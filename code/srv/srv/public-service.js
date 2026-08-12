@@ -210,6 +210,32 @@ module.exports = cds.service.impl(async function () {
         return { Items: items, Count: items.length, HasMore: hasMore, Summary: summary };
     });
 
+    // --- Offline file bridge ------------------------------------------------
+
+    this.on('importUsageExtract', async (req) => {
+        const { targetSystemId, payload } = req.data;
+        const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
+        if (!targetSystem) return req.reject(404, 'Target system not found.');
+        let extract;
+        try {
+            extract = JSON.parse(payload);
+        } catch {
+            return req.reject(400, 'The file is not valid JSON.');
+        }
+        const { importUsageExtract } = require('./utils/usage-extraction.js');
+        try {
+            const result = await importUsageExtract({
+                targetSystem,
+                extract,
+                requestedBy: req.user?.id,
+                tenantId: currentTenant()
+            });
+            return JSON.stringify(result);
+        } catch (error) {
+            return req.reject(400, error.message);
+        }
+    });
+
     // --- Proposals (Phase 2) ------------------------------------------------
 
     this.on('generateProposals', async (req) => {

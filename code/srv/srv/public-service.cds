@@ -122,6 +122,10 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
     minExecutions: Integer
   ) returns TaskHandle;
 
+  // Offline bridge: ingest a ZADO_EXPORT_USAGE JSON file as an extraction
+  // run - for landscapes where the Cloud Connector path is not open yet.
+  action importUsageExtract(targetSystemId: UUID, payload: LargeString) returns LargeString;
+
   action cancelTask(taskId: UUID) returns TaskStatus;
   function getTaskStatus(taskId: UUID) returns TaskStatus;
   function listActiveTasks(targetSystemId: UUID) returns array of TaskStatus;

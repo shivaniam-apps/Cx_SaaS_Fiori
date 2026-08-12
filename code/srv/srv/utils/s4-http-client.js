@@ -715,7 +715,23 @@ async function callS4Destination({ destinationName = DEFAULT_DESTINATION, path =
     };
   }
 
-  const resolved = await resolveDestination(destinationName, subdomain);
+  // Direct-credentials mode: URL override + ADOPTOPS_S4_DIRECT_USER/PASSWORD
+  // skip the BTP destination service entirely. For development on a network
+  // that reaches the S/4 ICM directly (VPN) - no Cloud Connector, no BTP
+  // dependency. Never set these in a deployed environment.
+  const directUser = envValue('S4_DIRECT_USER', '');
+  const resolved = directUser && DIRECT_URL_OVERRIDES.get(destinationName)
+    ? {
+        destinationConfiguration: {
+          URL: DIRECT_URL_OVERRIDES.get(destinationName),
+          ProxyType: 'Internet',
+          Authentication: 'BasicAuthentication',
+          User: directUser,
+          Password: envValue('S4_DIRECT_PASSWORD', '')
+        },
+        authTokens: []
+      }
+    : await resolveDestination(destinationName, subdomain);
   const config = resolved.destinationConfiguration || {};
   const locationId = cloudConnectorLocationId(config);
 

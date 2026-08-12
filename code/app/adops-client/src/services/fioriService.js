@@ -72,6 +72,12 @@ export async function runUsageExtraction(request) {
   return postAction('runUsageExtraction', request);
 }
 
+export async function importUsageExtract(targetSystemId, payload) {
+  const response = await http.post('/fiori/importUsageExtract', { targetSystemId, payload });
+  const value = response.data?.value ?? response.data;
+  return typeof value === 'string' ? JSON.parse(value) : value;
+}
+
 export async function getTaskStatus(taskId) {
   return getFunction(`getTaskStatus(taskId=${taskId})`);
 }

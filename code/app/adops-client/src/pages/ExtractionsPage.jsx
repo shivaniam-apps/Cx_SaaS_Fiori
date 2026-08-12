@@ -21,6 +21,7 @@ import {
   listTargetSystems,
   listExtractionRuns,
   runUsageExtraction,
+  importUsageExtract,
   getTaskStatus,
   getServiceErrorMessage,
   TERMINAL_TASK_STATES
@@ -120,9 +121,40 @@ export function ExtractionsPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title level="H2">Extractions</Title>
-        <Button design="Emphasized" icon="database" disabled={!systems.length} onClick={() => setDialogOpen(true)}>
-          New Extraction
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--adops-space-xs)' }}>
+          <Button
+            icon="upload"
+            disabled={!systems.length}
+            onClick={() => document.getElementById('adops-extract-file')?.click()}
+          >
+            Import Extract
+          </Button>
+          {/* Offline bridge: a ZADO_EXPORT_USAGE JSON downloaded via SAP GUI
+              becomes a normal run - no Cloud Connector required. */}
+          <input
+            id="adops-extract-file"
+            type="file"
+            accept=".json,application/json"
+            style={{ display: 'none' }}
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              try {
+                const text = await file.text();
+                const result = await importUsageExtract(draft.targetSystemId || systems[0]?.ID, text);
+                setError('');
+                setReloadToken((t) => t + 1);
+                console.info('Import result', result);
+              } catch (e) {
+                setError(getServiceErrorMessage(e, 'The extract could not be imported.'));
+              }
+            }}
+          />
+          <Button design="Emphasized" icon="database" disabled={!systems.length} onClick={() => setDialogOpen(true)}>
+            New Extraction
+          </Button>
+        </div>
       </div>
 
       {error ? (

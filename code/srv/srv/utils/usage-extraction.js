@@ -318,4 +318,108 @@ function mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top, topUser
   return { rows: page, totalCount: rows.length, hasMore: skip + page.length < rows.length };
 }
 
-module.exports = { runUsageExtraction, pseudonymiseUser, lineOfBusinessOf, isCustomTcode };
+// ---------------------------------------------------------------------------
+// Offline file bridge: ingest a ZADO_EXPORT_USAGE JSON extract (downloaded
+// via SAP GUI in landscapes where the Cloud Connector path is not open yet)
+// as a normal ExtractionRun - same screens, same proposal engine.
+// ---------------------------------------------------------------------------
+
+async function importUsageExtract({ targetSystem, extract, requestedBy, tenantId }) {
+  const db = cds.db;
+  if (extract?.format !== 'adops-usage-extract') {
+    throw new Error('Not an AdoptOps usage extract (missing format marker).');
+  }
+  const periodFrom = extract.periodFrom;
+  const periodTo = extract.periodTo;
+  if (!periodFrom || !periodTo) throw new Error('The extract carries no period.');
+  const transactions = Array.isArray(extract.transactions) ? extract.transactions : [];
+  const userTcodes = Array.isArray(extract.userTcodes) ? extract.userTcodes : [];
+  if (!transactions.length) throw new Error('The extract contains no transaction rows.');
+
+  const runId = randomUUID();
+  const now = new Date().toISOString();
+  const pseudonymised = extract.pseudonymised !== false;
+
+  await db.run(INSERT.into('adops.db.ExtractionRuns').entries({
+    ID: runId,
+    targetSystem_ID: targetSystem.ID,
+    TenantId: tenantId,
+    Title: `${targetSystem.displayName || extract.system || 'Import'} ${periodFrom}..${periodTo} (file import)`,
+    Status: 'RUNNING',
+    SourcesJson: JSON.stringify(['ST03N_FILE']),
+    PeriodFrom: periodFrom,
+    PeriodTo: periodTo,
+    PeriodGranularity: 'MONTH',
+    Pseudonymised: pseudonymised,
+    RequestedBy: requestedBy || null,
+    StartedAt: now
+  }));
+
+  const run = { ID: runId, TenantId: tenantId };
+  const txSnapshot = await createSnapshot(db, run, targetSystem, 'ST03N', 'MONTH', periodFrom, periodTo);
+  await db.run(INSERT.into('adops.db.TransactionUsage').entries(transactions.map((row) => ({
+    ID: randomUUID(),
+    snapshot_ID: txSnapshot,
+    targetSystem_ID: targetSystem.ID,
+    TenantId: tenantId,
+    TransactionCode: row.tcode,
+    TransactionText: row.text || '',
+    ApplicationComponent: row.component || '',
+    LineOfBusiness: lineOfBusinessOf(row.component),
+    PeriodFrom: periodFrom,
+    PeriodTo: periodTo,
+    ExecutionCount: Number(row.executions || 0),
+    DialogStepCount: Number(row.dialogSteps || 0),
+    DistinctUserCount: Number(row.users || 0),
+    TotalResponseTimeMs: Number(row.respMs || 0),
+    AvgResponseTimeMs: Number(row.executions) ? Math.round((Number(row.respMs || 0) / Number(row.executions)) * 100) / 100 : 0,
+    TotalCpuTimeMs: Number(row.cpuMs || 0),
+    TotalDbTimeMs: Number(row.dbMs || 0),
+    FirstUsedOn: periodFrom,
+    LastUsedOn: periodTo,
+    IsCustom: isCustomTcode(row.tcode),
+    IsStandard: !isCustomTcode(row.tcode),
+    Source: 'ST03N'
+  }))));
+  await UPDATE('adops.db.UsageSnapshots').set({ RowCount: transactions.length }).where({ ID: txSnapshot });
+
+  let userRows = 0;
+  if (userTcodes.length) {
+    const userSnapshot = await createSnapshot(db, run, targetSystem, 'ST03N', 'MONTH', periodFrom, periodTo, 'USERTCODE');
+    // Defence in depth: hash again unless the file explicitly declares an
+    // identified export AND the system allows identified usage.
+    const keepIdentified = !pseudonymisedRequired(extract, targetSystem);
+    await db.run(INSERT.into('adops.db.UserTransactionUsage').entries(userTcodes.map((row) => ({
+      ID: randomUUID(),
+      snapshot_ID: userSnapshot,
+      targetSystem_ID: targetSystem.ID,
+      TenantId: tenantId,
+      UserKey: keepIdentified ? row.user : (pseudonymised ? row.user : pseudonymiseUser(row.user, tenantId)),
+      TransactionCode: row.tcode,
+      PeriodFrom: periodFrom,
+      PeriodTo: periodTo,
+      ExecutionCount: Number(row.executions || 0),
+      DialogStepCount: Number(row.dialogSteps || 0),
+      LastUsedOn: periodTo
+    }))));
+    userRows = userTcodes.length;
+    await UPDATE('adops.db.UsageSnapshots').set({ RowCount: userRows }).where({ ID: userSnapshot });
+  }
+
+  await UPDATE('adops.db.ExtractionRuns').set({
+    Status: 'COMPLETED',
+    CompletedAt: new Date().toISOString(),
+    TransactionRowCount: transactions.length,
+    UserRowCount: userRows
+  }).where({ ID: runId });
+
+  return { runId, transactions: transactions.length, userRows };
+}
+
+function pseudonymisedRequired(extract, targetSystem) {
+  // Identified data survives only when the export was explicitly identified
+  // AND the target system's audited opt-in allows it.
+  return !(extract.pseudonymised === false && targetSystem.identifiedUsageAllowed);
+}
+
+module.exports = { runUsageExtraction, importUsageExtract, pseudonymiseUser, lineOfBusinessOf, isCustomTcode };
