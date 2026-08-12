@@ -1,0 +1,9 @@
+code/.cdsrc-private.json
+code/srv/.cdsrc-private.json
+code/srv/package.json
+code/db.sqlite
+code/db-t0.sqlite
+code/db-t1.sqlite
+code/app/cpsaas-client/.env.local
+.claude/settings.local.json
+CLAUDE.local.md
