@@ -27,6 +27,8 @@ CLASS lcl_probe DEFINITION FINAL.
     METHODS probe_function_modules.
     METHODS probe_collector_and_swnc.
     METHODS probe_tables.
+    METHODS probe_field_lists.
+    METHODS probe_stc_scenarios.
     METHODS probe_business_roles.
     METHODS manual_follow_ups.
     METHODS fm_signature IMPORTING iv_funcname TYPE tfdir-funcname.
@@ -44,6 +46,8 @@ CLASS lcl_probe IMPLEMENTATION.
     probe_function_modules( ).
     probe_collector_and_swnc( ).
     probe_tables( ).
+    probe_field_lists( ).
+    probe_stc_scenarios( ).
     probe_business_roles( ).
     manual_follow_ups( ).
     section( 'END OF PROBE' ).
@@ -99,9 +103,11 @@ CLASS lcl_probe IMPLEMENTATION.
     fm_signature( 'SAPWL_STATREC_DIRECT_READ' ).
     fm_signature( 'SAPWL_READ_STATISTIC_FILES' ).
 
-    line( 'ICF activation:' ).
+    line( 'ICF activation (HTTP_DEACTIVATE_NODE was MISSING in run 1 - candidates):' ).
     fm_signature( 'HTTP_ACTIVATE_NODE' ).
-    fm_signature( 'HTTP_DEACTIVATE_NODE' ).
+    fm_signature( 'HTTP_DEACTIVATE_NODES' ).
+    fm_signature( 'HTTP_ACTIVATE_NODES' ).
+    fm_signature( 'HTTP_UPDATE_NODE' ).
 
     line( 'PFCG / roles:' ).
     fm_signature( 'PRGN_RFC_CREATE_AGR_MULTIPLE' ).
@@ -109,7 +115,10 @@ CLASS lcl_probe IMPLEMENTATION.
     fm_signature( 'PRGN_READ_ROLE_MENU' ).
     fm_signature( 'PRGN_AUTO_GENERATE_PROFILE_NEW' ).
     fm_signature( 'BAPI_USER_ACTGROUPS_ASSIGN' ).
-    fm_signature( 'PFCG_TIME_DEPENDENCY' ).
+    " PFCG_TIME_DEPENDENCY was MISSING in run 1; user master comparison
+    " candidates (else SUBMIT report RHAUTUPD_NEW in a background job):
+    fm_signature( 'PRGN_UPDATE_DATABASE' ).
+    fm_signature( 'SUSR_USER_BUFFER_AFTER_CHANGE' ).
 
     line( 'Transport (CTS):' ).
     fm_signature( 'TR_INSERT_NEW_COMM' ).
@@ -120,12 +129,13 @@ CLASS lcl_probe IMPLEMENTATION.
     fm_signature( 'TR_RELEASE_REQUEST' ).
     fm_signature( 'TRINT_RELEASE_REQUEST' ).
 
-    line( 'Task manager (STC01):' ).
-    fm_signature( 'STC_TM_GET_SCENARIO_LIST' ).
-    fm_signature( 'STC_TM_SCENARIO_GET_TASKLIST' ).
-    fm_signature( 'STC_TM_SCENARIO_GET_PARAMETERS' ).
-    fm_signature( 'STC_TM_GET_TEMPLATE_LIST' ).
-    fm_signature( 'STC_TM_GET_SESSION_LIST' ).
+    line( 'Task manager (STC01) - session lifecycle candidates (run 2):' ).
+    fm_signature( 'STC_TM_SESSION_BEGIN' ).
+    fm_signature( 'STC_TM_SESSION_START' ).
+    fm_signature( 'STC_TM_SESSION_RESUME' ).
+    fm_signature( 'STC_TM_SESSION_GET_STATUS' ).
+    fm_signature( 'STC_TM_SESSION_SET_PARAMETERS' ).
+    fm_signature( 'STC_TM_TASKLIST_EXECUTE' ).
   ENDMETHOD.
 
   METHOD fm_signature.
@@ -195,17 +205,66 @@ CLASS lcl_probe IMPLEMENTATION.
 
   METHOD probe_tables.
     section( '4. CANDIDATE TABLE INVENTORY (DD02L)' ).
-    line( 'Launchpad content and spaces/pages:' ).
-    list_tables( '/UI2/%' ).
-    line( 'IAM apps / business catalogs:' ).
+    line( 'Spaces and pages repository (run 1: FDM% matched nothing here):' ).
+    list_tables( '/UI2/ST%' ).
+    list_tables( '/UI2/PG%' ).
+    line( 'Target mappings / launchpad designer content:' ).
+    list_tables( '/UI2/TM%' ).
+    list_tables( '/UI2/CHIP%' ).
+    line( 'IAM apps / business catalogs (absent on plain ABAP Platform):' ).
     list_tables( '%IAM%APP%' ).
-    line( 'Spaces/pages repository (FDM):' ).
     list_tables( 'FDM%' ).
-    line( 'Task manager:' ).
-    list_tables( 'STC%' ).
-    line( 'ICF:' ).
-    list_tables( 'ICFSERVICE%' ).
-    list_tables( 'ICFACTIVE%' ).
+  ENDMETHOD.
+
+  " Field lists for structures/tables run 1 confirmed but whose columns the
+  " design still needs: the user x tcode aggregate (client dimension?) and
+  " ICFSERVICE (where does the activation state live?).
+  METHOD probe_field_lists.
+    section( '4b. FIELD LISTS (DD03L) FOR CONFIRMED STRUCTURES' ).
+    LOOP AT VALUE string_table( ( `SWNCAGGUSERTCODE` ) ( `SWNCAGGTCDET` )
+                                ( `ICFSERVICE` ) ) INTO DATA(lv_struct).
+      DATA lv_tabname TYPE dd03l-tabname.
+      lv_tabname = lv_struct.
+      SELECT fieldname, rollname, position
+        FROM dd03l
+        WHERE tabname  = @lv_tabname
+          AND as4local = 'A'
+        ORDER BY position
+        INTO TABLE @DATA(lt_fields).
+      IF lt_fields IS INITIAL.
+        line( |{ lv_struct }: no DD03L fields (check SE11 manually)| ).
+        CONTINUE.
+      ENDIF.
+      line( |{ lv_struct }:| ).
+      LOOP AT lt_fields INTO DATA(ls_field).
+        line( |      { ls_field-fieldname } TYPE { ls_field-rollname }| ).
+      ENDLOOP.
+    ENDLOOP.
+  ENDMETHOD.
+
+  " Run 1 confirmed the STC_TM read FMs; use them to list the scenarios so
+  " the Fiori task-list names stop being a manual step.
+  METHOD probe_stc_scenarios.
+    section( '4c. STC01 SCENARIO INVENTORY (via STC_TM_GET_SCENARIO_LIST)' ).
+    DATA lt_scenario TYPE STANDARD TABLE OF stc_s_scenario.
+    DATA lt_return   TYPE bapirettab.
+    TRY.
+        CALL FUNCTION 'STC_TM_GET_SCENARIO_LIST'
+          TABLES
+            et_scenario = lt_scenario
+            et_return   = lt_return.
+        line( |Scenarios found: { lines( lt_scenario ) } - Fiori-relevant ones:| ).
+        LOOP AT lt_scenario ASSIGNING FIELD-SYMBOL(<ls_scenario>).
+          DATA(lv_id) = CONV string( <ls_scenario>-scenario_id ).
+          IF lv_id CS 'FIORI' OR lv_id CS 'GATEWAY' OR lv_id CS 'UI2'.
+            line( |      { lv_id }| ).
+          ENDIF.
+        ENDLOOP.
+        line( '(full list: run STC01 or raise the filter above)' ).
+      CATCH cx_root INTO DATA(lx_error).
+        line( |STC_TM_GET_SCENARIO_LIST call failed: { lx_error->get_text( ) }| ).
+        line( '(fall back to listing scenarios in STC01 manually)' ).
+    ENDTRY.
   ENDMETHOD.
 
   METHOD count_tables.
@@ -276,25 +335,26 @@ CLASS lcl_probe IMPLEMENTATION.
 
   METHOD manual_follow_ups.
     section( '6. MANUAL FOLLOW-UPS THE PROBE CANNOT DECIDE' ).
-    line( '- SWNC_COLLECTOR_GET_AGGREGATES: from section 2, note which TABLES' ).
-    line( '  parameters carry the transaction profile vs the user profile, and' ).
-    line( '  whether a combined user x tcode aggregate exists. If not, per-user' ).
-    line( '  per-tcode detail must come from STAD sampling (product constraint).' ).
+    line( 'Resolved by run 1 (A4H): USERTCODE user x tcode aggregate EXISTS;' ).
+    line( 'collector running; CTS/PFCG/STC read FMs confirmed. See' ).
+    line( 'docu/06-s4-integration/api-matrix-a4h.md.' ).
+    line( '' ).
     line( '- ST03N retention: ST03N -> Collector & Perf. Database -> Reorganization.' ).
-    line( '- STC01: list scenarios, confirm exact names of SAP_FIORI_FOUNDATION_S4,' ).
-    line( '  SAP_FIORI_LAUNCHPAD_INIT_SETUP, SAP_FIORI_CONTENT_ACTIVATION (or the' ).
-    line( '  release-specific equivalents).' ).
     line( '- /UI2/FLIA: resolve one known WEBGUI target mapping and record the' ).
     line( '  exact application parameter key that carries the tcode' ).
-    line( '  (expected: sap-ui2-tcode).' ).
+    line( '  (expected: sap-ui2-tcode). Needs a real S/4, not plain A4H.' ).
     line( '- FDM_* OData services: check activation state in /IWFND/MAINT_SERVICE' ).
     line( '  for FDM_SPACE_REPOSITORY_CUST_SRV, FDM_PAGE_REPOSITORY_CUST_SRV,' ).
-    line( '  FDM_TRANSPORT_SRV.' ).
-    line( '- AGR_HIER: open one SAP_BR_* role in PFCG, find a business catalog' ).
-    line( '  menu node, then locate its row in AGR_HIER/AGR_HIERT to record the' ).
-    line( '  node type and catalog id columns.' ).
+    line( '  FDM_TRANSPORT_SRV. Needs a real S/4 2023.' ).
+    line( '- AGR_HIER: on a real S/4, open one SAP_BR_* role in PFCG, find a' ).
+    line( '  business catalog menu node, locate its AGR_HIER/AGR_HIERT rows.' ).
+    line( '- ICF deactivation: if section 2 run-2 candidates are all MISSING,' ).
+    line( '  read the where-used list of SICF deactivate (CL_ICF_TREE methods).' ).
     line( '- ST01 trace while running this report with the future technical user' ).
     line( '  to build the ZADO_BR_READER authorization list from evidence.' ).
+    line( '- IMPORTANT: catalog derivation, spaces/pages and SAP_BR content' ).
+    line( '  cannot be validated on plain A4H (no S4CORE). Line up the customer' ).
+    line( '  sandbox or an SAP CAL fully-activated S/4HANA 2023 appliance.' ).
   ENDMETHOD.
 
 ENDCLASS.
