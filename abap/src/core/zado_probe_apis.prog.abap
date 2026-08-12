@@ -138,14 +138,14 @@ CLASS lcl_probe IMPLEMENTATION.
     line( |  { iv_funcname }: exists| ).
     " Parameter signature from FUPARAREF: kind P=importing, E=exporting,
     " T=tables, C=changing. STRUCTURE column carries the typing.
-    SELECT parameter, paramtype, structure, pdefault
+    SELECT parameter, paramtype, structure
       FROM fupararef
       WHERE funcname = @iv_funcname
         AND r3state  = 'A'
       ORDER BY paramtype, pposition
       INTO TABLE @DATA(lt_params).
     LOOP AT lt_params INTO DATA(ls_param).
-      line( |      { ls_param-paramtype } { ls_param-parameter } TYPE { ls_param-structure } DEFAULT { ls_param-pdefault }| ).
+      line( |      { ls_param-paramtype } { ls_param-parameter } TYPE { ls_param-structure }| ).
     ENDLOOP.
   ENDMETHOD.
 
@@ -230,8 +230,8 @@ CLASS lcl_probe IMPLEMENTATION.
       ORDER BY tabname
       INTO TABLE @DATA(lt_names)
       UP TO @iv_max ROWS.
-    LOOP AT lt_names INTO DATA(lv_name).
-      line( |      { lv_name }| ).
+    LOOP AT lt_names INTO DATA(ls_name).
+      line( |      { ls_name-tabname }| ).
     ENDLOOP.
     IF lv_total > iv_max.
       line( |      ... { lv_total - iv_max } more (raise iv_max or use SE16)| ).
@@ -252,13 +252,13 @@ CLASS lcl_probe IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    LOOP AT lt_roles INTO DATA(lv_role).
-      line( |Role { lv_role }:| ).
+    LOOP AT lt_roles INTO DATA(ls_role).
+      line( |Role { ls_role-agr_name }:| ).
       " AGR_TCODES: TYPE distinguishes transactions from other menu object
       " kinds. The distinct TYPE values answer how business catalogs appear.
       SELECT type, COUNT(*) AS cnt
         FROM agr_tcodes
-        WHERE agr_name = @lv_role
+        WHERE agr_name = @ls_role-agr_name
         GROUP BY type
         INTO TABLE @DATA(lt_types).
       LOOP AT lt_types INTO DATA(ls_type).
@@ -266,7 +266,7 @@ CLASS lcl_probe IMPLEMENTATION.
       ENDLOOP.
       " AGR_HIER carries the full menu tree; its per-node object typing is
       " the other candidate location for catalog references.
-      SELECT COUNT(*) FROM agr_hier WHERE agr_name = @lv_role INTO @DATA(lv_hier).
+      SELECT COUNT(*) FROM agr_hier WHERE agr_name = @ls_role-agr_name INTO @DATA(lv_hier).
       line( |  AGR_HIER entries: { lv_hier } (inspect one in SE16 to identify the catalog node type)| ).
     ENDLOOP.
 
