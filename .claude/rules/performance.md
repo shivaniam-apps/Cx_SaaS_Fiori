@@ -13,10 +13,11 @@ Never optimise only for the current small development dataset.
 ## Performance-Sensitive Areas
 
 Highest priority:
-- Dashboard
-- My Schedules
-- Monitor Jobs
-- Calendar
+- Dashboard (adoption cockpit)
+- Usage Insight
+- User & Role Landscape
+- Proposals
+- Activation run monitor
 
 ## Query Principles
 
@@ -45,31 +46,29 @@ Avoid:
 
 Dashboard should consume purpose-built analytical data.
 
-Do not download full My Schedules or Monitor Jobs datasets merely to calculate
-dashboard counts or trends.
+Do not download the full transaction-usage or proposal datasets merely to
+calculate dashboard counts or trends.
 
 Prefer one or a small number of optimised dashboard endpoints.
 
-## My Schedules
+## Usage Insight
 
-Use server-side paging and filtering.
+Use server-side paging, filtering, sorting and aggregation. Default to a
+bounded top-N by executions with explicit load-more; never ship "everything"
+to the browser. Cumulative-%/Pareto figures come from a server summary over
+the full filter scope.
 
-Completed historical schedules should not dominate normal interactive queries.
+## Proposals
 
-## Monitor Jobs
+Use server-side paging and filtering; evidence rollups live on the proposal
+row so the list never needs child reads. Scope adjustments recompute from the
+already-delivered payload — no refetch for arithmetic.
 
-Use bounded queries and server-side filtering.
+## Activation run monitor
 
-Do not load thousands of completed SAP jobs when the user needs recent or
-actionable operational data.
-
-## Calendar
-
-Query only the period required for the visible calendar view plus a small
-justified buffer where appropriate.
-
-Navigation between weeks/months should load the newly required period rather
-than loading all schedule history up front.
+Poll one purpose-built run read (status + steps + counts in a single
+response). Fetch per-step logs only when a step row is expanded, and re-fetch
+them only while that step is RUNNING.
 
 ## React
 

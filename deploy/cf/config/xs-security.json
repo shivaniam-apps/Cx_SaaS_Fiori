@@ -1,0 +1,134 @@
+{
+  "tenant-mode": "shared",
+  "foreign-scope-references": [
+    "xs_authorization.read",
+    "xs_authorization.write",
+    "xs_user.read",
+    "xs_user.write",
+    "xs_idp.read",
+    "xs_idp.write"
+  ],
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.mtcallback",
+      "description": "SaaS Provisioning",
+      "grant-as-authority-to-apps": [
+        "$XSAPPNAME(application,sap-provisioning,tenant-onboarding)"
+      ]
+    },
+    {
+      "name": "$XSAPPNAME.mtdeployment",
+      "description": "SaaS Model Upgrade"
+    },
+    {
+      "name": "uaa.user",
+      "description": "UAA user"
+    },
+    {
+      "name": "$XSAPPNAME.Member",
+      "description": "AdoptOps member - read usage analyses and proposals, run extractions"
+    },
+    {
+      "name": "$XSAPPNAME.Approver",
+      "description": "Approve, reject or defer Fiori app proposals"
+    },
+    {
+      "name": "$XSAPPNAME.Activator",
+      "description": "Activate Fiori content and manage transports in S/4HANA"
+    },
+    {
+      "name": "$XSAPPNAME.Admin",
+      "description": "AdoptOps administrator - target systems, overlay curation, telemetry"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "Token_Exchange",
+      "description": "UAA token exchange",
+      "scope-references": [
+        "uaa.user"
+      ]
+    },
+    {
+      "name": "Member",
+      "description": "Use AdoptOps usage analysis and proposals",
+      "scope-references": [
+        "$XSAPPNAME.Member"
+      ]
+    },
+    {
+      "name": "Approver",
+      "description": "Decide AdoptOps proposals",
+      "scope-references": [
+        "$XSAPPNAME.Approver",
+        "$XSAPPNAME.Member"
+      ]
+    },
+    {
+      "name": "Activator",
+      "description": "Execute AdoptOps activation and transports",
+      "scope-references": [
+        "$XSAPPNAME.Activator",
+        "$XSAPPNAME.Approver",
+        "$XSAPPNAME.Member"
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Administer AdoptOps configuration",
+      "scope-references": [
+        "$XSAPPNAME.Admin",
+        "$XSAPPNAME.Member",
+        "xs_authorization.read",
+        "xs_authorization.write",
+        "xs_user.read",
+        "xs_user.write",
+        "xs_idp.read",
+        "xs_idp.write"
+      ]
+    },
+    {
+      "name": "SaaSAdmin",
+      "description": "SaaS Administrator",
+      "scope-references": [
+        "$XSAPPNAME.mtcallback",
+        "$XSAPPNAME.mtdeployment"
+      ]
+    },
+    {
+      "name": "UserManagementAdmin",
+      "description": "Manage authorizations, trusted identity providers, and users.",
+      "default-role-name": "User and Role Administrator",
+      "scope-references": [
+        "xs_authorization.read",
+        "xs_authorization.write",
+        "xs_user.read",
+        "xs_user.write",
+        "xs_idp.read",
+        "xs_idp.write"
+      ]
+    },
+    {
+      "name": "UserManagementAuditor",
+      "description": "Read-only access for authorizations, trusted identity providers, and users.",
+      "default-role-name": "User and Role Auditor",
+      "scope-references": [
+        "xs_authorization.read",
+        "xs_user.read",
+        "xs_idp.read"
+      ]
+    }
+  ],
+  "authorities": [
+    "$XSAPPNAME.mtcallback",
+    "$XSAPPNAME.mtdeployment"
+  ],
+  "oauth2-configuration": {
+    "token-validity": 3600,
+    "redirect-uris": [
+      "http://localhost:5000/**",
+      "http://*.localhost:5000/**",
+      "https://*.cfapps.*.hana.ondemand.com/**"
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "adops-client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/zip-html5.mjs",
+    "lint": "eslint .",
+    "test": "node --test src/features/auth/memberAccess.test.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ui5/webcomponents": "^2.22.0",
+    "@ui5/webcomponents-fiori": "^2.22.0",
+    "@ui5/webcomponents-icons": "^2.22.0",
+    "@ui5/webcomponents-react": "^2.22.2",
+    "axios": "^1.17.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router-dom": "^7.17.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "vite": "^8.0.12"
+  }
+}
