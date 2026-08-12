@@ -4,6 +4,9 @@ import MemberGate from '../components/MemberGate.jsx';
 import AppErrorBoundary from '../components/AppErrorBoundary.jsx';
 import DashboardPage from '../pages/DashboardPage.jsx';
 import PlaceholderPage from '../pages/PlaceholderPage.jsx';
+import TargetSystemsPage from '../pages/TargetSystemsPage.jsx';
+import ExtractionsPage from '../pages/ExtractionsPage.jsx';
+import UsageInsightPage from '../pages/UsageInsightPage.jsx';
 
 // Route table follows the optional-param convention (/usage/:view?) so tab
 // switches and detail columns never remount their page.
@@ -12,9 +15,9 @@ function AppRoutes({ userInfo }) {
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<DashboardPage userInfo={userInfo} />} />
-      <Route path="/systems/:systemId?" element={<PlaceholderPage title="Target Systems" phase="Phase 1" />} />
-      <Route path="/extractions/:extractionId?" element={<PlaceholderPage title="Extractions" phase="Phase 1" />} />
-      <Route path="/usage/:view?" element={<PlaceholderPage title="Usage Insight" phase="Phase 1" />} />
+      <Route path="/systems/:systemId?" element={<TargetSystemsPage />} />
+      <Route path="/extractions/:extractionId?" element={<ExtractionsPage />} />
+      <Route path="/usage/:view?" element={<UsageInsightPage />} />
       <Route path="/landscape/:view?" element={<PlaceholderPage title="User & Role Landscape" phase="Phase 2" />} />
       <Route path="/proposals/:proposalId?" element={<PlaceholderPage title="Proposals" phase="Phase 2" />} />
       <Route path="/waves/:waveId?" element={<PlaceholderPage title="Adoption Waves" phase="Phase 3" />} />

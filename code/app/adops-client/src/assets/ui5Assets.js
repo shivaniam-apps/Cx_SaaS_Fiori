@@ -6,6 +6,9 @@ import '@ui5/webcomponents/dist/generated/json-imports/Themes.js';
 import '@ui5/webcomponents-fiori/dist/generated/json-imports/Themes.js';
 
 import '@ui5/webcomponents-icons/dist/action-settings.js';
+import '@ui5/webcomponents-icons/dist/add.js';
+import '@ui5/webcomponents-icons/dist/refresh.js';
+import '@ui5/webcomponents-icons/dist/decline.js';
 import '@ui5/webcomponents-icons/dist/activities.js';
 import '@ui5/webcomponents-icons/dist/bar-chart.js';
 import '@ui5/webcomponents-icons/dist/business-objects-experience.js';
