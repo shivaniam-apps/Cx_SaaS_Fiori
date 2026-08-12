@@ -1,0 +1,23 @@
+{
+  "BALANCED": {
+    "usage": 0.30,
+    "population": 0.25,
+    "coverage": 0.20,
+    "readiness": 0.15,
+    "effort": 0.10
+  },
+  "QUICK_WINS": {
+    "usage": 0.20,
+    "population": 0.15,
+    "coverage": 0.15,
+    "readiness": 0.25,
+    "effort": 0.25
+  },
+  "ADOPTION_FIRST": {
+    "usage": 0.20,
+    "population": 0.40,
+    "coverage": 0.25,
+    "readiness": 0.10,
+    "effort": 0.05
+  }
+}

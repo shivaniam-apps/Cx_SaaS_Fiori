@@ -97,4 +97,34 @@ export async function queryTransactionUsers(extractionRunId, transactionCode) {
   });
 }
 
+// --- Proposals ---------------------------------------------------------------
+
+export async function listAnalysisRuns() {
+  return getEntity('AnalysisRuns', { $orderby: 'createdAt desc', $top: 50 });
+}
+
+export async function generateProposals(request) {
+  return postAction('generateProposals', request);
+}
+
+function parseJsonActionResult(data) {
+  const value = data?.value ?? data;
+  return typeof value === 'string' ? JSON.parse(value) : value;
+}
+
+export async function queryProposals(request) {
+  const response = await http.post('/fiori/queryProposals', request);
+  return parseJsonActionResult(response.data);
+}
+
+export async function readProposal(proposalId) {
+  const response = await http.get(`/fiori/readProposal(proposalId=${proposalId})`);
+  return parseJsonActionResult(response.data);
+}
+
+// kind: approveProposal | rejectProposal | deferProposal
+export async function decideProposal(kind, proposalId, notes, targetWave) {
+  return postAction(kind, { proposalId, notes: notes || null, targetWave: targetWave || null });
+}
+
 export const TERMINAL_TASK_STATES = ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];

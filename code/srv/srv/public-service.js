@@ -210,6 +210,173 @@ module.exports = cds.service.impl(async function () {
         return { Items: items, Count: items.length, HasMore: hasMore, Summary: summary };
     });
 
+    // --- Proposals (Phase 2) ------------------------------------------------
+
+    this.on('generateProposals', async (req) => {
+        const { extractionRunId, scoringProfile, minExecutions, includeAlreadyAdopted } = req.data;
+        const extractionRun = await SELECT.one.from('adops.db.ExtractionRuns').where({ ID: extractionRunId });
+        if (!extractionRun) return req.reject(404, 'Extraction run not found.');
+        if (!['COMPLETED', 'PARTIAL'].includes(extractionRun.Status)) {
+            return req.reject(400, `Extraction run is ${extractionRun.Status}; analysis needs COMPLETED or PARTIAL.`);
+        }
+
+        const analysisRunId = randomUUID();
+        await INSERT.into('adops.db.AnalysisRuns').entries({
+            ID: analysisRunId,
+            targetSystem_ID: extractionRun.targetSystem_ID,
+            extractionRun_ID: extractionRunId,
+            TenantId: currentTenant(),
+            Title: `Analysis of ${extractionRun.Title}`,
+            Status: 'QUEUED',
+            ScoringProfile: scoringProfile || 'BALANCED'
+        });
+
+        const task = await enqueueTask({
+            taskType: 'ANALYSIS',
+            targetSystemId: extractionRun.targetSystem_ID,
+            objectType: 'AnalysisRuns',
+            objectId: analysisRunId,
+            requestedBy: req.user?.id,
+            correlationId: cds.context?.id,
+            payload: {
+                extractionRunId,
+                scoringProfile: scoringProfile || 'BALANCED',
+                minExecutions: minExecutions || 1,
+                includeAlreadyAdopted: includeAlreadyAdopted !== false,
+                analysisRunId
+            }
+        });
+        return { taskId: task.ID, objectId: analysisRunId, status: task.Status, pollAfterMs: 2000 };
+    });
+
+    this.on('queryProposals', async (req) => {
+        const { analysisRunId, search, reviewStatus, confidence, lineOfBusiness, top = 100, skip = 0, includeSummary = true } = req.data;
+        if (!analysisRunId) return req.reject(400, 'analysisRunId is required.');
+
+        const where = { analysisRun_ID: analysisRunId };
+        if (reviewStatus) where.ReviewStatus = reviewStatus;
+        if (confidence) where.Confidence = confidence;
+        if (lineOfBusiness) where.LineOfBusiness = lineOfBusiness;
+        if (search) where.AppTitle = { like: `%${search}%` };
+
+        const boundedTop = Math.min(Number(top) || 100, 500);
+        const rows = await SELECT.from('adops.db.AppProposals')
+            .where(where)
+            .orderBy('Rank asc')
+            .limit(boundedTop + 1, Number(skip) || 0);
+        const hasMore = rows.length > boundedTop;
+        if (hasMore) rows.pop();
+
+        let summary = null;
+        if (includeSummary) {
+            const all = await SELECT.from('adops.db.AppProposals')
+                .columns('ReviewStatus', 'TotalExecutions')
+                .where({ analysisRun_ID: analysisRunId });
+            const run = await SELECT.one.from('adops.db.AnalysisRuns').where({ ID: analysisRunId });
+            const totalRunExecutions = all.reduce((sum, row) => sum + Number(row.TotalExecutions || 0), 0);
+            const approvedExecutions = all
+                .filter((row) => row.ReviewStatus === 'APPROVED')
+                .reduce((sum, row) => sum + Number(row.TotalExecutions || 0), 0);
+            summary = {
+                open: all.filter((row) => ['NEW', 'IN_REVIEW'].includes(row.ReviewStatus)).length,
+                approved: all.filter((row) => row.ReviewStatus === 'APPROVED').length,
+                rejected: all.filter((row) => row.ReviewStatus === 'REJECTED').length,
+                deferred: all.filter((row) => row.ReviewStatus === 'DEFERRED').length,
+                noEquivalent: all.filter((row) => row.ReviewStatus === 'SUPERSEDED').length,
+                // % of the run's mapped GUI executions covered by the ACCEPTED
+                // set - the number the customer actually cares about.
+                approvedExecutionShare: totalRunExecutions
+                    ? Math.round((approvedExecutions / totalRunExecutions) * 10000) / 100
+                    : 0,
+                mappedExecutionShare: run?.CoveredExecutionShare ?? null
+            };
+        }
+        return JSON.stringify({ Items: rows, Count: rows.length, HasMore: hasMore, Summary: summary });
+    });
+
+    this.on('readProposal', async (req) => {
+        const proposal = await SELECT.one.from('adops.db.AppProposals').where({ ID: req.data.proposalId });
+        if (!proposal) return req.reject(404, 'Proposal not found.');
+        const evidence = await SELECT.from('adops.db.ProposalEvidence')
+            .where({ proposal_ID: proposal.ID }).orderBy('ExecutionCount desc');
+        const comments = await SELECT.from('adops.db.ProposalComments')
+            .where({ proposal_ID: proposal.ID }).orderBy('PostedAt desc');
+        return JSON.stringify({ proposal, evidence, comments });
+    });
+
+    const decide = (decision) => async (req) => {
+        const { proposalId, notes, targetWave } = req.data;
+        const proposal = await SELECT.one.from('adops.db.AppProposals').where({ ID: proposalId });
+        if (!proposal) return req.reject(404, 'Proposal not found.');
+        if (decision === 'REJECTED' && !String(notes || '').trim()) {
+            return req.reject(400, 'A rejection requires a reason.');
+        }
+        const now = new Date().toISOString();
+        await UPDATE('adops.db.AppProposals').set({
+            ReviewStatus: decision,
+            DecidedBy: req.user?.id || null,
+            DecidedAt: now,
+            DecisionNotes: notes || null,
+            TargetWave: targetWave || proposal.TargetWave
+        }).where({ ID: proposalId });
+        await INSERT.into('adops.db.AuditEvents').entries({
+            ID: randomUUID(),
+            TenantId: proposal.TenantId,
+            Timestamp: now,
+            EventType: `PROPOSAL_${decision}`,
+            Severity: 'INFO',
+            ObjectType: 'AppProposals',
+            ObjectName: `${proposal.FioriId} ${proposal.AppTitle}`.trim(),
+            ObjectId: proposalId,
+            UserId: req.user?.id || '',
+            Source: 'PublicService',
+            Message: String(notes || '').slice(0, 500),
+            BeforeValue: proposal.ReviewStatus,
+            AfterValue: decision,
+            CorrelationId: cds.context?.id || ''
+        });
+        return SELECT.one.from('adops.db.AppProposals').where({ ID: proposalId });
+    };
+
+    this.on('approveProposal', decide('APPROVED'));
+    this.on('rejectProposal', decide('REJECTED'));
+    this.on('deferProposal', decide('DEFERRED'));
+
+    this.on('bulkDecideProposals', async (req) => {
+        const { proposalIds = [], decision, notes } = req.data;
+        const decisionMap = { APPROVED: 'approveProposal', REJECTED: 'rejectProposal', DEFERRED: 'deferProposal' };
+        if (!decisionMap[decision]) return req.reject(400, 'decision must be APPROVED, REJECTED or DEFERRED.');
+        const handler = decide(decision);
+        const results = { decided: 0, skipped: 0 };
+        for (const proposalId of proposalIds) {
+            try {
+                await handler({ data: { proposalId, notes }, user: req.user, reject: () => { throw new Error('skip'); } });
+                results.decided += 1;
+            } catch {
+                results.skipped += 1;
+            }
+        }
+        return JSON.stringify(results);
+    });
+
+    this.on('addProposalComment', async (req) => {
+        const { proposalId, commentType, commentText } = req.data;
+        const proposal = await SELECT.one.from('adops.db.AppProposals').where({ ID: proposalId });
+        if (!proposal) return req.reject(404, 'Proposal not found.');
+        if (!String(commentText || '').trim()) return req.reject(400, 'commentText is required.');
+        const id = randomUUID();
+        await INSERT.into('adops.db.ProposalComments').entries({
+            ID: id,
+            proposal_ID: proposalId,
+            TenantId: proposal.TenantId,
+            PostedAt: new Date().toISOString(),
+            Author: req.user?.id || '',
+            CommentType: commentType || 'NOTE',
+            CommentText: String(commentText).slice(0, 2000)
+        });
+        return SELECT.one.from('adops.db.ProposalComments').where({ ID: id });
+    });
+
     this.on('queryUsageOverview', async (req) => {
         const { extractionRunId } = req.data;
         if (!extractionRunId) return req.reject(400, 'extractionRunId is required.');

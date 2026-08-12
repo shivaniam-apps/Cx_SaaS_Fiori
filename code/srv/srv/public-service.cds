@@ -142,4 +142,40 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   ) returns TransactionUsagePage;
 
   function queryUsageOverview(extractionRunId: UUID) returns LargeString;
+
+  // --- Proposals (Phase 2) --------------------------------------------------
+  // Composite reads return JSON LargeStrings: the shapes are page-specific
+  // view models (typed contracts live in the services layer of the client);
+  // decisions return the typed entity so OData clients see the new state.
+
+  action generateProposals(
+    extractionRunId: UUID,
+    scoringProfile: String,      // BALANCED | QUICK_WINS | ADOPTION_FIRST
+    minExecutions: Integer,
+    includeAlreadyAdopted: Boolean
+  ) returns TaskHandle;
+
+  action queryProposals(
+    analysisRunId: UUID,
+    search: String,
+    reviewStatus: String,
+    confidence: String,
+    lineOfBusiness: String,
+    top: Integer,
+    skip: Integer,
+    includeSummary: Boolean
+  ) returns LargeString;
+
+  function readProposal(proposalId: UUID) returns LargeString;
+
+  @(requires: 'Approver')
+  action approveProposal(proposalId: UUID, notes: String, targetWave: String) returns AppProposals;
+  @(requires: 'Approver')
+  action rejectProposal(proposalId: UUID, notes: String) returns AppProposals;
+  @(requires: 'Approver')
+  action deferProposal(proposalId: UUID, notes: String, targetWave: String) returns AppProposals;
+  @(requires: 'Approver')
+  action bulkDecideProposals(proposalIds: many String, decision: String, notes: String) returns LargeString;
+
+  action addProposalComment(proposalId: UUID, commentType: String, commentText: String) returns ProposalComments;
 };

@@ -94,8 +94,14 @@ cds.on('served', () => {
     // Async S/4 work: register handlers, then start the claim/heartbeat poller.
     const { registerTaskHandler, startTaskRunner } = require('./utils/task-runner.js');
     const { runUsageExtraction } = require('./utils/usage-extraction.js');
+    const { runAnalysis } = require('./utils/analysis-run.js');
     registerTaskHandler('USAGE_EXTRACTION', runUsageExtraction);
+    registerTaskHandler('ANALYSIS', runAnalysis);
     startTaskRunner();
+
+    // Shipped curated overlay content (idempotent, failure never blocks boot).
+    const { seedShippedOverlay } = require('./utils/shipped-overlay-catalog.js');
+    seedShippedOverlay();
 });
 
 module.exports = cds.server;
