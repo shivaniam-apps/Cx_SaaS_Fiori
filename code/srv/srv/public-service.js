@@ -1,24 +1,89 @@
 const cds = require('@sap/cds');
+const { randomUUID } = require('node:crypto');
 const Logger = cds.log('public-service');
-const { registerTenantScope } = require('./utils/tenant-scope.js');
-
-// Phase 0b skeleton: the read projections are live (sqlite/postgres), the
-// S/4-facing actions reject 501 until the Phase 1 transport lift
-// (s4-http-client.js) and task runner (task-runner.js) land. Keeping the
-// action surface declared now means the frontend contract is stable from
-// the first commit.
-const PHASE1_ACTIONS = [
-    'checkTargetSystemConnection',
-    'getBackendCapabilities',
-    'runUsageExtraction'
-];
+const { registerTenantScope, currentTenant } = require('./utils/tenant-scope.js');
+const { checkTargetSystemConnection, getBackendCapabilities } = require('./utils/s4-fiori-adapter.js');
+const { enqueueTask } = require('./utils/task-runner.js');
 
 module.exports = cds.service.impl(async function () {
     registerTenantScope(this);
 
-    for (const action of PHASE1_ACTIONS) {
-        this.on(action, (req) => req.reject(501, `${action} arrives with the Phase 1 S/4 transport lift.`));
-    }
+    // --- Connectivity / discovery ------------------------------------------
+
+    this.on('checkTargetSystemConnection', async (req) => {
+        const { destinationName, path } = req.data;
+        if (!destinationName) return req.reject(400, 'destinationName is required.');
+        const verdict = await checkTargetSystemConnection({ destinationName, path, req });
+        // Persist the last verdict on the matching target system so the list
+        // page shows health without re-testing.
+        await UPDATE('adops.db.TargetSystems')
+            .set({
+                lastCheckedAt: verdict.TestedAt,
+                lastCheckStatus: verdict.Stage,
+                lastCheckMessage: verdict.Message
+            })
+            .where({ destinationName });
+        return verdict;
+    });
+
+    this.on('getBackendCapabilities', async (req) => {
+        const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: req.data.targetSystemId });
+        if (!targetSystem) return req.reject(404, 'Target system not found.');
+        const capabilities = await getBackendCapabilities({ targetSystem, req });
+        return JSON.stringify(capabilities);
+    });
+
+    // --- Extraction (async) -------------------------------------------------
+
+    this.on('runUsageExtraction', async (req) => {
+        const {
+            targetSystemId, sources, periodFrom, periodTo,
+            granularity, topUsersPerTcode, minExecutions
+        } = req.data;
+        const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
+        if (!targetSystem) return req.reject(404, 'Target system not found.');
+        if (!periodFrom || !periodTo) return req.reject(400, 'periodFrom and periodTo are required.');
+
+        const effectiveSources = (sources && sources.length ? sources : ['ST03N']).map((s) => String(s).toUpperCase());
+        const runId = randomUUID();
+        const pseudonymised = !targetSystem.identifiedUsageAllowed;
+
+        await INSERT.into('adops.db.ExtractionRuns').entries({
+            ID: runId,
+            targetSystem_ID: targetSystemId,
+            TenantId: currentTenant(),
+            Title: `${targetSystem.displayName || targetSystem.systemId || 'System'} ${periodFrom}..${periodTo}`,
+            Status: 'QUEUED',
+            SourcesJson: JSON.stringify(effectiveSources),
+            PeriodFrom: periodFrom,
+            PeriodTo: periodTo,
+            PeriodGranularity: granularity || 'MONTH',
+            Pseudonymised: pseudonymised,
+            RequestedBy: req.user?.id || null,
+            CorrelationId: cds.context?.id || null
+        });
+
+        const task = await enqueueTask({
+            taskType: 'USAGE_EXTRACTION',
+            targetSystemId,
+            objectType: 'ExtractionRuns',
+            objectId: runId,
+            requestedBy: req.user?.id,
+            correlationId: cds.context?.id,
+            payload: {
+                targetSystemId,
+                sources: effectiveSources,
+                periodFrom,
+                periodTo,
+                granularity: granularity || 'MONTH',
+                topUsersPerTcode: topUsersPerTcode || 20,
+                minExecutions: minExecutions || 1,
+                runId
+            }
+        });
+
+        return { taskId: task.ID, objectId: runId, status: task.Status, pollAfterMs: 2000 };
+    });
 
     // --- Task polling (live already: rows are written by the task runner) ---
 

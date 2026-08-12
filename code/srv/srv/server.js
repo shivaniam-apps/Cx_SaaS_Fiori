@@ -90,6 +90,12 @@ cds.on('bootstrap', async (app) => {
 // ADOPTOPS_TELEMETRY_CLEANUP_INTERVAL_HOURS (default 24, <=0 disables).
 cds.on('served', () => {
     scheduleTelemetryRetentionCleanup();
+
+    // Async S/4 work: register handlers, then start the claim/heartbeat poller.
+    const { registerTaskHandler, startTaskRunner } = require('./utils/task-runner.js');
+    const { runUsageExtraction } = require('./utils/usage-extraction.js');
+    registerTaskHandler('USAGE_EXTRACTION', runUsageExtraction);
+    startTaskRunner();
 });
 
 module.exports = cds.server;

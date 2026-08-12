@@ -5,6 +5,8 @@ const { isDatabaseLess, currentTier } = require('./utils/tier.js');
 const { registerTelemetryAdminHandlers } = require('./utils/telemetry-admin-handlers.js');
 const { registerAccessRequestAdminHandlers } = require('./utils/access-request-handlers.js');
 const { registerTenantScope } = require('./utils/tenant-scope.js');
+const { listDestinations, getBtpAccountInfo, callS4Destination } = require('./utils/s4-http-client.js');
+const { checkTargetSystemConnection } = require('./utils/s4-fiori-adapter.js');
 
 module.exports = cds.service.impl(async function () {
     const { Users } = this.entities;
@@ -16,12 +18,33 @@ module.exports = cds.service.impl(async function () {
     registerTelemetryAdminHandlers(this);
     registerAccessRequestAdminHandlers(this);
 
-    // --- Connectivity (Phase 1 wires these to s4-http-client.js) ----------
-    // Kept as explicit 501s so the frontend contract exists from day one and
-    // the Settings page can render its states.
-    for (const action of ['listBtpDestinations', 'getBtpAccountInfo', 'testS4Destination', 'checkTargetSystemConnection']) {
-        this.on(action, (req) => req.reject(501, `${action} arrives with the Phase 1 S/4 transport lift.`));
-    }
+    // --- Connectivity --------------------------------------------------------
+
+    this.on('listBtpDestinations', async () => JSON.stringify(await listDestinations()));
+
+    this.on('getBtpAccountInfo', () => JSON.stringify(getBtpAccountInfo()));
+
+    // Lax generic GET proxy: returns the payload even when S/4 answers
+    // 4xx/5xx - capability and value-help reads depend on exactly that.
+    // Never tighten it (see .claude/rules/sap-backend.md).
+    this.on('testS4Destination', async (req) => {
+        const { destinationName, path } = req.data;
+        if (!destinationName) return req.reject(400, 'destinationName is required.');
+        const result = await callS4Destination({
+            destinationName,
+            path: path || '/',
+            req,
+            timeoutMs: 20000,
+            maxAttempts: 1
+        });
+        return JSON.stringify({ status: result.status, ok: result.ok, data: result.data });
+    });
+
+    this.on('checkTargetSystemConnection', async (req) => {
+        const { destinationName, path } = req.data;
+        if (!destinationName) return req.reject(400, 'destinationName is required.');
+        return checkTargetSystemConnection({ destinationName, path, req });
+    });
 
     // --- Overlay curation --------------------------------------------------
     this.on('upsertOverlayMapping', async (req) => {
