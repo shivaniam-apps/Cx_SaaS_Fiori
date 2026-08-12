@@ -45,12 +45,39 @@ coded before the probe output is reviewed.** The design deliberately marks
 several SAP API names as unverified; the probe is what converts them from
 assumption to fact.
 
-## Phase 1+ (after probe review)
+## Phase 1 — `src/usage/` (live, PROD-safe read slice)
 
-- `ZADO_CORE` tables (`ZADO_CFG`, `ZADO_RUN`, `ZADO_RUN_MSG`, `ZADO_AUDIT`),
-  domains, message class, `ZCL_ADO_LOG/CFG/MSG/HASH/PSEUDONYM`
-- `ZADO_USAGE` snapshot tables + collector + CDS + OData V4 binding
-  `ZADO_USAGE_O4` (service root consumed by the CAP layer:
-  `/sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001`)
-- Seeded-usage generator for the A4H appliance (thin ST03N history there
-  makes the analytics screens undemonstrable otherwise)
+Serves the CAP layer at
+`/sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001` with four
+entities (names are the CAP adapter contract — do not rename):
+
+| Entity | Provider | Content |
+|---|---|---|
+| `UsagePeriods` | `ZCL_ADO_Q_PERIODS` | Available ST03N periods from `SWNCMONIINDEX` (defensive column access, synthetic fallback). Also the connection-check probe target. |
+| `TransactionUsage` | `ZCL_ADO_Q_TX_USAGE` | Per-tcode profile aggregated from the `USERTCODE` aggregate; page-window materialisation; TSTC/TSTCT enrichment per page. |
+| `UserTransactionUsage` | `ZCL_ADO_Q_USER_TX` | User×tcode rows, **pseudonymised** (`ZCL_ADO_PSEUDONYM`, SHA-256), top-20 users per tcode bounded at source. |
+| `SystemInfo` | `ZCL_ADO_Q_SYSTEM_INFO` | SID/client/S4CORE/SAP_UI, collector-running flag, add-on version. |
+
+The workhorse is `ZCL_ADO_ST03_READER`: loops monthly
+`SWNC_COLLECTOR_GET_AGGREGATES` calls over the requested window
+(component `TOTAL`, period type `M` — verified on RD1), aggregates, and
+session-caches per window so OData paging never refetches the FM.
+
+Install: abapGit pull (package `ZADO`), activate, then create the OData V4
+service binding `ZADO_USAGE_O4` for `ZADO_USAGE_SRV` and publish it
+(/IWFND or the "Publish" button in the binding editor). Smoke test in the
+browser: `<host>/sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001/UsagePeriods?$top=5`.
+
+Known Phase 1 limits (by design, revisited with the snapshot iteration):
+- Aggregates are recomputed per session (cached), not persisted ABAP-side —
+  the SaaS persists page-by-page instead.
+- Only the default sort orders the CAP adapter requests are honoured.
+- COUNT-vs-DCOUNT semantics still to be validated against the ST03N UI
+  (API-matrix follow-up 7); executions currently = COUNT.
+
+## Phase 2+ (next)
+
+- `ZADO_CORE` tables (`ZADO_CFG` incl. per-tenant pseudonym salt,
+  `ZADO_RUN`, `ZADO_AUDIT`), snapshot tables + background collector for
+  PROD-scale windows
+- `ZADO_CATALOG` (needs a real S/4 — validated against RD1)

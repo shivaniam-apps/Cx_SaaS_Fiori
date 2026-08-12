@@ -270,11 +270,12 @@ async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodT
   const filters = [];
   if (periodFrom) filters.push(`PeriodFrom ge ${periodFrom}`);
   if (periodTo) filters.push(`PeriodTo le ${periodTo}`);
-  // Volume is bounded at the SOURCE: the add-on's parameterized view applies
-  // top-N users per tcode above a threshold before rows ever leave ABAP.
-  const params = {};
-  if (topUsersPerTcode) params.p_top_users = topUsersPerTcode;
-  if (minExecutions) params.p_min_executions = minExecutions;
+  // Volume is bounded at the SOURCE: ZCL_ADO_Q_USER_TX keeps only the top-N
+  // users per tcode (default 20) before rows ever leave ABAP. Passing the N
+  // over the wire becomes a view parameter in the persisted-snapshot
+  // iteration; until then the requested values document intent.
+  void topUsersPerTcode;
+  void minExecutions;
 
   const page = await fetchPagedEntity({
     targetSystem,
