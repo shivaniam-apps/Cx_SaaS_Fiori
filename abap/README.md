@@ -1,5 +1,11 @@
 # ZADO — AdoptOps ABAP add-on
 
+> **Canonical abapGit repo:**
+> [shivaniam-apps/a4h_2023_zado](https://github.com/shivaniam-apps/a4h_2023_zado)
+> — that is what the SAP systems pull. This folder is the working copy inside
+> the product repo; after changing anything here, mirror it:
+> `Copy-Item abap\* ..\a4h_2023_zado\ -Recurse -Force` then commit+push there.
+
 abapGit repository for the AdoptOps backend agent. Namespace prefix `ZADO`
 (classes `ZCL_ADO_*`, interfaces `ZIF_ADO_*`), conventions mirrored from the
 sibling `a4h_2023_zshvm` repo.
