@@ -14,17 +14,34 @@ REPORT zado_export_usage.
 " audited opt-in the connected mode enforces).
 "---------------------------------------------------------------------
 
-"=====================================================================
-" EDIT HERE: export window and options (no selection screen - values
-" are maintained in the source so the report also runs where the
-" dynpro selection screen is unavailable).
-"=====================================================================
-CONSTANTS: p_from  TYPE d VALUE '20260201',  "period start (YYYYMMDD)
-           p_to    TYPE d VALUE '20260731',  "period end   (YYYYMMDD)
-           p_top   TYPE i VALUE 20,          "top users per transaction
-           p_ident TYPE abap_bool VALUE ' '. "'X' = identified export
-                                             "(explicit opt-in; default
-                                             " keeps user ids hashed)
+" Selection screen with labels maintained IN THE PROGRAM: each parameter
+" sits in a line with a named COMMENT element whose text is assigned at
+" INITIALIZATION - no Text Elements maintenance needed.
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_from FOR FIELD p_from.
+PARAMETERS p_from TYPE d OBLIGATORY DEFAULT '20260201'.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_to FOR FIELD p_to.
+PARAMETERS p_to TYPE d OBLIGATORY DEFAULT '20260731'.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_top FOR FIELD p_top.
+PARAMETERS p_top TYPE i DEFAULT 20.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_ident FOR FIELD p_ident.
+PARAMETERS p_ident AS CHECKBOX DEFAULT ''.
+SELECTION-SCREEN END OF LINE.
+
+INITIALIZATION.
+  c_from  = 'Period from'.
+  c_to    = 'Period to'.
+  c_top   = 'Top users per transaction'.
+  c_ident = 'Identified export (opt-in)'.
 
 CLASS lcl_export DEFINITION FINAL.
   PUBLIC SECTION.
