@@ -25,6 +25,7 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   entity BackendLaunchpadContent as projection on db.BackendLaunchpadContent;
   @readonly entity AppMappingOverlay as projection on db.AppMappingOverlay;
   entity AnalysisRuns as projection on db.AnalysisRuns;
+  entity AdoptionWaves as projection on db.AdoptionWaves;
   entity AppProposals as projection on db.AppProposals;
   entity ProposalEvidence as projection on db.ProposalEvidence;
   entity ProposalComments as projection on db.ProposalComments;
@@ -182,4 +183,39 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   action bulkDecideProposals(proposalIds: many String, decision: String, notes: String) returns LargeString;
 
   action addProposalComment(proposalId: UUID, commentType: String, commentText: String) returns ProposalComments;
+
+  // --- Adoption waves (Phase 3) ---------------------------------------------
+  // Wave membership lives on AppProposals.wave; TargetWave (the wave Name)
+  // is kept in sync for existing consumers of the string label.
+
+  @(requires: 'Approver')
+  action createAdoptionWave(
+    targetSystemId: UUID,
+    name: String,
+    description: String,
+    targetDate: Date,
+    adoptLabelled: Boolean   // link proposals whose TargetWave already equals name
+  ) returns AdoptionWaves;
+
+  @(requires: 'Approver')
+  action assignProposalsToWave(waveId: UUID, proposalIds: many String) returns LargeString;
+  @(requires: 'Approver')
+  action removeProposalsFromWave(waveId: UUID, proposalIds: many String) returns LargeString;
+
+  // Wave list with server-side membership rollups (counts by review status,
+  // approved execution share) so the list page needs no child reads.
+  function queryAdoptionWaves(targetSystemId: UUID) returns LargeString;
+  function readAdoptionWave(waveId: UUID) returns LargeString;
+
+  // --- Activation planning (Phase 3) ----------------------------------------
+  // createActivationPlan derives the step sequence from the wave's APPROVED
+  // proposals; simulateActivationPlan is verify-first and never writes to
+  // S/4 (mock-S4 runs a deterministic stub; live simulation arrives with
+  // the ZADO activation read unit).
+
+  @(requires: 'Activator')
+  action createActivationPlan(waveId: UUID, name: String) returns LargeString;
+  @(requires: 'Activator')
+  action simulateActivationPlan(planId: UUID) returns LargeString;
+  function readActivationPlan(planId: UUID) returns LargeString;
 };

@@ -1,0 +1,49 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { canBuildPlan, membershipLabel, simulationLabel, groupSteps } from './waveModel.js';
+
+test('canBuildPlan requires at least one approved member', () => {
+  assert.equal(canBuildPlan(null), false);
+  assert.equal(canBuildPlan({ appCount: 3, approved: 0 }), false);
+  assert.equal(canBuildPlan({ appCount: 3, approved: 1 }), true);
+});
+
+test('membershipLabel reads naturally and omits empty buckets', () => {
+  assert.equal(membershipLabel(null), 'No proposals assigned');
+  assert.equal(membershipLabel({ appCount: 0 }), 'No proposals assigned');
+  assert.equal(membershipLabel({ appCount: 4, approved: 4, open: 0, deferred: 0, rejected: 0 }), '4 apps · 4 approved');
+  assert.equal(
+    membershipLabel({ appCount: 3, approved: 1, open: 1, deferred: 1, rejected: 0 }),
+    '3 apps · 1 approved · 1 open · 1 deferred'
+  );
+  assert.equal(membershipLabel({ appCount: 1, approved: 0, open: 1 }), '1 app · 0 approved · 1 open');
+});
+
+test('simulationLabel is empty before simulation and compact after', () => {
+  assert.equal(simulationLabel(null), '');
+  assert.equal(simulationLabel({ Status: 'DRAFT' }), '');
+  assert.equal(
+    simulationLabel({ SimulatedAt: 'x', SucceededCount: 12, WarningCount: 4, FailedCount: 0, SkippedCount: 1 }),
+    '12 OK, 4 warnings, 1 skippable'
+  );
+  assert.equal(
+    simulationLabel({ SimulatedAt: 'x', SucceededCount: 5, WarningCount: 1, FailedCount: 2, SkippedCount: 0 }),
+    '5 OK, 1 warning, 2 blocked'
+  );
+});
+
+test('groupSteps preserves first-seen group order and step order within groups', () => {
+  const steps = [
+    { StepGroup: 'FOUNDATION', SequenceNo: 1 },
+    { StepGroup: 'SERVICE', SequenceNo: 2 },
+    { StepGroup: 'SERVICE', SequenceNo: 3 },
+    { StepGroup: 'CONTENT', SequenceNo: 4 },
+    { StepGroup: 'ROLE', SequenceNo: 5 },
+    { StepGroup: 'TRANSPORT', SequenceNo: 6 }
+  ];
+  const groups = groupSteps(steps);
+  assert.deepEqual(groups.map((g) => g.group), ['FOUNDATION', 'SERVICE', 'CONTENT', 'ROLE', 'TRANSPORT']);
+  assert.deepEqual(groups[1].steps.map((s) => s.SequenceNo), [2, 3]);
+  assert.deepEqual(groupSteps([]), []);
+  assert.deepEqual(groupSteps(null), []);
+});

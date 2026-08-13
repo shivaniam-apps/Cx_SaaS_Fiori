@@ -133,4 +133,52 @@ export async function decideProposal(kind, proposalId, notes, targetWave) {
   return postAction(kind, { proposalId, notes: notes || null, targetWave: targetWave || null });
 }
 
+// --- Adoption waves -----------------------------------------------------------
+
+export async function queryAdoptionWaves(targetSystemId) {
+  const path = targetSystemId ? `queryAdoptionWaves(targetSystemId=${targetSystemId})` : 'queryAdoptionWaves()';
+  const response = await http.get(`/fiori/${path}`);
+  return parseJsonActionResult(response.data);
+}
+
+export async function readAdoptionWave(waveId) {
+  const response = await http.get(`/fiori/readAdoptionWave(waveId=${waveId})`);
+  return parseJsonActionResult(response.data);
+}
+
+export async function createAdoptionWave(request) {
+  return postAction('createAdoptionWave', request);
+}
+
+export async function deleteAdoptionWave(waveId) {
+  await http.delete(`/fiori/AdoptionWaves(${waveId})`);
+}
+
+export async function assignProposalsToWave(waveId, proposalIds) {
+  const response = await http.post('/fiori/assignProposalsToWave', { waveId, proposalIds });
+  return parseJsonActionResult(response.data);
+}
+
+export async function removeProposalsFromWave(waveId, proposalIds) {
+  const response = await http.post('/fiori/removeProposalsFromWave', { waveId, proposalIds });
+  return parseJsonActionResult(response.data);
+}
+
+// --- Activation planning ------------------------------------------------------
+
+export async function createActivationPlan(waveId, name) {
+  const response = await http.post('/fiori/createActivationPlan', { waveId, name: name || null });
+  return parseJsonActionResult(response.data);
+}
+
+export async function simulateActivationPlan(planId) {
+  const response = await http.post('/fiori/simulateActivationPlan', { planId });
+  return parseJsonActionResult(response.data);
+}
+
+export async function readActivationPlan(planId) {
+  const response = await http.get(`/fiori/readActivationPlan(planId=${planId})`);
+  return parseJsonActionResult(response.data);
+}
+
 export const TERMINAL_TASK_STATES = ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];

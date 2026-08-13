@@ -3,6 +3,7 @@ const { randomUUID } = require('node:crypto');
 const Logger = cds.log('public-service');
 const { registerTenantScope, currentTenant } = require('./utils/tenant-scope.js');
 const { checkTargetSystemConnection, getBackendCapabilities } = require('./utils/s4-fiori-adapter.js');
+const { shouldMockSap } = require('./utils/s4-http-client.js');
 const { enqueueTask } = require('./utils/task-runner.js');
 
 module.exports = cds.service.impl(async function () {
@@ -340,12 +341,21 @@ module.exports = cds.service.impl(async function () {
             return req.reject(400, 'A rejection requires a reason.');
         }
         const now = new Date().toISOString();
+        // Wave membership: the string label stays the API surface, but when a
+        // wave row of that name exists the association is linked as well.
+        let waveId = proposal.wave_ID || null;
+        if (targetWave) {
+            const wave = await SELECT.one.from('adops.db.AdoptionWaves')
+                .where({ targetSystem_ID: proposal.targetSystem_ID, Name: targetWave });
+            if (wave) waveId = wave.ID;
+        }
         await UPDATE('adops.db.AppProposals').set({
             ReviewStatus: decision,
             DecidedBy: req.user?.id || null,
             DecidedAt: now,
             DecisionNotes: notes || null,
-            TargetWave: targetWave || proposal.TargetWave
+            TargetWave: targetWave || proposal.TargetWave,
+            wave_ID: waveId
         }).where({ ID: proposalId });
         await INSERT.into('adops.db.AuditEvents').entries({
             ID: randomUUID(),
@@ -403,6 +413,197 @@ module.exports = cds.service.impl(async function () {
             CommentText: String(commentText).slice(0, 2000)
         });
         return SELECT.one.from('adops.db.ProposalComments').where({ ID: id });
+    });
+
+    // --- Adoption waves (Phase 3) -------------------------------------------
+
+    // Membership rollups for a set of waves in ONE grouped query (list pages
+    // must not do child reads). Distinct-user figures are deliberately absent:
+    // summing per-proposal user counts would double-count shared users.
+    const waveRollups = async (waveIds) => {
+        if (!waveIds.length) return {};
+        const rows = await SELECT.from('adops.db.AppProposals')
+            .columns('wave_ID', 'ReviewStatus', 'count(*) as cnt', 'sum(TotalExecutions) as execSum')
+            .where({ wave_ID: { in: waveIds } })
+            .groupBy('wave_ID', 'ReviewStatus');
+        const byWave = {};
+        for (const row of rows) {
+            const agg = byWave[row.wave_ID] || (byWave[row.wave_ID] = {
+                appCount: 0, approved: 0, open: 0, rejected: 0, deferred: 0,
+                totalExecutions: 0, approvedExecutions: 0
+            });
+            const cnt = Number(row.cnt) || 0;
+            const execs = Number(row.execSum) || 0;
+            agg.appCount += cnt;
+            agg.totalExecutions += execs;
+            if (row.ReviewStatus === 'APPROVED') { agg.approved += cnt; agg.approvedExecutions += execs; }
+            else if (row.ReviewStatus === 'REJECTED') agg.rejected += cnt;
+            else if (row.ReviewStatus === 'DEFERRED') agg.deferred += cnt;
+            else agg.open += cnt;
+        }
+        return byWave;
+    };
+
+    this.on('createAdoptionWave', async (req) => {
+        const { targetSystemId, name, description, targetDate, adoptLabelled } = req.data;
+        const trimmed = String(name || '').trim();
+        if (!trimmed) return req.reject(400, 'name is required.');
+        const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
+        if (!targetSystem) return req.reject(404, 'Target system not found.');
+        const existing = await SELECT.one.from('adops.db.AdoptionWaves')
+            .where({ targetSystem_ID: targetSystemId, Name: trimmed });
+        if (existing) return req.reject(409, `A wave named "${trimmed}" already exists for this target system.`);
+
+        const id = randomUUID();
+        await INSERT.into('adops.db.AdoptionWaves').entries({
+            ID: id,
+            targetSystem_ID: targetSystemId,
+            TenantId: currentTenant(),
+            Name: trimmed,
+            Description: description || '',
+            Status: 'PLANNED',
+            TargetDate: targetDate || null
+        });
+        if (adoptLabelled) {
+            // Adopt proposals already carrying this label from the string era.
+            await UPDATE('adops.db.AppProposals')
+                .set({ wave_ID: id })
+                .where({ targetSystem_ID: targetSystemId, TargetWave: trimmed, wave_ID: null });
+        }
+        return SELECT.one.from('adops.db.AdoptionWaves').where({ ID: id });
+    });
+
+    const setWaveMembership = async (req, join) => {
+        const { waveId, proposalIds = [] } = req.data;
+        const wave = await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: waveId });
+        if (!wave) return req.reject(404, 'Adoption wave not found.');
+        if (!proposalIds.length) return JSON.stringify({ changed: 0 });
+        const changed = await UPDATE('adops.db.AppProposals')
+            .set(join
+                ? { wave_ID: wave.ID, TargetWave: wave.Name }
+                : { wave_ID: null, TargetWave: null })
+            .where(join
+                ? { ID: { in: proposalIds } }
+                : { ID: { in: proposalIds }, wave_ID: wave.ID });
+        return JSON.stringify({ changed: Number(changed) || 0 });
+    };
+    this.on('assignProposalsToWave', (req) => setWaveMembership(req, true));
+    this.on('removeProposalsFromWave', (req) => setWaveMembership(req, false));
+
+    this.on('queryAdoptionWaves', async (req) => {
+        const { targetSystemId } = req.data;
+        const where = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
+        const waves = await SELECT.from('adops.db.AdoptionWaves').where(where)
+            .orderBy('SortOrder asc', 'Name asc');
+        const rollups = await waveRollups(waves.map((w) => w.ID));
+        const items = waves.map((w) => ({ ...w, Rollup: rollups[w.ID] || null }));
+        return JSON.stringify({ Items: items, Count: items.length });
+    });
+
+    this.on('readAdoptionWave', async (req) => {
+        const { waveId } = req.data;
+        const wave = await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: waveId });
+        if (!wave) return req.reject(404, 'Adoption wave not found.');
+        const proposals = await SELECT.from('adops.db.AppProposals')
+            .columns('ID', 'FioriId', 'AppTitle', 'LineOfBusiness', 'Score', 'Rank', 'Confidence',
+                'ReviewStatus', 'TotalExecutions', 'DistinctUserCount', 'BusinessRoleId')
+            .where({ wave_ID: waveId })
+            .orderBy('Rank asc');
+        const plans = await SELECT.from('adops.db.ActivationPlans')
+            .columns('ID', 'Name', 'Status', 'StepCount', 'SucceededCount', 'WarningCount',
+                'FailedCount', 'SkippedCount', 'SimulatedAt', 'createdAt')
+            .where({ wave_ID: waveId })
+            .orderBy('createdAt desc');
+        const rollup = (await waveRollups([waveId]))[waveId] || null;
+        return JSON.stringify({ Wave: wave, Rollup: rollup, Proposals: proposals, Plans: plans });
+    });
+
+    // Deleting a wave unlinks members; it never deletes proposals or plans.
+    this.before('DELETE', 'AdoptionWaves', async (req) => {
+        const id = req.data.ID;
+        await UPDATE('adops.db.AppProposals').set({ wave_ID: null, TargetWave: null }).where({ wave_ID: id });
+        await UPDATE('adops.db.ActivationPlans').set({ wave_ID: null }).where({ wave_ID: id });
+    });
+
+    // --- Activation planning (Phase 3) --------------------------------------
+
+    const activationPlanPayload = async (planId) => {
+        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
+        if (!plan) return null;
+        const steps = await SELECT.from('adops.db.ActivationSteps')
+            .where({ plan_ID: planId }).orderBy('SequenceNo asc');
+        return { Plan: plan, Steps: steps };
+    };
+
+    this.on('createActivationPlan', async (req) => {
+        const { waveId, name } = req.data;
+        const wave = await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: waveId });
+        if (!wave) return req.reject(404, 'Adoption wave not found.');
+        const approved = await SELECT.from('adops.db.AppProposals')
+            .where({ wave_ID: waveId, ReviewStatus: 'APPROVED' })
+            .orderBy('Rank asc');
+        if (!approved.length) return req.reject(400, 'The wave has no approved proposals - approve apps before planning activation.');
+
+        const { deriveActivationSteps } = require('./utils/activation-plan.js');
+        const { steps, spaceId, roleName } = deriveActivationSteps({ proposals: approved, waveName: wave.Name });
+
+        const planId = randomUUID();
+        await INSERT.into('adops.db.ActivationPlans').entries({
+            ID: planId,
+            targetSystem_ID: wave.targetSystem_ID,
+            wave_ID: wave.ID,
+            analysisRun_ID: approved[0].analysisRun_ID,
+            TenantId: currentTenant(),
+            Name: String(name || '').trim() || `Activation of ${wave.Name}`,
+            Description: `Derived from ${approved.length} approved proposal(s) of wave "${wave.Name}".`,
+            Status: 'DRAFT',
+            SpaceId: spaceId,
+            SpaceTitle: wave.Name,
+            RoleNamePattern: roleName,
+            AssignUsers: false,
+            StopOnError: true,
+            StepCount: steps.length
+        });
+        await INSERT.into('adops.db.ActivationSteps').entries(steps.map((s) => ({
+            ...s, plan_ID: planId, TenantId: currentTenant()
+        })));
+        Logger.info(`Activation plan ${planId} derived from wave ${wave.Name}: ${steps.length} steps.`);
+        return JSON.stringify(await activationPlanPayload(planId));
+    });
+
+    this.on('simulateActivationPlan', async (req) => {
+        const { planId } = req.data;
+        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
+        if (!plan) return req.reject(404, 'Activation plan not found.');
+        if (!['DRAFT', 'SIMULATED'].includes(plan.Status)) {
+            return req.reject(400, `Plan is ${plan.Status}; simulation runs on DRAFT or SIMULATED plans.`);
+        }
+        if (!shouldMockSap()) {
+            return req.reject(501, 'Live simulation requires the ZADO activation read unit; only mock-S4 simulation is available in this build.');
+        }
+
+        const { simulateSteps, mockSimulationProbe } = require('./utils/activation-plan.js');
+        const steps = await SELECT.from('adops.db.ActivationSteps')
+            .where({ plan_ID: planId }).orderBy('SequenceNo asc');
+        const { steps: verdicts, rollup } = simulateSteps(steps, mockSimulationProbe);
+        for (const v of verdicts) {
+            await UPDATE('adops.db.ActivationSteps')
+                .set({ Status: v.Status, ExistsAlready: v.ExistsAlready, SimulationMessage: v.SimulationMessage })
+                .where({ ID: v.ID });
+        }
+        await UPDATE('adops.db.ActivationPlans').set({
+            Status: 'SIMULATED',
+            SimulatedAt: new Date().toISOString(),
+            SimulatedBy: req.user?.id || null,
+            ...rollup
+        }).where({ ID: planId });
+        return JSON.stringify(await activationPlanPayload(planId));
+    });
+
+    this.on('readActivationPlan', async (req) => {
+        const payload = await activationPlanPayload(req.data.planId);
+        if (!payload) return req.reject(404, 'Activation plan not found.');
+        return JSON.stringify(payload);
     });
 
     this.on('queryUsageOverview', async (req) => {

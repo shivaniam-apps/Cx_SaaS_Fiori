@@ -359,7 +359,8 @@ context adops.db {
             DecidedAt             : Timestamp;
             DecisionNotes         : String(2000);
             Priority              : String(10);   // HIGH|MEDIUM|LOW
-            TargetWave            : String(40);
+            TargetWave            : String(40);   // legacy label; kept in sync with wave.Name
+            wave                  : Association to AdoptionWaves;
             evidence              : Composition of many ProposalEvidence
                                           on evidence.proposal = $self;
             comments              : Composition of many ProposalComments
@@ -394,12 +395,33 @@ context adops.db {
       }
 
       // ------------------------------------------------------------------
+      // Adoption waves
+      // ------------------------------------------------------------------
+
+      // First-class wave object. AppProposals.TargetWave (the wave's Name)
+      // stays maintained in parallel for backward compatibility - existing
+      // consumers filter on the string; the association is the new source
+      // of truth for membership.
+      entity AdoptionWaves : cuid, managed, tenantScoped {
+            targetSystem : Association to TargetSystems;
+            Name         : String(40);
+            Description  : String(500);
+            Status       : String(20) default 'PLANNED';
+                           // PLANNED | IN_PROGRESS | COMPLETED | ON_HOLD
+            TargetDate   : Date;
+            SortOrder    : Integer default 0;
+            proposals    : Association to many AppProposals
+                                 on proposals.wave = $self;
+      }
+
+      // ------------------------------------------------------------------
       // Activation and transport
       // ------------------------------------------------------------------
 
       entity ActivationPlans : cuid, managed, tenantScoped {
             targetSystem     : Association to TargetSystems;
             analysisRun      : Association to AnalysisRuns;
+            wave             : Association to AdoptionWaves;
             transportRequest : Association to TransportRequests;
             Name             : String(160);
             Description      : String(500);
