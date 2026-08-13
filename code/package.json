@@ -40,6 +40,7 @@
     "srv:hybrid:sqlite": "npm run db:refresh:sqlite && npx shx cp package.json srv/ && npx shx cp .cdsrc-private.json srv/ && cd srv && cds bind --exec --profile hybrid -- node ../scripts/without-vcap-services.mjs postgresql-db -- npm run srv:hybrid:sqlite:helper",
     "srv:hybrid:sqlite:helper": "node ../scripts/with-env.mjs NODE_ENV=production CDS_ENV=hybrid CDS_REQUIRES_AUTH_KIND=mocked CDS_REQUIRES_DB_KIND=sqlite CDS_REQUIRES_DB_CREDENTIALS_URL=../db.sqlite ADOPTOPS_DB_MODE=sqlite ADOPTOPS_S4_URL_OVERRIDES=S4H_2023=http://vhcala4hci:50000 PORT=4104 -- cds serve PublicService,AdminService,CoreService --watch --profile hybrid",
     "srv:sqlite": "npm run db:refresh:sqlite && cd srv && node ../scripts/with-env.mjs NODE_ENV=development CDS_ENV=development CDS_REQUIRES_AUTH_KIND=mocked ADOPTOPS_DB_MODE=sqlite ADOPTOPS_MOCK_S4=true PORT=4104 -- npx cds serve srv/public-service.cds srv/admin-service.cds srv/core-service.cds --watch --profile development",
+    "srv:sqlite:nowatch": "npm run db:refresh:sqlite && cd srv && node ../scripts/with-env.mjs NODE_ENV=development CDS_ENV=development CDS_REQUIRES_AUTH_KIND=mocked ADOPTOPS_DB_MODE=sqlite ADOPTOPS_MOCK_S4=true PORT=4104 -- npx cds serve srv/public-service.cds srv/admin-service.cds srv/core-service.cds --profile development",
     "mock:hybrid": "cds bind --exec npm run mock:run:hybrid",
     "mock:run:hybrid": "(cd router && cds bind --exec --profile hybrid node ../node_modules/@sap/html5-repo-mock/index.js)",
     "router:hybrid": "cds bind --exec --profile hybrid npm run router:run",
