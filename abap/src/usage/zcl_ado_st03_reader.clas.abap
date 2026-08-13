@@ -217,11 +217,14 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD month_starts.
+    " lv_next must be TYPED d: date+integer arithmetic infers i, and an
+    " integer does not permit the (6) substring below.
+    DATA lv_next  TYPE d.
     DATA(lv_month) = CONV d( |{ iv_from(6) }01| ).
     WHILE lv_month <= iv_to.
       APPEND lv_month TO rt_months.
       " First day of the following month.
-      DATA(lv_next) = CONV d( |{ lv_month(6) }28| ) + 5.
+      lv_next  = CONV d( |{ lv_month(6) }28| ) + 5.
       lv_month = CONV d( |{ lv_next(6) }01| ).
       IF lines( rt_months ) > 36. "Hard cap: three years per window.
         EXIT.
