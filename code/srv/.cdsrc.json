@@ -3,6 +3,11 @@
     "app": "../app",
     "db-sqlite": "../db/sqlite"
   },
+  "server": {
+    "body_parser": {
+      "limit": "20mb"
+    }
+  },
   "requires": {
     " ---------------------": "---",
     "--- MTXs Settings ----": "---",

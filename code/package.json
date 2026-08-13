@@ -75,6 +75,11 @@
     }
   },
   "cds": {
+    "server": {
+      "body_parser": {
+        "limit": "20mb"
+      }
+    },
     "hana": {
       "deploy-format": "hdbtable"
     },
