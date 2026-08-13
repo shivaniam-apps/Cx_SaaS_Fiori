@@ -187,19 +187,34 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
     SORT et_tx_usage BY execution_count DESCENDING transaction_code ASCENDING.
 
     " --- user x tcode rows, top-N per tcode, pseudonymised -------------------
-    DATA lt_user_all TYPE ty_user_tx_t.
+    " Aggregated by (user, 20-char tcode): distinct 72-char ENTRY_IDs (batch
+    " job variants) collapse to the same truncated code, matching the
+    " per-tcode rollup above - without this merge the same user leaves the
+    " system once per variant, i.e. duplicate (user, tcode) rows.
+    DATA lt_user_agg TYPE HASHED TABLE OF ty_user_tx
+      WITH UNIQUE KEY user_key transaction_code.
+    DATA lv_user_key TYPE ty_user_tx-user_key.
+    DATA lv_tcode20  TYPE ty_user_tx-transaction_code.
     LOOP AT lt_raw ASSIGNING <ls_raw>.
-      APPEND VALUE ty_user_tx(
-          user_key          = COND #(
-            WHEN iv_pseudonymise = abap_true
-            THEN zcl_ado_pseudonym=>hash( CONV string( <ls_raw>-account ) )
-            ELSE <ls_raw>-account )
-          transaction_code  = <ls_raw>-entry_id
-          period_from       = iv_from
-          period_to         = iv_to
-          execution_count   = <ls_raw>-count
-          dialog_step_count = <ls_raw>-count ) TO lt_user_all.
+      lv_user_key = COND string(
+        WHEN iv_pseudonymise = abap_true
+        THEN zcl_ado_pseudonym=>hash( CONV string( <ls_raw>-account ) )
+        ELSE <ls_raw>-account ).
+      lv_tcode20 = <ls_raw>-entry_id.
+      READ TABLE lt_user_agg ASSIGNING FIELD-SYMBOL(<ls_uagg>)
+        WITH TABLE KEY user_key = lv_user_key transaction_code = lv_tcode20.
+      IF sy-subrc <> 0.
+        INSERT VALUE ty_user_tx( user_key         = lv_user_key
+                                 transaction_code = lv_tcode20
+                                 period_from      = iv_from
+                                 period_to        = iv_to )
+          INTO TABLE lt_user_agg ASSIGNING <ls_uagg>.
+      ENDIF.
+      <ls_uagg>-execution_count   = <ls_uagg>-execution_count   + <ls_raw>-count.
+      <ls_uagg>-dialog_step_count = <ls_uagg>-dialog_step_count + <ls_raw>-count.
     ENDLOOP.
+    DATA lt_user_all TYPE ty_user_tx_t.
+    lt_user_all = lt_user_agg.
     SORT lt_user_all BY transaction_code ASCENDING execution_count DESCENDING.
 
     " Volume bound at the source: only the top-N users per transaction leave
