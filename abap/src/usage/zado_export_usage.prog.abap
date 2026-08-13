@@ -14,10 +14,17 @@ REPORT zado_export_usage.
 " audited opt-in the connected mode enforces).
 "---------------------------------------------------------------------
 
-PARAMETERS: p_from  TYPE d OBLIGATORY DEFAULT '20260201',
-            p_to    TYPE d OBLIGATORY DEFAULT '20260731',
-            p_top   TYPE i DEFAULT 20,
-            p_ident AS CHECKBOX DEFAULT ''.
+"=====================================================================
+" EDIT HERE: export window and options (no selection screen - values
+" are maintained in the source so the report also runs where the
+" dynpro selection screen is unavailable).
+"=====================================================================
+CONSTANTS: p_from  TYPE d VALUE '20260201',  "period start (YYYYMMDD)
+           p_to    TYPE d VALUE '20260731',  "period end   (YYYYMMDD)
+           p_top   TYPE i VALUE 20,          "top users per transaction
+           p_ident TYPE abap_bool VALUE ' '. "'X' = identified export
+                                             "(explicit opt-in; default
+                                             " keeps user ids hashed)
 
 CLASS lcl_export DEFINITION FINAL.
   PUBLIC SECTION.
