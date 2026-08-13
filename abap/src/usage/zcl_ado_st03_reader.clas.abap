@@ -52,6 +52,10 @@ CLASS zcl_ado_st03_reader DEFINITION
                 et_user_tx        TYPE ty_user_tx_t.
 
   PRIVATE SECTION.
+    " Named table type: RETURNING parameters cannot use inline/generic
+    " table declarations.
+    TYPES ty_date_t TYPE STANDARD TABLE OF d WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_cache,
              cache_key TYPE string,
              tx_usage  TYPE ty_tx_usage_t,
@@ -62,7 +66,7 @@ CLASS zcl_ado_st03_reader DEFINITION
     CLASS-METHODS month_starts
       IMPORTING iv_from          TYPE d
                 iv_to            TYPE d
-      RETURNING VALUE(rt_months) TYPE STANDARD TABLE OF d WITH EMPTY KEY.
+      RETURNING VALUE(rt_months) TYPE ty_date_t.
 ENDCLASS.
 
 
