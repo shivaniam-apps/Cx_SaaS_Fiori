@@ -216,13 +216,15 @@ module.exports = cds.service.impl(async function () {
         const { targetSystemId, payload } = req.data;
         const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
         if (!targetSystem) return req.reject(404, 'Target system not found.');
+        const { importUsageExtract, sanitizeExtractJson } = require('./utils/usage-extraction.js');
         let extract;
         try {
-            extract = JSON.parse(payload);
+            // Sanitize first: raw SWNC fields can smuggle control bytes into
+            // the exported JSON (observed on RD1), which strict parsing rejects.
+            extract = JSON.parse(sanitizeExtractJson(payload));
         } catch {
             return req.reject(400, 'The file is not valid JSON.');
         }
-        const { importUsageExtract } = require('./utils/usage-extraction.js');
         try {
             const result = await importUsageExtract({
                 targetSystem,

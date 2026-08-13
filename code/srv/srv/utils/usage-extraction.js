@@ -324,6 +324,50 @@ function mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top, topUser
 // as a normal ExtractionRun - same screens, same proposal engine.
 // ---------------------------------------------------------------------------
 
+// The file's tcode field is the raw SWNC ENTRY_ID: "<name> <task-type>" for
+// interactive entries ("PFCG T", "SAPMSSY1 R"), "<report> <jobname...>" for
+// batch. The export truncates to 20 chars, so a suffix may be cut off; an
+// entry that cannot be classified is treated as non-dialog.
+const TASK_TYPE_SUFFIX = /\s[A-Z]$/;
+
+// The ABAP exporter escapes quotes and backslashes but raw SWNC fields can
+// carry control bytes (observed on RD1: an ACCOUNT of 12 NULs from an aborted
+// session) that strict JSON.parse rejects. Strip C0 controls except tab/CR/LF
+// so one garbage row cannot block a whole file import.
+function sanitizeExtractJson(payload) {
+  return String(payload || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+}
+
+function parseSwncEntryId(entryId) {
+  const raw = String(entryId || '').trim();
+  const match = /^(.+)\s([A-Z])$/.exec(raw);
+  if (!match) return { tcode: raw, taskType: null, isDialog: false };
+  return { tcode: match[1].trim(), taskType: match[2], isDialog: match[2] === 'T' };
+}
+
+// Only dialog transactions ("... T") can match Fiori apps; on RD1 the rest -
+// update task, bgRFC daemons, batch jobs - was 98.9% of executions. Filter at
+// import and strip the suffix so TransactionCode is a clean tcode. A file
+// without any task-type suffixes (already-clean tcodes) imports unchanged.
+function filterDialogRows(transactions, userTcodes) {
+  const hasTaskTypes = transactions.some((row) => TASK_TYPE_SUFFIX.test(String(row.tcode || '').trim()));
+  if (!hasTaskTypes) {
+    return { transactions, userTcodes, skippedTransactions: 0, skippedUserRows: 0 };
+  }
+  const keep = (rows) => rows.flatMap((row) => {
+    const parsed = parseSwncEntryId(row.tcode);
+    return parsed.isDialog ? [{ ...row, tcode: parsed.tcode }] : [];
+  });
+  const keptTransactions = keep(transactions);
+  const keptUserTcodes = keep(userTcodes);
+  return {
+    transactions: keptTransactions,
+    userTcodes: keptUserTcodes,
+    skippedTransactions: transactions.length - keptTransactions.length,
+    skippedUserRows: userTcodes.length - keptUserTcodes.length
+  };
+}
+
 async function importUsageExtract({ targetSystem, extract, requestedBy, tenantId }) {
   const db = cds.db;
   if (extract?.format !== 'adops-usage-extract') {
@@ -332,9 +376,19 @@ async function importUsageExtract({ targetSystem, extract, requestedBy, tenantId
   const periodFrom = extract.periodFrom;
   const periodTo = extract.periodTo;
   if (!periodFrom || !periodTo) throw new Error('The extract carries no period.');
-  const transactions = Array.isArray(extract.transactions) ? extract.transactions : [];
-  const userTcodes = Array.isArray(extract.userTcodes) ? extract.userTcodes : [];
-  if (!transactions.length) throw new Error('The extract contains no transaction rows.');
+  const rawTransactions = Array.isArray(extract.transactions) ? extract.transactions : [];
+  const rawUserTcodes = Array.isArray(extract.userTcodes) ? extract.userTcodes : [];
+  if (!rawTransactions.length) throw new Error('The extract contains no transaction rows.');
+
+  const { transactions, userTcodes, skippedTransactions, skippedUserRows } =
+    filterDialogRows(rawTransactions, rawUserTcodes);
+  if (!transactions.length) {
+    throw new Error('The extract contains no dialog transaction rows - only background/technical entries.');
+  }
+  if (skippedTransactions || skippedUserRows) {
+    LOG.info(`Import filter: kept ${transactions.length}/${rawTransactions.length} transaction rows, ` +
+      `${userTcodes.length}/${rawUserTcodes.length} user rows (dialog task type only).`);
+  }
 
   const runId = randomUUID();
   const now = new Date().toISOString();
@@ -413,7 +467,7 @@ async function importUsageExtract({ targetSystem, extract, requestedBy, tenantId
     UserRowCount: userRows
   }).where({ ID: runId });
 
-  return { runId, transactions: transactions.length, userRows };
+  return { runId, transactions: transactions.length, userRows, skippedTransactions, skippedUserRows };
 }
 
 function pseudonymisedRequired(extract, targetSystem) {
@@ -422,4 +476,13 @@ function pseudonymisedRequired(extract, targetSystem) {
   return !(extract.pseudonymised === false && targetSystem.identifiedUsageAllowed);
 }
 
-module.exports = { runUsageExtraction, importUsageExtract, pseudonymiseUser, lineOfBusinessOf, isCustomTcode };
+module.exports = {
+  runUsageExtraction,
+  importUsageExtract,
+  pseudonymiseUser,
+  lineOfBusinessOf,
+  isCustomTcode,
+  parseSwncEntryId,
+  filterDialogRows,
+  sanitizeExtractJson
+};
