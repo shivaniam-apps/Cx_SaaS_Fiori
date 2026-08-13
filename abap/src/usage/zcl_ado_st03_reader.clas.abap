@@ -99,14 +99,26 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
     " whose row we have not verified.
     DATA lt_usertcode TYPE STANDARD TABLE OF swncaggusertcode WITH EMPTY KEY.
 
+    " Every exporting parameter goes in as ITS OWN declared type: literals
+    " raised CALL_FUNCTION_CONFLICT_TYPE at runtime on RD1 (the FM interface
+    " checks field types strictly for dynamic calls).
+    DATA lv_component  TYPE swnchostname.
+    DATA lv_sysid      TYPE swncsysid.
+    DATA lv_periodtype TYPE swncperitype.
+    DATA lv_periodstrt TYPE swncdatum.
+    lv_component  = 'TOTAL'.
+    lv_sysid      = sy-sysid.
+    lv_periodtype = 'M'.
+
     LOOP AT month_starts( iv_from = iv_from iv_to = iv_to ) INTO DATA(lv_month).
       CLEAR lt_usertcode.
+      lv_periodstrt = lv_month.
       CALL FUNCTION 'SWNC_COLLECTOR_GET_AGGREGATES'
         EXPORTING
-          component     = 'TOTAL'
-          assigndsys    = sy-sysid
-          periodtype    = 'M'
-          periodstrt    = lv_month
+          component     = lv_component
+          assigndsys    = lv_sysid
+          periodtype    = lv_periodtype
+          periodstrt    = lv_periodstrt
         TABLES
           usertcode     = lt_usertcode
         EXCEPTIONS
