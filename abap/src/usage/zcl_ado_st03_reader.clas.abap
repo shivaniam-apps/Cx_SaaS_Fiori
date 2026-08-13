@@ -204,7 +204,8 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
 
     " Volume bound at the source: only the top-N users per transaction leave
     " the system (the SaaS proposal engine UNIONs user sets, it does not need
-    " the long tail).
+    " the long tail). iv_top_users <= 0 means no limit - it used to export
+    " zero user rows, which silently broke proposal scoring downstream.
     DATA lv_current  TYPE ty_user_tx-transaction_code.
     DATA lv_taken    TYPE i.
     LOOP AT lt_user_all ASSIGNING FIELD-SYMBOL(<ls_user>).
@@ -213,7 +214,7 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
         lv_taken = 0.
       ENDIF.
       lv_taken = lv_taken + 1.
-      IF lv_taken <= iv_top_users.
+      IF iv_top_users <= 0 OR lv_taken <= iv_top_users.
         APPEND <ls_user> TO et_user_tx.
       ENDIF.
     ENDLOOP.

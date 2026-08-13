@@ -40,7 +40,7 @@ SELECTION-SCREEN END OF LINE.
 INITIALIZATION.
   c_from  = 'Period from'.
   c_to    = 'Period to'.
-  c_top   = 'Top users per transaction'.
+  c_top   = 'Top users/transaction (0 = all)'.
   c_ident = 'Identified export (opt-in)'.
 
 CLASS lcl_export DEFINITION FINAL.
