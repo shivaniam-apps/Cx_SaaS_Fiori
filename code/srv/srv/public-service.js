@@ -578,14 +578,26 @@ module.exports = cds.service.impl(async function () {
         if (!['DRAFT', 'SIMULATED'].includes(plan.Status)) {
             return req.reject(400, `Plan is ${plan.Status}; simulation runs on DRAFT or SIMULATED plans.`);
         }
-        if (!shouldMockSap()) {
-            return req.reject(501, 'Live simulation requires the ZADO activation read unit; only mock-S4 simulation is available in this build.');
-        }
-
+        // Live backend-state probing arrives with the ZADO read-side checks;
+        // until then simulation runs offline in live mode too - structural
+        // verdicts (irreversibility, dependency shape) still hold, and each
+        // message says so instead of blocking execution behind a 501.
         const { simulateSteps, mockSimulationProbe } = require('./utils/activation-plan.js');
+        const offline = !shouldMockSap();
+        const probe = offline
+            ? (step) => {
+                const verdict = mockSimulationProbe(step);
+                return {
+                    ...verdict,
+                    // Without a backend probe nothing may claim to exist.
+                    existsAlready: false,
+                    message: `${verdict.message} [offline simulation - backend state not probed]`
+                };
+            }
+            : mockSimulationProbe;
         const steps = await SELECT.from('adops.db.ActivationSteps')
             .where({ plan_ID: planId }).orderBy('SequenceNo asc');
-        const { steps: verdicts, rollup } = simulateSteps(steps, mockSimulationProbe);
+        const { steps: verdicts, rollup } = simulateSteps(steps, probe);
         for (const v of verdicts) {
             await UPDATE('adops.db.ActivationSteps')
                 .set({ Status: v.Status, ExistsAlready: v.ExistsAlready, SimulationMessage: v.SimulationMessage })
