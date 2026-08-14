@@ -70,7 +70,10 @@ CLASS zcl_ado_act_role IMPLEMENTATION.
     DATA lv_role   TYPE agr_name.
     DATA lv_text   TYPE agr_title.
     DATA lv_trkorr TYPE trkorr.
-    DATA lt_return TYPE zif_ado_act_step=>ty_messages.
+    " DEFAULT KEY, not EMPTY KEY: classic function groups hand their TABLES
+    " parameters to PERFORMs typed with default-key table types - an EMPTY
+    " KEY table dumps with PERFORM_CONFLICT_TAB_TYPE (seen on RD1).
+    DATA lt_return TYPE STANDARD TABLE OF bapiret2 WITH DEFAULT KEY.
     lv_role   = iv_role.
     lv_text   = iv_text.
     lv_trkorr = iv_trkorr.
@@ -164,8 +167,9 @@ CLASS zcl_ado_act_role IMPLEMENTATION.
     DATA lv_failed TYPE i.
     LOOP AT it_users INTO DATA(lv_user_raw).
       DATA lv_user TYPE xubname.
-      DATA lt_agrs TYPE STANDARD TABLE OF bapiagr WITH EMPTY KEY.
-      DATA lt_ret  TYPE zif_ado_act_step=>ty_messages.
+      " DEFAULT KEY for TABLES parameters (see create_role).
+      DATA lt_agrs TYPE STANDARD TABLE OF bapiagr WITH DEFAULT KEY.
+      DATA lt_ret  TYPE STANDARD TABLE OF bapiret2 WITH DEFAULT KEY.
       CLEAR: lt_agrs, lt_ret.
       lv_user = lv_user_raw.
       APPEND VALUE bapiagr( agr_name = iv_role ) TO lt_agrs.

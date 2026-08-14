@@ -50,12 +50,13 @@ CLASS zcl_ado_act_cts IMPLEMENTATION.
     lv_text       = iv_text.
     lv_trfunction = 'K'.
 
+    " Signature corrected after an RD1 ST22 (CALL_FUNCTION_PARM_UNKNOWN):
+    " there is no WI_USER; user and client default to sy-uname/sy-mandt,
+    " so neither is passed.
     CALL FUNCTION 'TR_INSERT_NEW_COMM'
       EXPORTING
         wi_kurztext   = lv_text
         wi_trfunction = lv_trfunction
-        wi_client     = sy-mandt
-        wi_user       = sy-uname
       IMPORTING
         we_trkorr     = lv_trkorr
       EXCEPTIONS
