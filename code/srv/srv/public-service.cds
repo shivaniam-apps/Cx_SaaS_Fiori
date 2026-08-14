@@ -218,4 +218,14 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   @(requires: 'Activator')
   action simulateActivationPlan(planId: UUID) returns LargeString;
   function readActivationPlan(planId: UUID) returns LargeString;
+
+  // Execution is async (ACTIVATION_EXECUTION task, single attempt - the
+  // runner never retries writes; re-invoking the action RESUMES a PARTIAL/
+  // FAILED plan, completed steps are skipped). Requires a simulated plan.
+  @(requires: 'Activator')
+  action executeActivationPlan(planId: UUID) returns TaskHandle;
+
+  // Step messages are fetched only when a step row is expanded (monitor
+  // read discipline - never shipped with the plan read).
+  function readActivationStepMessages(stepId: UUID) returns LargeString;
 };

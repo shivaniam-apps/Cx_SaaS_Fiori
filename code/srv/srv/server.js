@@ -95,8 +95,10 @@ cds.on('served', () => {
     const { registerTaskHandler, startTaskRunner } = require('./utils/task-runner.js');
     const { runUsageExtraction } = require('./utils/usage-extraction.js');
     const { runAnalysis } = require('./utils/analysis-run.js');
+    const { runActivationExecution } = require('./utils/activation-execution.js');
     registerTaskHandler('USAGE_EXTRACTION', runUsageExtraction);
     registerTaskHandler('ANALYSIS', runAnalysis);
+    registerTaskHandler('ACTIVATION_EXECUTION', runActivationExecution);
     startTaskRunner();
 
     // Shipped curated overlay content (idempotent, failure never blocks boot).

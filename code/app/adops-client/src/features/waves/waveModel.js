@@ -58,6 +58,19 @@ export function simulationLabel(plan) {
   return parts.join(', ');
 }
 
+// Execution applicability - the same predicate gates the button and the
+// action (fiori-ux mass-action rule). DRAFT must simulate first; EXECUTING
+// and COMPLETED have nothing to execute.
+export function canExecutePlan(plan) {
+  return Boolean(plan) && ['SIMULATED', 'READY', 'PARTIAL', 'FAILED'].includes(plan.Status);
+}
+
+// PARTIAL/FAILED plans resume (completed steps are skipped), they never
+// re-run wholesale - the label says so.
+export function executeActionLabel(plan) {
+  return ['PARTIAL', 'FAILED'].includes(plan?.Status) ? 'Resume' : 'Execute';
+}
+
 // Steps in render order, grouped by StepGroup with first-seen ordering
 // preserved (FOUNDATION -> SERVICE -> CONTENT -> ROLE -> TRANSPORT).
 export function groupSteps(steps) {

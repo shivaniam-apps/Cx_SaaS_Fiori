@@ -606,6 +606,57 @@ module.exports = cds.service.impl(async function () {
         return JSON.stringify(payload);
     });
 
+    this.on('executeActivationPlan', async (req) => {
+        const { planId } = req.data;
+        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
+        if (!plan) return req.reject(404, 'Activation plan not found.');
+
+        const { EXECUTABLE_PLAN_STATES } = require('./utils/activation-execution.js');
+        if (plan.Status === 'DRAFT') {
+            return req.reject(400, 'Simulate the plan first - execution needs the blast-radius verdicts.');
+        }
+        if (!EXECUTABLE_PLAN_STATES.includes(plan.Status) && plan.Status !== 'EXECUTING') {
+            return req.reject(400, `Plan is ${plan.Status}; execution needs one of ${EXECUTABLE_PLAN_STATES.join('/')}.`);
+        }
+        if (!shouldMockSap()) {
+            return req.reject(501, 'Live execution requires the ZADO activation service binding; only mock-S4 execution is available in this build.');
+        }
+
+        // Idempotent start: while a task for this plan is still active,
+        // return its handle instead of enqueuing a duplicate.
+        const active = await SELECT.one.from('adops.db.BackgroundTasks')
+            .where({ ObjectId: planId, TaskType: 'ACTIVATION_EXECUTION', Status: { in: ['QUEUED', 'CLAIMED', 'RUNNING'] } });
+        if (active) {
+            return { taskId: active.ID, objectId: planId, status: active.Status, pollAfterMs: 2000 };
+        }
+        if (plan.Status === 'EXECUTING') {
+            // EXECUTING without an active task = a dead worker; allow resume.
+            await UPDATE('adops.db.ActivationPlans').set({ Status: 'PARTIAL' }).where({ ID: planId });
+        }
+
+        const task = await enqueueTask({
+            taskType: 'ACTIVATION_EXECUTION',
+            targetSystemId: plan.targetSystem_ID,
+            objectType: 'ActivationPlans',
+            objectId: planId,
+            requestedBy: req.user?.id,
+            correlationId: cds.context?.id,
+            payload: { planId, executedBy: req.user?.id }
+        });
+        return { taskId: task.ID, objectId: planId, status: task.Status, pollAfterMs: 2000 };
+    });
+
+    this.on('readActivationStepMessages', async (req) => {
+        const { stepId } = req.data;
+        const step = await SELECT.one.from('adops.db.ActivationSteps').where({ ID: stepId });
+        if (!step) return req.reject(404, 'Activation step not found.');
+        const messages = await SELECT.from('adops.db.ActivationStepMessages')
+            .columns('ID', 'Sequence', 'MessageType', 'MessageText', 'ObjectName')
+            .where({ step_ID: stepId })
+            .orderBy('Sequence asc');
+        return JSON.stringify({ StepId: stepId, Messages: messages });
+    });
+
     this.on('queryUsageOverview', async (req) => {
         const { extractionRunId } = req.data;
         if (!extractionRunId) return req.reject(400, 'extractionRunId is required.');

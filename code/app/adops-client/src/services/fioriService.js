@@ -181,4 +181,13 @@ export async function readActivationPlan(planId) {
   return parseJsonActionResult(response.data);
 }
 
+export async function executeActivationPlan(planId) {
+  return postAction('executeActivationPlan', { planId });
+}
+
+export async function readActivationStepMessages(stepId) {
+  const response = await http.get(`/fiori/readActivationStepMessages(stepId=${stepId})`);
+  return parseJsonActionResult(response.data);
+}
+
 export const TERMINAL_TASK_STATES = ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];

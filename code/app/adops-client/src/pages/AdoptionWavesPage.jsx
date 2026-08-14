@@ -30,13 +30,19 @@ import {
   createActivationPlan,
   simulateActivationPlan,
   readActivationPlan,
-  getServiceErrorMessage
+  executeActivationPlan,
+  getTaskStatus,
+  getServiceErrorMessage,
+  TERMINAL_TASK_STATES
 } from '../services/fioriService.js';
+import useRunPolling from '../hooks/useRunPolling.js';
 import {
   WAVE_STATUS_DESIGN,
   PLAN_STATUS_DESIGN,
   STEP_STATUS_DESIGN,
   canBuildPlan,
+  canExecutePlan,
+  executeActionLabel,
   membershipLabel,
   simulationLabel,
   groupSteps
@@ -71,6 +77,28 @@ export function AdoptionWavesPage() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [systems, setSystems] = useState([]);
   const [reloadToken, setReloadToken] = useState(0);
+  const [executing, setExecuting] = useState(null); // { taskId, planId }
+
+  // One poll drives everything while a plan executes: task status for the
+  // progress line, and a plan re-read (steps + counts in one response) so
+  // the step table updates live. Terminal -> stop and refresh the detail.
+  const execPolling = useRunPolling({
+    id: executing?.taskId,
+    fetchStatus: getTaskStatus,
+    isTerminal: (status) => TERMINAL_TASK_STATES.includes(status?.status)
+  });
+  useEffect(() => {
+    if (!executing || !execPolling.status) return;
+    let cancelled = false;
+    readActivationPlan(executing.planId)
+      .then((result) => { if (!cancelled) setPlan(result); })
+      .catch(() => {});
+    if (TERMINAL_TASK_STATES.includes(execPolling.status.status)) {
+      setExecuting(null);
+      setReloadToken((t) => t + 1);
+    }
+    return () => { cancelled = true; };
+  }, [execPolling.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +183,18 @@ export function AdoptionWavesPage() {
       const result = await simulateActivationPlan(planId);
       setPlan(result);
       refresh();
+    } catch (e) {
+      setError(getServiceErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const execute = async (planId) => {
+    try {
+      setBusy(true);
+      const handle = await executeActivationPlan(planId);
+      setExecuting({ taskId: handle.taskId, planId });
     } catch (e) {
       setError(getServiceErrorMessage(e));
     } finally {
@@ -320,22 +360,41 @@ export function AdoptionWavesPage() {
                         <TableCell><span>{p.StepCount}</span></TableCell>
                         <TableCell><span>{simulationLabel(p) || '—'}</span></TableCell>
                         <TableCell>
-                          {activator && ['DRAFT', 'SIMULATED'].includes(p.Status) ? (
-                            <Button
-                              design="Transparent"
-                              icon="simulate"
-                              disabled={busy}
-                              onClick={(e) => { e.stopPropagation(); simulate(p.ID); }}
-                            >
-                              Simulate
-                            </Button>
-                          ) : null}
+                          <span style={{ display: 'inline-flex', gap: 'var(--adops-space-xs)' }}>
+                            {activator && ['DRAFT', 'SIMULATED'].includes(p.Status) ? (
+                              <Button
+                                design="Transparent"
+                                icon="simulate"
+                                disabled={busy || Boolean(executing)}
+                                onClick={(e) => { e.stopPropagation(); simulate(p.ID); }}
+                              >
+                                Simulate
+                              </Button>
+                            ) : null}
+                            {activator && canExecutePlan(p) ? (
+                              <Button
+                                design="Emphasized"
+                                icon="play"
+                                disabled={busy || Boolean(executing)}
+                                onClick={(e) => { e.stopPropagation(); execute(p.ID); }}
+                              >
+                                {executeActionLabel(p)}
+                              </Button>
+                            ) : null}
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))}
                   </Table>
                 )}
               </Panel>
+
+              {executing && execPolling.status ? (
+                <MessageStrip design="Information" hideCloseButton style={{ marginTop: 'var(--adops-space-sm)' }}>
+                  {execPolling.status.phase || 'Executing…'}
+                  {execPolling.isStale ? ' (connection lost — showing last known state)' : ''}
+                </MessageStrip>
+              ) : null}
 
               {plan?.Plan ? (
                 <Panel headerText={`${plan.Plan.Name} — steps`} style={{ marginTop: 'var(--adops-space-md)' }}>

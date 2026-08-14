@@ -1,6 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canBuildPlan, membershipLabel, simulationLabel, groupSteps } from './waveModel.js';
+import {
+  canBuildPlan,
+  membershipLabel,
+  simulationLabel,
+  groupSteps,
+  canExecutePlan,
+  executeActionLabel
+} from './waveModel.js';
+
+test('canExecutePlan gates on simulated/ready/resumable states only', () => {
+  assert.equal(canExecutePlan(null), false);
+  assert.equal(canExecutePlan({ Status: 'DRAFT' }), false);
+  assert.equal(canExecutePlan({ Status: 'EXECUTING' }), false);
+  assert.equal(canExecutePlan({ Status: 'COMPLETED' }), false);
+  for (const Status of ['SIMULATED', 'READY', 'PARTIAL', 'FAILED']) {
+    assert.equal(canExecutePlan({ Status }), true, Status);
+  }
+});
+
+test('executeActionLabel says Resume for partial/failed plans', () => {
+  assert.equal(executeActionLabel({ Status: 'SIMULATED' }), 'Execute');
+  assert.equal(executeActionLabel({ Status: 'PARTIAL' }), 'Resume');
+  assert.equal(executeActionLabel({ Status: 'FAILED' }), 'Resume');
+});
 
 test('canBuildPlan requires at least one approved member', () => {
   assert.equal(canBuildPlan(null), false);
