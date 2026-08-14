@@ -93,30 +93,30 @@ CLASS zcl_ado_act_role IMPLEMENTATION.
         return              = lt_return
       EXCEPTIONS
         OTHERS              = 1.
-    IF sy-subrc <> 0.
-      rs_result-status = zif_ado_act_step=>c_status-failed.
-      APPEND VALUE bapiret2(
-          type    = 'E'
-          message = |PRGN_RFC_CREATE_ACTIVITY_GROUP failed for { iv_role } (subrc { sy-subrc }).| )
-        TO rs_result-messages.
-      APPEND LINES OF lt_return TO rs_result-messages.
-      RETURN.
-    ENDIF.
+    DATA(lv_subrc) = sy-subrc.
     APPEND LINES OF lt_return TO rs_result-messages.
 
-    " Verify-after.
+    " VERIFY-AFTER DECIDES, not sy-subrc: the RD1 smoke test showed the FM
+    " creating the role, committing internally, and still signalling an
+    " exception for its menu/template warnings. Because the FM commits its
+    " own writes, the step-LUW rollback cannot undo them either - reading
+    " the actual state is the only truthful verdict.
     IF role_exists( iv_role ) = abap_true.
-      rs_result-status = zif_ado_act_step=>c_status-success.
+      rs_result-status = COND #( WHEN lv_subrc = 0
+                                 THEN zif_ado_act_step=>c_status-success
+                                 ELSE zif_ado_act_step=>c_status-warning ).
       rs_result-trkorr = lv_trkorr.
       APPEND VALUE bapiret2(
-          type    = 'S'
-          message = |Role { iv_role } created{ COND #( WHEN lv_trkorr IS NOT INITIAL THEN | on transport { lv_trkorr }| ) }.| )
+          type    = COND #( WHEN lv_subrc = 0 THEN 'S' ELSE 'W' )
+          message = |Role { iv_role } created and verified| &&
+                    |{ COND #( WHEN lv_trkorr IS NOT INITIAL THEN | on transport { lv_trkorr }| ) }| &&
+                    |{ COND #( WHEN lv_subrc <> 0 THEN | (FM signalled subrc { lv_subrc } - see its messages above)| ) }.| )
         TO rs_result-messages.
     ELSE.
       rs_result-status = zif_ado_act_step=>c_status-failed.
       APPEND VALUE bapiret2(
           type    = 'E'
-          message = |Post-verification failed: role { iv_role } not found after create.| )
+          message = |Role { iv_role } does not exist after PRGN_RFC_CREATE_ACTIVITY_GROUP (subrc { lv_subrc }).| )
         TO rs_result-messages.
     ENDIF.
   ENDMETHOD.
