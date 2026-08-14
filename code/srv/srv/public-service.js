@@ -619,7 +619,12 @@ module.exports = cds.service.impl(async function () {
             return req.reject(400, `Plan is ${plan.Status}; execution needs one of ${EXECUTABLE_PLAN_STATES.join('/')}.`);
         }
         if (!shouldMockSap()) {
-            return req.reject(501, 'Live execution requires the ZADO activation service binding; only mock-S4 execution is available in this build.');
+            // Live mode needs a routable target system; the DEV-only ICF node
+            // (ZCL_ADO_ACT_HTTP) is reached through its BTP destination.
+            const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID });
+            if (!targetSystem?.destinationName) {
+                return req.reject(400, 'Live execution needs a target system with a configured BTP destination.');
+            }
         }
 
         // Idempotent start: while a task for this plan is still active,

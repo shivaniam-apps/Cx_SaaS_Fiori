@@ -252,14 +252,19 @@ async function runActivationExecution({ payload, reportProgress, log, isCancelRe
   if (!EXECUTABLE_PLAN_STATES.includes(plan.Status)) {
     throw new Error(`Plan is ${plan.Status}; execution needs one of ${EXECUTABLE_PLAN_STATES.join('/')}.`);
   }
-  if (!shouldMockSap()) {
-    throw new Error('Live execution requires the ZADO activation service binding; only mock-S4 execution is available in this build.');
-  }
 
   const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID });
   const steps = await SELECT.from('adops.db.ActivationSteps')
     .where({ plan_ID: planId }).orderBy('SequenceNo asc');
   if (!steps.length) throw new Error('The plan has no steps.');
+
+  // Executor selection: deterministic mock under ADOPTOPS_MOCK_S4, otherwise
+  // the live adapter against the DEV-only ZADO_ACT ICF node.
+  let executor = mockStepExecutor;
+  if (!shouldMockSap()) {
+    const { liveStepExecutorFor } = require('./s4-activate-adapter.js');
+    executor = liveStepExecutorFor(targetSystem); // throws without a destination
+  }
 
   await UPDATE('adops.db.ActivationPlans').set({
     Status: 'EXECUTING',
@@ -271,7 +276,7 @@ async function runActivationExecution({ payload, reportProgress, log, isCancelRe
   const summary = await executePlanSteps({
     plan,
     steps,
-    executor: mockStepExecutor,
+    executor,
     systemId: targetSystem?.systemId || targetSystem?.displayName || 'MCK',
     executedBy,
     reportProgress,
