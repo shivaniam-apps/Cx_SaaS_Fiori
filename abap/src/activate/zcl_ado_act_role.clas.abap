@@ -75,16 +75,21 @@ CLASS zcl_ado_act_role IMPLEMENTATION.
     lv_text   = iv_text.
     lv_trkorr = iv_trkorr.
 
+    " Signature verified in RD1 (SE37): the text parameter is
+    " ACTIVITY_GROUP_TEXT, the transport goes IN as REQUEST and comes BACK
+    " as NEW_REQUEST - there is no CHANGING clause. NO_DIALOG defaults 'X'.
+    " Single roles only; collective roles use PRGN_RFC_CREATE_AGR_MULTIPLE.
     CALL FUNCTION 'PRGN_RFC_CREATE_ACTIVITY_GROUP'
       EXPORTING
-        activity_group = lv_role
-        text           = lv_text
-      CHANGING
-        request        = lv_trkorr
+        activity_group      = lv_role
+        activity_group_text = lv_text
+        request             = lv_trkorr
+      IMPORTING
+        new_request         = lv_trkorr
       TABLES
-        return         = lt_return
+        return              = lt_return
       EXCEPTIONS
-        OTHERS         = 1.
+        OTHERS              = 1.
     IF sy-subrc <> 0.
       rs_result-status = zif_ado_act_step=>c_status-failed.
       APPEND VALUE bapiret2(
