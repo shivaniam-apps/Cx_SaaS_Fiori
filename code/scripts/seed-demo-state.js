@@ -60,58 +60,69 @@ async function call(method, path, body) {
     console.log(`target system created: ${system.ID} (destination ${destinationName})`);
   }
 
-  // 2. Import the extract file.
-  const payload = fs.readFileSync(extractPath, 'utf8');
-  const imported = await call('POST', 'importUsageExtract', { targetSystemId: system.ID, payload });
-  console.log(`extract imported: run ${imported.runId} | ${imported.transactions} transactions, ${imported.userRows} user rows (skipped ${imported.skippedTransactions}/${imported.skippedUserRows} background rows)`);
-
-  // 3. Generate proposals and wait for the analysis task.
-  const handle = await call('POST', 'generateProposals', { extractionRunId: imported.runId, scoringProfile: 'BALANCED' });
-  let analysisRunId = handle.objectId;
-  for (let i = 0; i < 60; i++) {
-    await wait(2000);
-    const status = await call('GET', `getTaskStatus(taskId=${handle.taskId})`);
-    if (status.status === 'SUCCEEDED') break;
-    if (['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(status.status)) {
-      throw new Error(`Analysis task ended ${status.status}: ${status.errorText || ''}`);
-    }
-  }
-  const proposals = await call('POST', 'queryProposals', { analysisRunId, top: 30 });
-  console.log(`proposals: ${proposals.Count} generated`);
-
-  // 4. Approve the top 4 into the Wave 1 label.
-  const top4 = proposals.Items.filter((p) => p.Rank <= 4);
-  for (const p of top4) {
-    if (p.ReviewStatus === 'APPROVED') continue;
-    await call('POST', 'approveProposal', {
-      proposalId: p.ID,
-      notes: 'Wave 1: high-usage core business apps (seeded).',
-      targetWave: 'Wave 1'
-    });
-    console.log(`approved: rank ${p.Rank} ${p.FioriId} ${p.AppTitle}`);
-  }
-
-  // 5. Wave 1 (adopts the labelled approvals).
+  // Idempotency gate: a populated Wave 1 means import/analysis/approvals
+  // already ran - a rerun must not create a second proposal set (the label
+  // resolution would pull the duplicates into the wave).
   const waves = unwrap(await call('GET', 'queryAdoptionWaves()'));
   let wave = (waves.Items || []).find((w) => w.Name === 'Wave 1');
-  if (wave) {
-    console.log(`wave exists: ${wave.ID}`);
+
+  if (wave && (wave.Rollup?.approved || 0) > 0) {
+    console.log(`wave exists with ${wave.Rollup.approved} approved member(s) - skipping import/analysis/approvals.`);
   } else {
-    wave = await call('POST', 'createAdoptionWave', {
-      targetSystemId: system.ID,
-      name: 'Wave 1',
-      description: 'Core SD/MM/LE apps with the highest real usage (seeded).',
-      targetDate: '2026-10-01',
-      adoptLabelled: true
-    });
-    console.log(`wave created: ${wave.ID}`);
+    // 2. Import the extract file.
+    const payload = fs.readFileSync(extractPath, 'utf8');
+    const imported = await call('POST', 'importUsageExtract', { targetSystemId: system.ID, payload });
+    console.log(`extract imported: run ${imported.runId} | ${imported.transactions} transactions, ${imported.userRows} user rows (skipped ${imported.skippedTransactions}/${imported.skippedUserRows} background rows)`);
+
+    // 3. Generate proposals and wait for the analysis task.
+    const handle = await call('POST', 'generateProposals', { extractionRunId: imported.runId, scoringProfile: 'BALANCED' });
+    const analysisRunId = handle.objectId;
+    for (let i = 0; i < 60; i++) {
+      await wait(2000);
+      const status = await call('GET', `getTaskStatus(taskId=${handle.taskId})`);
+      if (status.status === 'SUCCEEDED') break;
+      if (['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(status.status)) {
+        throw new Error(`Analysis task ended ${status.status}: ${status.errorText || ''}`);
+      }
+    }
+    const proposals = await call('POST', 'queryProposals', { analysisRunId, top: 30 });
+    console.log(`proposals: ${proposals.Count} generated`);
+
+    // 4. Approve the top 4 into the Wave 1 label.
+    const top4 = proposals.Items.filter((p) => p.Rank <= 4);
+    for (const p of top4) {
+      if (p.ReviewStatus === 'APPROVED') continue;
+      await call('POST', 'approveProposal', {
+        proposalId: p.ID,
+        notes: 'Wave 1: high-usage core business apps (seeded).',
+        targetWave: 'Wave 1'
+      });
+      console.log(`approved: rank ${p.Rank} ${p.FioriId} ${p.AppTitle}`);
+    }
+
+    // 5. Wave 1 (adopts the labelled approvals).
+    if (!wave) {
+      wave = await call('POST', 'createAdoptionWave', {
+        targetSystemId: system.ID,
+        name: 'Wave 1',
+        description: 'Core SD/MM/LE apps with the highest real usage (seeded).',
+        targetDate: '2026-10-01',
+        adoptLabelled: true
+      });
+      console.log(`wave created: ${wave.ID}`);
+    }
   }
 
-  // 6. Plan + simulation.
-  const plan = await call('POST', 'createActivationPlan', { waveId: wave.ID, targetSystemId: system.ID });
-  console.log(`plan created: ${plan.Plan.ID} (${plan.Steps.length} steps, target ${plan.TargetSystem?.displayName})`);
-  const simulated = await call('POST', 'simulateActivationPlan', { planId: plan.Plan.ID });
-  console.log(`simulated: ${simulated.Plan.Status} | ok ${simulated.Plan.SucceededCount} warn ${simulated.Plan.WarningCount} blocked ${simulated.Plan.FailedCount}`);
+  // 6. Plan + simulation (skipped when the wave already has a plan).
+  const detail = unwrap(await call('GET', `readAdoptionWave(waveId=${wave.ID})`));
+  if ((detail.Plans || []).length) {
+    console.log(`plan exists: ${detail.Plans[0].ID} (${detail.Plans[0].StepCount} steps, ${detail.Plans[0].Status}) - skipping plan creation.`);
+  } else {
+    const plan = await call('POST', 'createActivationPlan', { waveId: wave.ID, targetSystemId: system.ID });
+    console.log(`plan created: ${plan.Plan.ID} (${plan.Steps.length} steps, target ${plan.TargetSystem?.displayName})`);
+    const simulated = await call('POST', 'simulateActivationPlan', { planId: plan.Plan.ID });
+    console.log(`simulated: ${simulated.Plan.Status} | ok ${simulated.Plan.SucceededCount} warn ${simulated.Plan.WarningCount} blocked ${simulated.Plan.FailedCount}`);
+  }
 
   console.log('\nDone. Open the app: Waves -> Wave 1 -> plan is ready to execute.');
 })().catch((e) => { console.error('SEED FAILED:', e.message); process.exit(1); });
