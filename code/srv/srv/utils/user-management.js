@@ -5,8 +5,15 @@ const cds = require('@sap/cds')
 let xsuaa, ias = new Object();
 const Logger = cds.log('user-management')
 if (cds.env.profiles.find( p =>  p.includes("hybrid") || p.includes("production"))) {
-    xsuaa = xsenv.getServices({ xsuaa: { tag: 'xsuaa' }}).xsuaa;
-    try{ 
+    try {
+        xsuaa = xsenv.getServices({ xsuaa: { tag: 'xsuaa' }}).xsuaa;
+    } catch (error) {
+        // No xsuaa binding (e.g. a hybrid run with mocked auth for S/4
+        // connectivity testing): user management is unavailable, but the
+        // rest of the server must still start.
+        Logger.log("[cds] - XSUAA binding is missing; user management is disabled for this run.");
+    }
+    try{
         ias = xsenv.getServices({ ias: { label: 'identity' }}).ias;
     }catch(error){
         Logger.log("[cds] - IAS Binding is missing, therefore user management will not interact with any IAS instance");
