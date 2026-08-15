@@ -33,6 +33,8 @@ import {
   simulateActivationPlan,
   readActivationPlan,
   executeActivationPlan,
+  readActivationManifest,
+  readActivationStepMessages,
   getTaskStatus,
   getServiceErrorMessage,
   TERMINAL_TASK_STATES
@@ -225,6 +227,44 @@ export function AdoptionWavesPage() {
     }
   };
 
+  // The QA/PROD replay runbook: fetched on demand, shown as markdown text
+  // with a file download for handing to a basis admin.
+  const [manifest, setManifest] = useState(null); // { planName, Markdown }
+
+  const openManifest = async (p) => {
+    try {
+      const result = await readActivationManifest(p.ID);
+      setManifest({ planName: p.Name, Markdown: result.Markdown });
+    } catch (e) {
+      setError(getServiceErrorMessage(e));
+    }
+  };
+
+  // Per-step messages are fetched ONLY when a row is clicked (monitor read
+  // discipline) - they carry the execution verdicts, unlike the inline
+  // SimulationMessage column.
+  const [stepMessages, setStepMessages] = useState(null); // { step, Messages }
+
+  const openStepMessages = async (step) => {
+    if (stepMessages?.step?.ID === step.ID) { setStepMessages(null); return; }
+    try {
+      const result = await readActivationStepMessages(step.ID);
+      setStepMessages({ step, Messages: result.Messages || [] });
+    } catch (e) {
+      setError(getServiceErrorMessage(e));
+    }
+  };
+
+  const downloadManifest = () => {
+    const blob = new Blob([manifest.Markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `replay-manifest-${manifest.planName.replace(/[^A-Za-z0-9-]+/g, '_')}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const approver = hasApproverAccess(userInfo);
   const activator = hasActivatorAccess(userInfo);
   const wave = detail?.Wave;
@@ -398,6 +438,16 @@ export function AdoptionWavesPage() {
                                 {executeActionLabel(p)}
                               </Button>
                             ) : null}
+                            {p.Status !== 'DRAFT' ? (
+                              <Button
+                                design="Transparent"
+                                icon="checklist"
+                                disabled={busy}
+                                onClick={(e) => { e.stopPropagation(); openManifest(p); }}
+                              >
+                                Manifest
+                              </Button>
+                            ) : null}
                           </span>
                         </TableCell>
                       </TableRow>
@@ -431,7 +481,7 @@ export function AdoptionWavesPage() {
                         }
                       >
                         {steps.map((s) => (
-                          <TableRow key={s.ID}>
+                          <TableRow key={s.ID} interactive onClick={() => openStepMessages(s)}>
                             <TableCell><span>{s.SequenceNo}</span></TableCell>
                             <TableCell><span>{s.StepType}</span></TableCell>
                             <TableCell><span style={{ fontWeight: 600 }}>{s.ObjectName}</span></TableCell>
@@ -447,6 +497,14 @@ export function AdoptionWavesPage() {
                       </Table>
                     </div>
                   ))}
+                  {stepMessages ? (
+                    <MessageStrip design="Information" onClose={() => setStepMessages(null)} style={{ marginTop: 'var(--adops-space-xs)' }}>
+                      Step {stepMessages.step.SequenceNo} {stepMessages.step.StepType} {stepMessages.step.ObjectName}:{' '}
+                      {stepMessages.Messages.length
+                        ? stepMessages.Messages.map((m) => `[${m.MessageType}] ${m.MessageText}`).join(' · ')
+                        : 'No execution messages yet - the step has not run.'}
+                    </MessageStrip>
+                  ) : null}
                 </Panel>
               ) : null}
             </>
@@ -481,6 +539,26 @@ export function AdoptionWavesPage() {
         <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
           <Button design="Transparent" onClick={() => setCreating(null)}>Cancel</Button>
           <Button design="Emphasized" disabled={busy || !creating?.name?.trim()} onClick={submitCreate}>Create</Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(manifest)}
+        headerText={`Replay manifest — ${manifest?.planName || ''}`}
+        onClose={() => setManifest(null)}
+      >
+        {manifest ? (
+          <pre style={{
+            margin: 0, padding: 'var(--adops-space-sm)', maxWidth: '46rem', maxHeight: '60vh',
+            overflow: 'auto', whiteSpace: 'pre-wrap', fontSize: '0.8rem',
+            fontFamily: 'var(--sapFontFamily-monospaced, monospace)'
+          }}>
+            {manifest.Markdown}
+          </pre>
+        ) : null}
+        <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
+          <Button design="Transparent" onClick={() => setManifest(null)}>Close</Button>
+          <Button design="Emphasized" icon="download" onClick={downloadManifest}>Download .md</Button>
         </div>
       </Dialog>
 

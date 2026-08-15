@@ -194,4 +194,24 @@ export async function readActivationStepMessages(stepId) {
   return parseJsonActionResult(response.data);
 }
 
+// --- Transports ---------------------------------------------------------------
+
+export async function queryTransportRequests(targetSystemId) {
+  const path = targetSystemId
+    ? `queryTransportRequests(targetSystemId=${targetSystemId})`
+    : 'queryTransportRequests()';
+  const response = await http.get(`/fiori/${path}`);
+  return parseJsonActionResult(response.data);
+}
+
+export async function releaseTransport(transportId, simulate) {
+  const response = await http.post('/fiori/releaseTransport', { transportId, simulate: Boolean(simulate) });
+  return parseJsonActionResult(response.data);
+}
+
+export async function readActivationManifest(planId) {
+  const response = await http.get(`/fiori/readActivationManifest(planId=${planId})`);
+  return parseJsonActionResult(response.data);
+}
+
 export const TERMINAL_TASK_STATES = ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];

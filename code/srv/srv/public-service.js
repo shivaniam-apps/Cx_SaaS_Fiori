@@ -706,6 +706,113 @@ module.exports = cds.service.impl(async function () {
         return { taskId: task.ID, objectId: planId, status: task.Status, pollAfterMs: 2000 };
     });
 
+    // --- Transports (Phase 3) ------------------------------------------------
+
+    this.on('queryTransportRequests', async (req) => {
+        const { targetSystemId } = req.data;
+        const where = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
+        const rows = await SELECT.from('adops.db.TransportRequests').where(where)
+            .orderBy('createdAt desc').limit(200);
+
+        // Labels in one pass - the list page must not do child reads.
+        const planIds = [...new Set(rows.map((r) => r.plan_ID).filter(Boolean))];
+        const systemIds = [...new Set(rows.map((r) => r.targetSystem_ID).filter(Boolean))];
+        const plans = planIds.length
+            ? await SELECT.from('adops.db.ActivationPlans').columns('ID', 'Name', 'wave_ID').where({ ID: { in: planIds } })
+            : [];
+        const waveIds = [...new Set(plans.map((p) => p.wave_ID).filter(Boolean))];
+        const waves = waveIds.length
+            ? await SELECT.from('adops.db.AdoptionWaves').columns('ID', 'Name').where({ ID: { in: waveIds } })
+            : [];
+        const systems = systemIds.length
+            ? await SELECT.from('adops.db.TargetSystems').columns('ID', 'displayName', 'environment').where({ ID: { in: systemIds } })
+            : [];
+        const planById = new Map(plans.map((p) => [p.ID, p]));
+        const waveById = new Map(waves.map((w) => [w.ID, w]));
+        const systemById = new Map(systems.map((s) => [s.ID, s]));
+
+        const items = rows.map((row) => {
+            const plan = planById.get(row.plan_ID);
+            const system = systemById.get(row.targetSystem_ID);
+            return {
+                ...row,
+                PlanName: plan?.Name || '',
+                WaveName: plan?.wave_ID ? (waveById.get(plan.wave_ID)?.Name || '') : '',
+                TargetSystemName: system ? `${system.displayName}${system.environment ? ` (${system.environment})` : ''}` : ''
+            };
+        });
+        return JSON.stringify({ Items: items, Count: items.length });
+    });
+
+    this.on('releaseTransport', async (req) => {
+        const { transportId, simulate } = req.data;
+        const transport = await SELECT.one.from('adops.db.TransportRequests').where({ ID: transportId });
+        if (!transport) return req.reject(404, 'Transport request not found.');
+        if (!transport.TransportRequestId) return req.reject(400, 'The row carries no TRKORR.');
+        if (transport.Status === 'RELEASED' && !simulate) {
+            return JSON.stringify({ Status: 'RELEASED', Messages: [{ type: 'S', message: `${transport.TransportRequestId} is already released.` }] });
+        }
+
+        // The release IS a write-unit step (ADD_TO_TRANSPORT with a TRKORR
+        // dispatches to release in ZCL_ADO_ACTIVATE); mock mode answers
+        // deterministically, live mode goes through the adapter.
+        let result;
+        if (shouldMockSap()) {
+            result = {
+                status: 'SUCCESS',
+                messages: [{
+                    type: 'S',
+                    message: simulate
+                        ? `Release simulation for ${transport.TransportRequestId} passed - nothing released (mock).`
+                        : `${transport.TransportRequestId} released (mock).`
+                }]
+            };
+        } else {
+            const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: transport.targetSystem_ID });
+            if (!targetSystem?.destinationName) return req.reject(400, 'The transport\'s target system has no destination.');
+            const { executeStepRemote } = require('./utils/s4-activate-adapter.js');
+            result = await executeStepRemote({
+                targetSystem,
+                step: {
+                    StepType: 'ADD_TO_TRANSPORT',
+                    ObjectKeyJson: JSON.stringify({ trkorr: transport.TransportRequestId, simulation: Boolean(simulate) })
+                }
+            });
+        }
+
+        const messageText = (result.messages || []).map((m) => `[${m.type}] ${m.message}`).join('\n');
+        if (!simulate) {
+            const released = ['SUCCESS', 'SKIPPED'].includes(result.status);
+            await UPDATE('adops.db.TransportRequests').set({
+                Status: released ? 'RELEASED' : 'RELEASE_FAILED',
+                ReleasedAt: released ? new Date().toISOString() : null,
+                ReleasedBy: released ? (req.user?.id || null) : null,
+                ReleaseLogText: messageText
+            }).where({ ID: transportId });
+        }
+        const fresh = await SELECT.one.from('adops.db.TransportRequests').where({ ID: transportId });
+        return JSON.stringify({ Status: fresh.Status, Simulated: Boolean(simulate), StepStatus: result.status, Messages: result.messages || [] });
+    });
+
+    this.on('readActivationManifest', async (req) => {
+        const { planId } = req.data;
+        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
+        if (!plan) return req.reject(404, 'Activation plan not found.');
+        const steps = await SELECT.from('adops.db.ActivationSteps')
+            .where({ plan_ID: planId }).orderBy('SequenceNo asc');
+        const wave = plan.wave_ID ? await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: plan.wave_ID }) : null;
+        const targetSystem = plan.targetSystem_ID
+            ? await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID })
+            : null;
+        const transport = plan.transportRequest_ID
+            ? await SELECT.one.from('adops.db.TransportRequests').where({ ID: plan.transportRequest_ID })
+            : null;
+
+        const { buildActivationManifest, renderManifestMarkdown } = require('./utils/activation-manifest.js');
+        const manifest = buildActivationManifest({ plan, steps, wave, targetSystem, transport });
+        return JSON.stringify({ Manifest: manifest, Markdown: renderManifestMarkdown(manifest) });
+    });
+
     this.on('readActivationStepMessages', async (req) => {
         const { stepId } = req.data;
         const step = await SELECT.one.from('adops.db.ActivationSteps').where({ ID: stepId });

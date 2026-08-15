@@ -9,6 +9,7 @@ import ExtractionsPage from '../pages/ExtractionsPage.jsx';
 import UsageInsightPage from '../pages/UsageInsightPage.jsx';
 import ProposalsPage from '../pages/ProposalsPage.jsx';
 import AdoptionWavesPage from '../pages/AdoptionWavesPage.jsx';
+import TransportsPage from '../pages/TransportsPage.jsx';
 
 // Route table follows the optional-param convention (/usage/:view?) so tab
 // switches and detail columns never remount their page.
@@ -25,7 +26,7 @@ function AppRoutes({ userInfo }) {
       <Route path="/waves/:waveId?" element={<AdoptionWavesPage />} />
       <Route path="/activation/:planId?" element={<PlaceholderPage title="Activation Plans" phase="Phase 3" />} />
       <Route path="/activation-runs/:runId?" element={<PlaceholderPage title="Activation Runs" phase="Phase 3" />} />
-      <Route path="/transports/:trId?" element={<PlaceholderPage title="Transports" phase="Phase 3" />} />
+      <Route path="/transports/:trId?" element={<TransportsPage />} />
       <Route path="/settings/:view?" element={<PlaceholderPage title="Settings" phase="Phase 1" />} />
       <Route path="/audit-log" element={<PlaceholderPage title="Audit Log" phase="Phase 2" />} />
       <Route path="/access-requests" element={<PlaceholderPage title="Access Requests" phase="Phase 1" />} />

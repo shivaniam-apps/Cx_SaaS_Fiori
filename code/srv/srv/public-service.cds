@@ -234,4 +234,17 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   // Step messages are fetched only when a step row is expanded (monitor
   // read discipline - never shipped with the plan read).
   function readActivationStepMessages(stepId: UUID) returns LargeString;
+
+  // --- Transports (Phase 3) -------------------------------------------------
+  // One composite read for the list page (plan/wave/system labels included);
+  // release goes through the write unit's CTS step (simulate = release
+  // checks only, never releases). Releasing is IRREVERSIBLE.
+
+  function queryTransportRequests(targetSystemId: UUID) returns LargeString;
+  @(requires: 'Activator')
+  action releaseTransport(transportId: UUID, simulate: Boolean) returns LargeString;
+
+  // The QA/PROD replay runbook for a plan: what arrives via transport, what
+  // must be repeated per system, and how to verify each item.
+  function readActivationManifest(planId: UUID) returns LargeString;
 };
