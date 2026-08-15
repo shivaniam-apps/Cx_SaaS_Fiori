@@ -95,6 +95,26 @@ async function executeStepViaIcf({ targetSystem, step, path }) {
   return mapRemoteStepResult(response.data);
 }
 
+// A RAP static action with result [1] <abstract entity> can serialize over
+// OData V4 as the bare structure, a { value: {...} } wrapper, a
+// { value: [ {...} ] } collection, or the V2-style { d: ... } - and the
+// ResultJson field casing can vary. Find the string wherever it sits.
+function extractResultJson(body) {
+  const candidates = [
+    body,
+    body?.value,
+    Array.isArray(body?.value) ? body.value[0] : undefined,
+    body?.d,
+    Array.isArray(body?.d?.results) ? body.d.results[0] : body?.d?.results
+  ];
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const key = Object.keys(candidate).find((k) => k.toLowerCase() === 'resultjson');
+    if (key && typeof candidate[key] === 'string') return candidate[key];
+  }
+  return undefined;
+}
+
 // RAP OData V4 transport: POST the bound static action; the FQN is resolved
 // from $metadata (like the read services' bound actions). The action returns
 // the single result entity, whose ResultJson field carries the step-result
@@ -122,11 +142,10 @@ async function executeStepViaOData({ targetSystem, step, path }) {
     if (response.status === 404) continue; // wrong action FQN candidate - try next
     if (!response.ok) return transportFailure(actionPath, response);
 
-    // Result shapes: { ResultJson }, { value: { ResultJson } }, or the
-    // action-import wrapper. Unwrap to the ResultJson string, then parse it
+    // Unwrap ResultJson across the shapes a RAP static action can return over
+    // OData V4 (single object, value-wrapped, or value-array), then parse it
     // into the step-result contract.
-    const body = response.data;
-    const resultJson = body?.ResultJson ?? body?.value?.ResultJson ?? body?.d?.ResultJson;
+    const resultJson = extractResultJson(response.data);
     if (typeof resultJson !== 'string') {
       return {
         status: 'FAILED', existsAlready: false, trkorr: '',
@@ -195,6 +214,7 @@ module.exports = {
   DEFAULT_ACTIVATE_ROOT,
   activateRootFor,
   isODataRoot,
+  extractResultJson,
   mapRemoteStepResult,
   executeStepRemote,
   probeActivateService,

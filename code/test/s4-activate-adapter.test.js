@@ -6,6 +6,7 @@ const {
   DEFAULT_ACTIVATE_ROOT,
   activateRootFor,
   isODataRoot,
+  extractResultJson,
   mapRemoteStepResult,
   executeStepRemote,
   liveStepExecutorFor
@@ -17,6 +18,27 @@ describe('activation transport mode selection', () => {
     expect(isODataRoot(DEFAULT_ACTIVATE_ROOT)).to.equal(false);
     expect(isODataRoot('/sap/opu/odata4/sap/zado_activate_o4/srvd/sap/zado_activate_srv/0001/')).to.equal(true);
     expect(isODataRoot('')).to.equal(false);
+  });
+});
+
+describe('RAP action ResultJson unwrapping', () => {
+  const RJ = '{"status":"SUCCESS"}';
+  it('finds ResultJson across OData V4 shapes and V2 fallback', () => {
+    expect(extractResultJson({ ResultJson: RJ })).to.equal(RJ);              // bare structure
+    expect(extractResultJson({ value: { ResultJson: RJ } })).to.equal(RJ);   // value-wrapped
+    expect(extractResultJson({ value: [{ ResultJson: RJ }] })).to.equal(RJ); // value collection
+    expect(extractResultJson({ d: { ResultJson: RJ } })).to.equal(RJ);       // V2 object
+    expect(extractResultJson({ d: { results: [{ ResultJson: RJ }] } })).to.equal(RJ);
+  });
+  it('is case-insensitive on the field name', () => {
+    expect(extractResultJson({ resultJson: RJ })).to.equal(RJ);
+    expect(extractResultJson({ RESULTJSON: RJ })).to.equal(RJ);
+  });
+  it('returns undefined when no ResultJson string is present', () => {
+    expect(extractResultJson(null)).to.equal(undefined);
+    expect(extractResultJson({ value: [] })).to.equal(undefined);
+    expect(extractResultJson({ ResultJson: 42 })).to.equal(undefined);
+    expect(extractResultJson('a string')).to.equal(undefined);
   });
 });
 
