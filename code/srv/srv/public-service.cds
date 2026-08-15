@@ -212,9 +212,15 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   // proposals; simulateActivationPlan is verify-first and never writes to
   // S/4 (mock-S4 runs a deterministic stub; live simulation arrives with
   // the ZADO activation read unit).
+  //
+  // Source and target are separate systems: analysis (the wave's proposals)
+  // may come from PROD usage while the plan writes into the landscape's DEV
+  // system. targetSystemId picks the write target; omitted, it defaults to
+  // the wave's system when that is a permissible target, else the tenant's
+  // DEV system. QA/PROD-like environments are refused.
 
   @(requires: 'Activator')
-  action createActivationPlan(waveId: UUID, name: String) returns LargeString;
+  action createActivationPlan(waveId: UUID, name: String, targetSystemId: UUID) returns LargeString;
   @(requires: 'Activator')
   action simulateActivationPlan(planId: UUID) returns LargeString;
   function readActivationPlan(planId: UUID) returns LargeString;

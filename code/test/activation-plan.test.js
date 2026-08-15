@@ -6,8 +6,23 @@ const {
   waveTechnicalKey,
   deriveActivationSteps,
   simulateSteps,
-  mockSimulationProbe
+  mockSimulationProbe,
+  isActivationTargetEnvironment
 } = require('../srv/srv/utils/activation-plan.js');
+
+describe('isActivationTargetEnvironment', () => {
+  it('refuses QA/PROD-like environments in any casing', () => {
+    for (const env of ['QAS', 'qa', 'PRD', 'prod', 'Production', 'PREPROD', 'pre-prod', ' prd ']) {
+      expect(isActivationTargetEnvironment(env), env).to.equal(false);
+    }
+  });
+
+  it('permits DEV, SANDBOX and unclassified systems', () => {
+    for (const env of ['DEV', 'dev', 'SANDBOX', '', null, undefined, 'TRAINING']) {
+      expect(isActivationTargetEnvironment(env), String(env)).to.equal(true);
+    }
+  });
+});
 
 const PROPOSALS = [
   { ID: 'p1', FioriId: 'F3893', BusinessRoleId: 'SAP_BR_INTERNAL_SALES_REP' },

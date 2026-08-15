@@ -166,8 +166,12 @@ export async function removeProposalsFromWave(waveId, proposalIds) {
 
 // --- Activation planning ------------------------------------------------------
 
-export async function createActivationPlan(waveId, name) {
-  const response = await http.post('/fiori/createActivationPlan', { waveId, name: name || null });
+export async function createActivationPlan(waveId, name, targetSystemId) {
+  const response = await http.post('/fiori/createActivationPlan', {
+    waveId,
+    name: name || null,
+    targetSystemId: targetSystemId || null
+  });
   return parseJsonActionResult(response.data);
 }
 

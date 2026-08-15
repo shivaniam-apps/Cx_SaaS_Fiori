@@ -17,6 +17,17 @@ const { randomUUID } = require('node:crypto');
 // implementation, the live probe arrives with the ZADO activation read unit.
 // ---------------------------------------------------------------------------
 
+// Activation writes are DEV-only (the write unit itself only exists there).
+// Anything that names a QA/PROD-like environment is refused as a plan
+// target; unknown/empty passes, because pilot systems may be unclassified.
+// The client mirrors this list for preselection only (features/waves) - the
+// enforcement lives here.
+const BLOCKED_TARGET_ENVIRONMENTS = ['QAS', 'QA', 'PRD', 'PROD', 'PRODUCTION', 'PREPROD', 'PRE-PROD'];
+
+function isActivationTargetEnvironment(environment) {
+  return !BLOCKED_TARGET_ENVIRONMENTS.includes(String(environment || '').trim().toUpperCase());
+}
+
 // 'Wave 1' -> 'W1'; 'Core SD/MM' -> 'CORE_SD_MM'. Bounded so PFCG role and
 // space ids stay inside their SAP length limits.
 function waveTechnicalKey(name, maxLength = 12) {
@@ -173,4 +184,10 @@ function simulateSteps(steps, probe) {
   };
 }
 
-module.exports = { waveTechnicalKey, deriveActivationSteps, simulateSteps, mockSimulationProbe };
+module.exports = {
+  waveTechnicalKey,
+  deriveActivationSteps,
+  simulateSteps,
+  mockSimulationProbe,
+  isActivationTargetEnvironment
+};

@@ -511,9 +511,18 @@ module.exports = cds.service.impl(async function () {
             .orderBy('Rank asc');
         const plans = await SELECT.from('adops.db.ActivationPlans')
             .columns('ID', 'Name', 'Status', 'StepCount', 'SucceededCount', 'WarningCount',
-                'FailedCount', 'SkippedCount', 'SimulatedAt', 'createdAt')
+                'FailedCount', 'SkippedCount', 'SimulatedAt', 'createdAt', 'targetSystem_ID')
             .where({ wave_ID: waveId })
             .orderBy('createdAt desc');
+        // Label cross-system plans without a per-row read.
+        const planSystemIds = [...new Set(plans.map((p) => p.targetSystem_ID).filter(Boolean))];
+        if (planSystemIds.length) {
+            const systems = await SELECT.from('adops.db.TargetSystems')
+                .columns('ID', 'displayName', 'environment')
+                .where({ ID: { in: planSystemIds } });
+            const nameById = new Map(systems.map((s) => [s.ID, `${s.displayName}${s.environment ? ` (${s.environment})` : ''}`]));
+            for (const plan of plans) plan.TargetSystemName = nameById.get(plan.targetSystem_ID) || '';
+        }
         const rollup = (await waveRollups([waveId]))[waveId] || null;
         return JSON.stringify({ Wave: wave, Rollup: rollup, Proposals: proposals, Plans: plans });
     });
@@ -532,11 +541,16 @@ module.exports = cds.service.impl(async function () {
         if (!plan) return null;
         const steps = await SELECT.from('adops.db.ActivationSteps')
             .where({ plan_ID: planId }).orderBy('SequenceNo asc');
-        return { Plan: plan, Steps: steps };
+        const targetSystem = plan.targetSystem_ID
+            ? await SELECT.one.from('adops.db.TargetSystems')
+                .columns('ID', 'displayName', 'environment', 'client', 'systemId')
+                .where({ ID: plan.targetSystem_ID })
+            : null;
+        return { Plan: plan, Steps: steps, TargetSystem: targetSystem };
     };
 
     this.on('createActivationPlan', async (req) => {
-        const { waveId, name } = req.data;
+        const { waveId, name, targetSystemId } = req.data;
         const wave = await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: waveId });
         if (!wave) return req.reject(404, 'Adoption wave not found.');
         const approved = await SELECT.from('adops.db.AppProposals')
@@ -544,18 +558,47 @@ module.exports = cds.service.impl(async function () {
             .orderBy('Rank asc');
         if (!approved.length) return req.reject(400, 'The wave has no approved proposals - approve apps before planning activation.');
 
-        const { deriveActivationSteps } = require('./utils/activation-plan.js');
+        const { deriveActivationSteps, isActivationTargetEnvironment } = require('./utils/activation-plan.js');
+
+        // Source != target: the wave's proposals may be scored from PROD
+        // usage, but activation writes go to a DEV system. Explicit choice
+        // wins; the default prefers the wave's own system when permissible,
+        // else the tenant's DEV/SANDBOX system.
+        let target;
+        if (targetSystemId) {
+            target = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
+            if (!target) return req.reject(404, 'Target system not found.');
+        } else {
+            const waveSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: wave.targetSystem_ID });
+            if (waveSystem && isActivationTargetEnvironment(waveSystem.environment)) {
+                target = waveSystem;
+            } else {
+                const candidates = await SELECT.from('adops.db.TargetSystems')
+                    .where({ environment: { in: ['DEV', 'SANDBOX'] }, active: true })
+                    .orderBy('isDefault desc', 'displayName asc');
+                target = candidates[0];
+            }
+            if (!target) {
+                return req.reject(400, 'No permissible activation target found - pass targetSystemId for a DEV system.');
+            }
+        }
+        if (!isActivationTargetEnvironment(target.environment)) {
+            return req.reject(400, `Target system "${target.displayName}" is ${target.environment} - activation plans write to development systems only; QA/PROD receive the content via transport.`);
+        }
+
         const { steps, spaceId, roleName } = deriveActivationSteps({ proposals: approved, waveName: wave.Name });
 
+        const crossSystem = target.ID !== wave.targetSystem_ID;
         const planId = randomUUID();
         await INSERT.into('adops.db.ActivationPlans').entries({
             ID: planId,
-            targetSystem_ID: wave.targetSystem_ID,
+            targetSystem_ID: target.ID,
             wave_ID: wave.ID,
             analysisRun_ID: approved[0].analysisRun_ID,
             TenantId: currentTenant(),
             Name: String(name || '').trim() || `Activation of ${wave.Name}`,
-            Description: `Derived from ${approved.length} approved proposal(s) of wave "${wave.Name}".`,
+            Description: `Derived from ${approved.length} approved proposal(s) of wave "${wave.Name}"`
+                + `${crossSystem ? ` (usage source differs; writes target ${target.displayName})` : ''}.`,
             Status: 'DRAFT',
             SpaceId: spaceId,
             SpaceTitle: wave.Name,

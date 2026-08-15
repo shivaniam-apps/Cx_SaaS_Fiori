@@ -58,6 +58,28 @@ export function simulationLabel(plan) {
   return parts.join(', ');
 }
 
+// Preselection mirror of the server-side activation-target rule
+// (srv/utils/activation-plan.js isActivationTargetEnvironment - keep the
+// lists identical; ENFORCEMENT lives in CAP, this only drives the picker).
+const BLOCKED_TARGET_ENVIRONMENTS = ['QAS', 'QA', 'PRD', 'PROD', 'PRODUCTION', 'PREPROD', 'PRE-PROD'];
+
+export function isActivationTargetAllowed(system) {
+  const environment = String(system?.environment || '').trim().toUpperCase();
+  return !BLOCKED_TARGET_ENVIRONMENTS.includes(environment);
+}
+
+// Default write target for a plan: the wave's own system when permissible,
+// else an explicit DEV/SANDBOX system, else any permissible system.
+export function defaultActivationTarget(systems, preferredSystemId) {
+  const allowed = (systems || []).filter(isActivationTargetAllowed);
+  return (
+    allowed.find((s) => s.ID === preferredSystemId) ||
+    allowed.find((s) => ['DEV', 'SANDBOX'].includes(String(s.environment || '').trim().toUpperCase())) ||
+    allowed[0] ||
+    null
+  );
+}
+
 // Execution applicability - the same predicate gates the button and the
 // action (fiori-ux mass-action rule). DRAFT must simulate first; EXECUTING
 // and COMPLETED have nothing to execute.

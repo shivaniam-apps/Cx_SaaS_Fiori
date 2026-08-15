@@ -6,8 +6,34 @@ import {
   simulationLabel,
   groupSteps,
   canExecutePlan,
-  executeActionLabel
+  executeActionLabel,
+  isActivationTargetAllowed,
+  defaultActivationTarget
 } from './waveModel.js';
+
+test('isActivationTargetAllowed blocks QA/PROD-like environments only', () => {
+  for (const environment of ['QAS', 'qa', 'PRD', 'prod', 'Production', 'PREPROD', 'pre-prod']) {
+    assert.equal(isActivationTargetAllowed({ environment }), false, environment);
+  }
+  for (const environment of ['DEV', 'SANDBOX', '', undefined, 'TRAINING']) {
+    assert.equal(isActivationTargetAllowed({ environment }), true, String(environment));
+  }
+  assert.equal(isActivationTargetAllowed(null), true);
+});
+
+test('defaultActivationTarget prefers the wave system, then DEV/SANDBOX, then any allowed', () => {
+  const dev = { ID: 'dev', environment: 'DEV' };
+  const sandbox = { ID: 'sbx', environment: 'SANDBOX' };
+  const prod = { ID: 'prd', environment: 'PRD' };
+  const unclassified = { ID: 'unk', environment: '' };
+
+  assert.equal(defaultActivationTarget([prod, dev, unclassified], 'unk')?.ID, 'unk');
+  assert.equal(defaultActivationTarget([prod, unclassified, dev], 'prd')?.ID, 'dev');
+  assert.equal(defaultActivationTarget([prod, unclassified], 'prd')?.ID, 'unk');
+  assert.equal(defaultActivationTarget([prod], 'prd'), null);
+  assert.equal(defaultActivationTarget([sandbox], undefined)?.ID, 'sbx');
+  assert.equal(defaultActivationTarget([], 'x'), null);
+});
 
 test('canExecutePlan gates on simulated/ready/resumable states only', () => {
   assert.equal(canExecutePlan(null), false);

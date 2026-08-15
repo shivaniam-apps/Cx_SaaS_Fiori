@@ -15,6 +15,8 @@ import { MessageStrip } from '@ui5/webcomponents-react/MessageStrip';
 import { Panel } from '@ui5/webcomponents-react/Panel';
 import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { Input } from '@ui5/webcomponents-react/Input';
+import { Select } from '@ui5/webcomponents-react/Select';
+import { Option } from '@ui5/webcomponents-react/Option';
 import { TextArea } from '@ui5/webcomponents-react/TextArea';
 import { DatePicker } from '@ui5/webcomponents-react/DatePicker';
 import { CheckBox } from '@ui5/webcomponents-react/CheckBox';
@@ -45,7 +47,9 @@ import {
   executeActionLabel,
   membershipLabel,
   simulationLabel,
-  groupSteps
+  groupSteps,
+  isActivationTargetAllowed,
+  defaultActivationTarget
 } from '../features/waves/waveModel.js';
 
 const PROPOSAL_STATUS_DESIGN = { NEW: 'Information', APPROVED: 'Positive', REJECTED: 'Negative', DEFERRED: 'Neutral' };
@@ -164,14 +168,25 @@ export function AdoptionWavesPage() {
     }
   };
 
-  const buildPlan = async () => {
+  // Source != target: the wave's proposals may be scored from another
+  // system's usage; the dialog picks the DEV system the plan writes to.
+  const [buildingPlan, setBuildingPlan] = useState(null); // { targetSystemId }
+
+  const openBuildDialog = () => {
+    const preset = defaultActivationTarget(systems, wave?.targetSystem_ID);
+    setBuildingPlan({ targetSystemId: preset?.ID || '' });
+  };
+
+  const submitBuildPlan = async () => {
     try {
       setBusy(true);
-      const result = await createActivationPlan(waveId);
+      const result = await createActivationPlan(waveId, null, buildingPlan.targetSystemId);
+      setBuildingPlan(null);
       setPlan(result);
       refresh();
     } catch (e) {
       setError(getServiceErrorMessage(e));
+      setBuildingPlan(null);
     } finally {
       setBusy(false);
     }
@@ -283,7 +298,7 @@ export function AdoptionWavesPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--adops-space-xs)' }}>
                   {activator ? (
-                    <Button design="Emphasized" icon="play" disabled={busy || !canBuildPlan(rollup)} onClick={buildPlan}>
+                    <Button design="Emphasized" icon="play" disabled={busy || !canBuildPlan(rollup)} onClick={openBuildDialog}>
                       Build Activation Plan
                     </Button>
                   ) : null}
@@ -346,6 +361,7 @@ export function AdoptionWavesPage() {
                     headerRow={
                       <TableHeaderRow>
                         <TableHeaderCell><span>Plan</span></TableHeaderCell>
+                        <TableHeaderCell><span>Target</span></TableHeaderCell>
                         <TableHeaderCell><span>Status</span></TableHeaderCell>
                         <TableHeaderCell><span>Steps</span></TableHeaderCell>
                         <TableHeaderCell><span>Simulation</span></TableHeaderCell>
@@ -356,6 +372,7 @@ export function AdoptionWavesPage() {
                     {detail.Plans.map((p) => (
                       <TableRow key={p.ID} interactive onClick={() => openPlan(p.ID)}>
                         <TableCell><span style={{ fontWeight: 600 }}>{p.Name}</span></TableCell>
+                        <TableCell><span>{p.TargetSystemName || '—'}</span></TableCell>
                         <TableCell><Tag design={PLAN_STATUS_DESIGN[p.Status] || 'Neutral'}>{p.Status}</Tag></TableCell>
                         <TableCell><span>{p.StepCount}</span></TableCell>
                         <TableCell><span>{simulationLabel(p) || '—'}</span></TableCell>
@@ -464,6 +481,33 @@ export function AdoptionWavesPage() {
         <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
           <Button design="Transparent" onClick={() => setCreating(null)}>Cancel</Button>
           <Button design="Emphasized" disabled={busy || !creating?.name?.trim()} onClick={submitCreate}>Create</Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(buildingPlan)}
+        headerText="Build Activation Plan"
+        onClose={() => setBuildingPlan(null)}
+      >
+        {buildingPlan ? (
+          <div style={{ display: 'grid', gap: 'var(--adops-space-sm)', padding: 'var(--adops-space-sm)', minWidth: '22rem' }}>
+            <Text>
+              Derives activation steps from this wave's approved apps. The plan writes into the
+              selected development system; QA/PROD receive the content via transport.
+            </Text>
+            <Label required>Target system (write)</Label>
+            <Select onChange={(e) => setBuildingPlan({ ...buildingPlan, targetSystemId: e.detail.selectedOption.dataset.value })}>
+              {systems.filter(isActivationTargetAllowed).map((s) => (
+                <Option key={s.ID} data-value={s.ID} selected={buildingPlan.targetSystemId === s.ID}>
+                  {s.displayName}{s.environment ? ` (${s.environment})` : ''}{s.client ? ` · client ${s.client}` : ''}
+                </Option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
+        <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
+          <Button design="Transparent" onClick={() => setBuildingPlan(null)}>Cancel</Button>
+          <Button design="Emphasized" disabled={busy || !buildingPlan?.targetSystemId} onClick={submitBuildPlan}>Build Plan</Button>
         </div>
       </Dialog>
 
