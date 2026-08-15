@@ -5,10 +5,20 @@ const require = createRequire(import.meta.url);
 const {
   DEFAULT_ACTIVATE_ROOT,
   activateRootFor,
+  isODataRoot,
   mapRemoteStepResult,
   executeStepRemote,
   liveStepExecutorFor
 } = require('../srv/srv/utils/s4-activate-adapter.js');
+
+describe('activation transport mode selection', () => {
+  it('routes /sap/opu/odata4 roots to OData and /sap/bc roots to ICF', () => {
+    expect(isODataRoot('/sap/bc/zado_act')).to.equal(false);
+    expect(isODataRoot(DEFAULT_ACTIVATE_ROOT)).to.equal(false);
+    expect(isODataRoot('/sap/opu/odata4/sap/zado_activate_o4/srvd/sap/zado_activate_srv/0001/')).to.equal(true);
+    expect(isODataRoot('')).to.equal(false);
+  });
+});
 
 describe('s4 activate adapter (the CAP side of ZIF_ADO_ACT_STEP)', () => {
   it('resolves the service root from the target system override', () => {
