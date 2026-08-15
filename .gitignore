@@ -42,3 +42,6 @@ code/api/package.json
 .claude/worktrees/
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Customer usage extracts (identified data) must never enter the repo
+adops_usage_*.json
