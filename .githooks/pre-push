@@ -1,0 +1,25 @@
+#!/bin/sh
+# pre-push hook: main is PR-only (see .claude/rules/git-workflow.md).
+# GitHub branch protection is unavailable on this plan (private repo,
+# personal account), so this hook enforces the convention locally:
+# direct pushes to main are rejected. Merges made through GitHub PRs
+# never pass through this hook, so the normal workflow is unaffected.
+#
+# Emergency override (use deliberately, never routinely):
+#   ALLOW_MAIN_PUSH=1 git push origin main
+
+if [ -n "$ALLOW_MAIN_PUSH" ]; then
+  exit 0
+fi
+
+while read _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      echo "pre-push: direct pushes to main are blocked - open a PR instead." >&2
+      echo "pre-push: (emergency override: ALLOW_MAIN_PUSH=1 git push ...)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+exit 0

@@ -1,0 +1,59 @@
+{
+  "basic": {
+    "label": "Basic",
+    "database": "postgres-lightweight",
+    "hanaCloudRequired": false,
+    "multitenancyMode": "saas-registry-shared-xsuaa-shared-postgres-logical-tenancy",
+    "features": [
+      "liveRead",
+      "usageExtraction",
+      "usageInsight",
+      "catalogDerivation",
+      "proposalScoring",
+      "proposalReview",
+      "basicAudit",
+      "localBrowserPreferences"
+    ],
+    "disabledFeatures": [
+      "tenantDatabaseProvisioning",
+      "longTermHistory",
+      "crossTenantAnalytics",
+      "extensionProjects",
+      "hdiTenantContainers"
+    ]
+  },
+  "standard": {
+    "label": "Standard",
+    "database": "postgres",
+    "hanaCloudRequired": false,
+    "multitenancyMode": "shared-postgres-logical-tenancy",
+    "features": [
+      "activationPlans",
+      "activationExecution",
+      "transportManagement",
+      "activationManifestReplay",
+      "adoptionTrend",
+      "basicAudit",
+      "notificationHistory"
+    ],
+    "disabledFeatures": [
+      "hdiTenantContainers",
+      "hanaCalculationViews"
+    ]
+  },
+  "enterprise": {
+    "label": "Enterprise",
+    "database": "hana",
+    "hanaCloudRequired": true,
+    "multitenancyMode": "cap-mtx-hdi-tenant-containers",
+    "features": [
+      "tenantIsolatedPersistence",
+      "scheduledReExtraction",
+      "adoptionMeasurement",
+      "advancedAnalytics",
+      "enterpriseAudit",
+      "iasIdentity"
+    ],
+    "disabledFeatures": []
+  }
+}

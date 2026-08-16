@@ -1,0 +1,42 @@
+{
+  "welcomeFile": "/adopsclient/",
+  "authenticationMethod": "route",
+  "logout": {
+    "logoutEndpoint": "/logout"
+  },
+  "routes": [
+    {
+      "source": "^/user-api(.*)",
+      "target": "$1",
+      "service": "sap-approuter-userapi",
+      "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^/fiori/(.*)$",
+      "target": "/fiori/$1",
+      "destination": "adops-srv-api",
+      "preferLocal": true,
+      "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^/core/(.*)$",
+      "target": "/core/$1",
+      "destination": "adops-srv-api",
+      "preferLocal": true,
+      "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^/catalog/(.*)$",
+      "target": "/catalog/$1",
+      "destination": "adops-srv-api",
+      "preferLocal": true,
+      "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^(/.*)$",
+      "target": "$1",
+      "service": "html5-apps-repo-rt",
+      "authenticationType": "xsuaa"
+    }
+  ]
+}

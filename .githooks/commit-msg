@@ -1,0 +1,13 @@
+#!/bin/sh
+# commit-msg hook: enforce the attribution ban (see CLAUDE.md "Attribution").
+# Strips AI-attribution trailers/lines (Co-Authored-By: Claude...,
+# "Generated with Claude Code", anthropic e-mail addresses) from the
+# commit message before the commit is recorded.
+
+msg="$1"
+tmp="$msg.strip"
+
+grep -viE '^(co-authored-by:.*(claude|anthropic).*|.*generated with.*claude.*|.*noreply@anthropic\.com.*)$' "$msg" > "$tmp" || :
+mv "$tmp" "$msg"
+
+exit 0

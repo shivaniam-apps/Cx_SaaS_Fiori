@@ -1,0 +1,32 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  font-family: var(--sapFontFamily, '72', 'Segoe UI', Arial, sans-serif);
+  background: var(--sapBackgroundColor, #f7f7f7);
+  color: var(--sapTextColor, #32363a);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.adops-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.adops-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.adops-content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--adops-space-md) var(--adops-page-inline-padding);
+}

@@ -1,0 +1,190 @@
+{
+  "folders": {
+    "app": "../app",
+    "db-sqlite": "../db/sqlite"
+  },
+  "server": {
+    "body_parser": {
+      "limit": "20mb"
+    }
+  },
+  "requires": {
+    " ---------------------": "---",
+    "--- MTXs Settings ----": "---",
+    "--------------------- ": "---",
+    "[hybrid]": {
+      "multitenancy": false,
+      "extensibility": false,
+      "toggles": false,
+      "destinations": {
+        "kind": "destinations"
+      },
+      "connectivity": {
+        "kind": "connectivity"
+      }
+    },
+    "[local-with-mtx]": {
+      "multitenancy": true,
+      "extensibility": true,
+      "toggles": true
+    },
+    "[development]": {
+      "multitenancy": false,
+      "extensibility": false,
+      "toggles": false
+    },
+    "------------------ ": "---",
+    "--- DB Settings ---": "---",
+    " ------------------": "---",
+    "db": {
+      "[local-with-mtx]": {
+        "kind": "sqlite",
+        "credentials": {
+          "url": "../db.sqlite"
+        },
+        "beta": {
+          "sqlMigration": "true"
+        }
+      },
+      "[development]": {
+        "kind": "sqlite",
+        "credentials": {
+          "url": "../db.sqlite"
+        }
+      },
+      "[basic]": {
+        "kind": "postgres",
+        "vcap": {
+          "label": "postgresql-db"
+        }
+      },
+      "[standard]": {
+        "kind": "postgres",
+        "vcap": {
+          "label": "postgresql-db"
+        }
+      },
+      "[enterprise]": {
+        "kind": "hana",
+        "vcap": {
+          "label": false,
+          "plan": "container"
+        }
+      }
+    },
+    "-------------------- ": "---",
+    "--- Auth Settings ---": "---",
+    " --------------------": "---",
+    "auth": {
+      "[hybrid]": {
+        "kind": "xsuaa"
+      },
+      "[local-with-mtx]": {
+        "kind": "basic",
+        "users": {
+          "alice": {
+            "tenant": "t1",
+            "roles": [
+              "Admin",
+              "Approver",
+              "Activator",
+              "Member",
+              "cds.Subscriber",
+              "cds.ExtensionDeveloper"
+            ]
+          },
+          "carol": {
+            "tenant": "t1",
+            "roles": [
+              "Member"
+            ]
+          },
+          "bob": {
+            "tenant": "t1-ext",
+            "roles": [
+              "Admin",
+              "cds.Subscriber",
+              "cds.ExtensionDeveloper"
+            ]
+          }
+        }
+      },
+      "[development]": {
+        "kind": "basic",
+        "users": {
+          "alice": {
+            "roles": [
+              "Admin",
+              "Approver",
+              "Activator",
+              "Member"
+            ]
+          },
+          "bob": {
+            "roles": [
+              "Approver",
+              "Member"
+            ]
+          },
+          "dave": {
+            "roles": [
+              "Activator",
+              "Member"
+            ]
+          },
+          "carol": {
+            "roles": [
+              "Member"
+            ]
+          },
+          "eve": {
+            "roles": []
+          }
+        }
+      },
+      "[basic]": {
+        "kind": "xsuaa"
+      },
+      "[standard]": {
+        "kind": "xsuaa"
+      },
+      "[enterprise]": {
+        "kind": "xsuaa"
+      }
+    },
+    "---------------------- ": "---",
+    "--- Model Settings ----": "---",
+    " ----------------------": "---",
+    "db-ext": {
+      "[production]": {
+        "model": "../db/hana"
+      },
+      "[local-with-mtx]": {
+        "model": [
+          "../test"
+        ]
+      },
+      "[development]": {
+        "model": [
+          "../test",
+          "../db/sqlite"
+        ]
+      }
+    },
+    "[basic]": {
+      "multitenancy": false,
+      "extensibility": false,
+      "toggles": false
+    },
+    "[standard]": {
+      "multitenancy": false,
+      "extensibility": false,
+      "toggles": false
+    },
+    "[enterprise]": {
+      "multitenancy": true,
+      "extensibility": true,
+      "toggles": true
+    }
+  }
+}

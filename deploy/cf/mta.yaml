@@ -1,0 +1,254 @@
+_schema-version: '3.2'
+ID: adops-basic
+version: 0.0.1
+
+parameters:
+  deploy_mode: html5-repo
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm run install
+        - npm run build:basic
+
+modules:
+  - name: adops-basic
+    type: approuter.nodejs
+    path: ../../code/router
+    build-parameters:
+      builder: custom
+      commands: []
+      ignore: [ '.DS_Store', 'node_modules/', 'default-env.json', 'manifest*.yml' ]
+    parameters:
+      app-name: adops-basic-${space}
+      disk-quota: 256MB
+      memory: 128MB
+      tenant-separator: '-'
+      app-domain: ${app-name}.${default-domain}
+      keep-existing-routes: true
+    properties:
+      TENANT_HOST_PATTERN: '^(.*)${tenant-separator}${app-domain}'
+      destinations: >
+        [
+          {
+            "name": "adops-srv-api",
+            "url": "~{adops-basic-srv-api/srv-url}",
+            "forwardAuthToken": true
+          }
+        ]
+    requires:
+      - name: adops-basic-destination
+      - name: adops-basic-html5-repo-runtime
+      - name: adops-basic-uaa
+      - name: adops-basic-srv-api
+    provides:
+      - name: adops-basic-router-api
+        properties:
+          app-url: ${default-url}
+          application: ${app-name}
+          tenant-separator: ${tenant-separator}
+          app-domain: ${app-domain}
+
+  - name: adops-basic-app-deployer
+    type: com.sap.application.content
+    path: ../../code/app/html5-deployer
+    requires:
+      - name: adops-basic-html5-repo-host
+        parameters:
+          content-target: true
+    build-parameters:
+      build-result: resources
+      requires:
+        - name: adopsclient
+          target-path: resources/
+          artifacts:
+            - adopsclient.zip
+
+  - name: adopsclient
+    type: html5
+    path: ../../code/app/adops-client
+    build-parameters:
+      build-result: dist
+      builder: custom
+      ignore: [ 'node_modules/', '.npm-cache/', 'default-env.json', 'manifest*.yml' ]
+      commands:
+        - npm ci --no-audit --no-fund
+        - npm run build
+      supported-platforms: []
+
+  - name: adops-basic-srv
+    type: nodejs
+    path: ../../code/gen/srv
+    build-parameters:
+      builder: npm
+      ignore: [ '.DS_Store', 'node_modules/', 'default-*.json', 'manifest*.yml' ]
+    parameters:
+      app-name: adops-basic-srv-${space}
+      # 512MB (ChronoPilot runs 256): extraction pages tens of thousands of
+      # rows and the scoring pass holds a run's candidate set in memory.
+      memory: 512MB
+      disk-quota: 1024MB
+      health-check-type: http
+      health-check-http-endpoint: /healthz
+      health-check-timeout: 180
+      health-check-invocation-timeout: 180
+    properties:
+      NODE_ENV: production
+      CDS_ENV: production
+      ADOPTOPS_TIER: basic
+      ADOPTOPS_DB_MODE: postgres
+      ADOPTOPS_TENANT_AUTOMATION: false
+      S4_DESTINATION: S4H_2023
+      ADOPTOPS_S4_SERVICE_ROOT: /sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001
+      ADOPTOPS_TASK_CONCURRENCY: 2
+      ADOPTOPS_TASK_HEARTBEAT_MS: 5000
+      ADOPTOPS_TASK_STALE_MS: 120000
+      tenantSeparator: ~{adops-basic-router-api/tenant-separator}
+      appDomain: ~{adops-basic-router-api/app-domain}
+      approuterUrl: ~{adops-basic-router-api/app-url}
+      appName: ~{adops-basic-router-api/application}
+    requires:
+      - name: adops-basic-uaa
+      - name: adops-basic-logging
+      - name: adops-basic-postgres
+      - name: adops-basic-registry
+      - name: adops-basic-destination
+      - name: adops-basic-connectivity
+      - name: adops-basic-html5-repo-runtime
+      - name: adops-basic-router-api
+    provides:
+      - name: adops-basic-srv-api
+        properties:
+          srv-url: ${default-url}
+
+resources:
+  - name: adops-basic-uaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-name: ${space}-adops-basic-uaa
+      service-plan: application
+      path: ./config/xs-security.json
+      xsuaa-app: adops-basic-${space}-${org}
+      config:
+        xsappname: ${xsuaa-app}
+        role-collections:
+          - name: AdoptOps Member (${space})
+            description: Read usage analyses and proposals, run extractions
+            role-template-references:
+              - '$XSAPPNAME.Member'
+              - '$XSAPPNAME.Token_Exchange'
+          - name: AdoptOps Approver (${space})
+            description: Decide Fiori app proposals
+            role-template-references:
+              - '$XSAPPNAME.Approver'
+              - '$XSAPPNAME.Member'
+              - '$XSAPPNAME.Token_Exchange'
+          - name: AdoptOps Activator (${space})
+            description: Execute activation and transports in S/4HANA
+            role-template-references:
+              - '$XSAPPNAME.Activator'
+              - '$XSAPPNAME.Approver'
+              - '$XSAPPNAME.Member'
+              - '$XSAPPNAME.Token_Exchange'
+          - name: AdoptOps Administrator (${space})
+            description: Administer AdoptOps configuration
+            role-template-references:
+              - '$XSAPPNAME.Admin'
+              - '$XSAPPNAME.SaaSAdmin'
+              - '$XSAPPNAME.Token_Exchange'
+    properties:
+      xsuaa-app: ${xsuaa-app}
+      XSAPPNAME: ${xsuaa-app}
+
+  - name: adops-basic-logging
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: application-logs
+      service-name: ${space}-adops-basic-logging
+      service-plan: lite
+
+  - name: adops-basic-postgres
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: postgresql-db
+      service-name: ${space}-adops-basic-postgres
+      service-plan: standard
+
+  - name: adops-basic-connectivity
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: connectivity
+      service-name: ${space}-adops-basic-connectivity
+      service-plan: lite
+
+  - name: adops-basic-registry
+    type: org.cloudfoundry.managed-service
+    requires:
+      - name: adops-basic-uaa
+      - name: adops-basic-srv-api
+      - name: adops-basic-router-api
+    parameters:
+      service: saas-registry
+      service-name: ${space}-adops-basic-registry
+      service-plan: application
+      config:
+        xsappname: ~{adops-basic-uaa/xsuaa-app}
+        appName: adoptops-service-adops-shivaniam
+        displayName: AdoptOps Service adops-shivaniam
+        description: AdoptOps by Shivaniam Technology Solutions - SAP Fiori adoption analysis, proposals and activation for S/4HANA
+        category: SaaS Multitenant Apps
+        appUrls:
+          onSubscription: ~{adops-basic-srv-api/srv-url}/-/basic/saas-provisioning/tenant/{tenantId}
+          onSubscriptionAsync: false
+          onUnSubscriptionAsync: false
+          getDependencies: ~{adops-basic-srv-api/srv-url}/-/basic/saas-provisioning/dependencies
+        appPlans:
+          - name: basic
+            description: Basic - usage extraction, usage insight, catalog derivation and proposal review on shared PostgreSQL
+          - name: standard
+            description: Standard - adds activation plans, execution, transport management and activation-manifest replay
+          - name: enterprise
+            description: Enterprise - SAP HANA Cloud / HDI tenant-isolated persistence, scheduled re-extraction and adoption measurement
+
+  - name: adops-basic-destination
+    type: org.cloudfoundry.managed-service
+    requires:
+      - name: adops-basic-srv-api
+    parameters:
+      service: destination
+      service-name: ${space}-adops-basic-destination
+      service-plan: lite
+      config:
+        HTML5Runtime_enabled: true
+        version: 1.0.0
+        init_data:
+          instance:
+            existing_destinations_policy: update
+            destinations:
+              - Name: adops-srv-api
+                Description: AdoptOps Service API
+                URL: ~{adops-basic-srv-api/srv-url}
+                Type: HTTP
+                ProxyType: Internet
+                Authentication: NoAuthentication
+                HTML5.DynamicDestination: true
+                forwardAuthToken: true
+
+  - name: adops-basic-html5-repo-host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-name: ${space}-adops-basic-html5-repo-host
+      service-plan: app-host
+      config:
+        sizeLimit: 2
+
+  - name: adops-basic-html5-repo-runtime
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-name: ${space}-adops-basic-html5-repo-runtime
+      service-plan: app-runtime

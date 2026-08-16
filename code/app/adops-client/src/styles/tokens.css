@@ -1,0 +1,24 @@
+:root {
+  --adops-space-xxs: 0.25rem;
+  --adops-space-xs: 0.5rem;
+  --adops-space-sm: 0.75rem;
+  --adops-space-md: 1rem;
+  --adops-space-lg: 1.5rem;
+  --adops-space-xl: 2rem;
+  --adops-page-inline-padding: clamp(1rem, 2.5vw, 2.5rem);
+  --adops-section-gap: var(--adops-space-md);
+  --adops-card-padding: var(--adops-space-md);
+  --adops-card-radius: 0.5rem;
+  --adops-card-border: 0.0625rem solid var(--sapGroup_ContentBorderColor, #d9d9d9);
+  --adops-card-background: var(--sapTile_Background, var(--sapGroup_ContentBackground, #fff));
+  --adops-card-shadow: var(--sapContent_Shadow0, 0 0.125rem 0.25rem rgba(34, 53, 72, 0.12));
+  --adops-heading-page-size: 1.5rem;
+  --adops-heading-section-size: 1.25rem;
+  --adops-heading-subsection-size: 1rem;
+  --adops-heading-card-size: 0.875rem;
+  --adops-field-label-size: 0.75rem;
+  --adops-field-label-weight: 600;
+  --adops-z-sticky-content: 70;
+  --adops-z-page-header: 80;
+  --adops-z-popover: 1000;
+}

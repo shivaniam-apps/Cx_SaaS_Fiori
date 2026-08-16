@@ -1,0 +1,215 @@
+{
+  "name": "adops",
+  "version": "0.0.1",
+  "license": "Apache License 2.0",
+  "description": "AdoptOps - SAP Fiori adoption assessment and activation SaaS",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "@cap-js-community/odata-v2-adapter": "^1.14.4",
+    "@sap/cds": "^8.9.4",
+    "@sap/xsenv": "^5.6.1",
+    "@sap/xssec": "^4.7.0",
+    "axios": "^1.9.0",
+    "express": "^4.18.2",
+    "passport": "^0.7.0",
+    "@cap-js/postgres": "^1.10.0"
+  },
+  "devDependencies": {
+    "@sap/approuter": "^20.5.0",
+    "@sap/cds-dk": "^8.9.8",
+    "@sap/html5-app-deployer": "^7.0.2",
+    "@sap/html5-repo-mock": "^2.1.9",
+    "@ui5/cli": "^4.0.8",
+    "chai": "^5.1.0",
+    "chai-subset": "^1.6.0",
+    "mbt": "^1.2.27",
+    "mocha": "^10.4.0",
+    "shx": "^0.3.4",
+    "@cap-js/sqlite": "^1",
+    "sqlite3": "^5.1.7"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "test": "mocha --timeout 20000",
+    "srv:hybrid:check": "cds bind --exec --profile hybrid node ./check-bindings.js",
+    "srv:hybrid": "npx shx cp package.json srv/ && npx shx cp .cdsrc-private.json srv/ && cd srv && cds bind --exec --profile hybrid npm run srv:hybrid:helper",
+    "srv:hybrid:helper": "node ../scripts/with-env.mjs NODE_ENV=production CDS_ENV=hybrid CDS_REQUIRES_AUTH_KIND=mocked ADOPTOPS_DB_MODE=postgres PORT=4104 -- cds serve PublicService,AdminService,CoreService --watch --profile hybrid",
+    "db:refresh:sqlite": "node ./scripts/refresh-sqlite-views.mjs",
+    "srv:hybrid:sqlite": "npm run db:refresh:sqlite && npx shx cp package.json srv/ && npx shx cp .cdsrc-private.json srv/ && cd srv && cds bind --exec --profile hybrid -- node ../scripts/without-vcap-services.mjs postgresql-db -- npm run srv:hybrid:sqlite:helper",
+    "srv:hybrid:sqlite:helper": "node ../scripts/with-env.mjs NODE_ENV=production CDS_ENV=hybrid CDS_REQUIRES_AUTH_KIND=mocked CDS_REQUIRES_DB_KIND=sqlite CDS_REQUIRES_DB_CREDENTIALS_URL=../db.sqlite ADOPTOPS_DB_MODE=sqlite ADOPTOPS_S4_URL_OVERRIDES=S4H_2023=http://vhcala4hci:50000 PORT=4104 -- cds serve PublicService,AdminService,CoreService --watch --profile hybrid",
+    "srv:sqlite": "npm run db:refresh:sqlite && cd srv && node ../scripts/with-env.mjs NODE_ENV=development CDS_ENV=development CDS_REQUIRES_AUTH_KIND=mocked ADOPTOPS_DB_MODE=sqlite ADOPTOPS_MOCK_S4=true PORT=4104 -- npx cds serve srv/public-service.cds srv/admin-service.cds srv/core-service.cds --watch --profile development",
+    "srv:sqlite:nowatch": "npm run db:refresh:sqlite && cd srv && node ../scripts/with-env.mjs NODE_ENV=development CDS_ENV=development CDS_REQUIRES_AUTH_KIND=mocked ADOPTOPS_DB_MODE=sqlite ADOPTOPS_MOCK_S4=true PORT=4104 -- npx cds serve srv/public-service.cds srv/admin-service.cds srv/core-service.cds --profile development",
+    "mock:hybrid": "cds bind --exec npm run mock:run:hybrid",
+    "mock:run:hybrid": "(cd router && cds bind --exec --profile hybrid node ../node_modules/@sap/html5-repo-mock/index.js)",
+    "router:hybrid": "cds bind --exec --profile hybrid npm run router:run",
+    "router:run": "node ./scripts/run-router-hybrid.mjs",
+    "cleanup-gen": "npx --yes rimraf -r ./gen",
+    "cleanup-modules": "npx --yes rimraf ./**/node_modules && npx --yes rimraf ./node_modules ",
+    "build": "npm run build:basic",
+    "build:basic": "node ./scripts/with-env.mjs CDS_ENV=production ADOPTOPS_TIER=basic ADOPTOPS_DB_MODE=postgres -- npx cds build --production && node ./scripts/prepare-basic-runtime.mjs"
+  },
+  "eslintConfig": {
+    "extends": "eslint:recommended",
+    "env": {
+      "es2020": true,
+      "node": true,
+      "jest": true,
+      "mocha": true
+    },
+    "globals": {
+      "SELECT": true,
+      "INSERT": true,
+      "UPDATE": true,
+      "DELETE": true,
+      "CREATE": true,
+      "DROP": true,
+      "CDL": true,
+      "CQL": true,
+      "CXL": true,
+      "cds": true
+    },
+    "rules": {
+      "no-console": "off",
+      "require-atomic-updates": "off"
+    }
+  },
+  "cds": {
+    "server": {
+      "body_parser": {
+        "limit": "20mb"
+      }
+    },
+    "hana": {
+      "deploy-format": "hdbtable"
+    },
+    "build": {
+      "tasks": [
+        {
+          "for": "nodejs",
+          "src": "srv/srv",
+          "dest": "srv",
+          "options": {
+            "model": [
+              "srv/srv"
+            ]
+          }
+        }
+      ]
+    },
+    "requires": {
+      "auth": {
+        "kind": "mocked",
+        "users": {
+          "alice": {
+            "roles": ["Admin", "Approver", "Activator", "Member"]
+          },
+          "bob": {
+            "roles": ["Approver", "Member"]
+          },
+          "dave": {
+            "roles": ["Activator", "Member"]
+          },
+          "carol": {
+            "roles": ["Member"]
+          },
+          "eve": {
+            "roles": []
+          }
+        }
+      },
+      "multitenancy": false,
+      "extensibility": false,
+      "toggles": false,
+      "[hybrid]": {
+        "auth": {
+          "kind": "mocked",
+          "users": {
+            "alice": {
+              "roles": ["Admin", "Approver", "Activator", "Member"]
+            },
+            "bob": {
+              "roles": ["Approver", "Member"]
+            },
+            "dave": {
+              "roles": ["Activator", "Member"]
+            },
+            "carol": {
+              "roles": ["Member"]
+            },
+            "eve": {
+              "roles": []
+            }
+          }
+        },
+        "db": {
+          "kind": "postgres",
+          "vcap": {
+            "label": "postgresql-db"
+          }
+        },
+        "destinations": {
+          "kind": "destinations"
+        },
+        "connectivity": {
+          "kind": "connectivity"
+        },
+        "multitenancy": false,
+        "extensibility": false,
+        "toggles": false
+      },
+      "[production]": {
+        "auth": {
+          "kind": "xsuaa"
+        },
+        "db": {
+          "kind": "postgres",
+          "vcap": {
+            "label": "postgresql-db"
+          }
+        },
+        "destinations": {
+          "kind": "destinations"
+        },
+        "connectivity": {
+          "kind": "connectivity"
+        },
+        "multitenancy": false,
+        "extensibility": false,
+        "toggles": false
+      },
+      "[basic]": {
+        "db": { "kind": "postgres" },
+        "multitenancy": false,
+        "extensibility": false,
+        "toggles": false
+      },
+      "[standard]": {
+        "db": { "kind": "postgres" },
+        "multitenancy": false,
+        "extensibility": false,
+        "toggles": false
+      },
+      "[enterprise]": {
+        "db": { "kind": "hana" },
+        "multitenancy": true,
+        "extensibility": true,
+        "toggles": true
+      }
+    },
+    "[development]": {
+      "requires": {
+        "db": {
+          "kind": "sqlite",
+          "credentials": {
+            "url": "../db.sqlite"
+          }
+        }
+      }
+    }
+  },
+  "sapux": [
+    "app/adops-client"
+  ]
+}

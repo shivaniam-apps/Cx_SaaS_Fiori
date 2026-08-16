@@ -1,0 +1,23 @@
+#!/bin/sh
+# post-merge hook: keep the local dev db.sqlite in step with the CDS model
+# right after a pull/merge instead of at the next server start. Runs the
+# same refresh the sqlite dev-server scripts run (view re-create + additive
+# base-table heal with automatic backup); drift that still needs a full
+# `cds deploy` prints its instructions here, where the merge just happened.
+#
+# Never blocks or fails the merge. Note: `git pull --rebase` does not fire
+# post-merge; the dev-server scripts remain the safety net there. A running
+# dev server keeps serving its previously compiled model - restart it after
+# schema changes.
+
+if [ -f code/db.sqlite ]; then
+  echo "[post-merge] refreshing code/db.sqlite against the merged CDS model..."
+  if npm --prefix code run db:refresh:sqlite; then
+    echo "[post-merge] db.sqlite is in sync. Restart your dev server if the model changed."
+  else
+    echo "[post-merge] db.sqlite needs a full deploy (see instructions above);"
+    echo "[post-merge] the sqlite dev-server scripts will refuse to start until it is done."
+  fi
+fi
+
+exit 0

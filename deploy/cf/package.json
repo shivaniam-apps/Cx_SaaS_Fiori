@@ -1,0 +1,11 @@
+{
+  "name": "adops-cf",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "description": "Cloud Foundry deployment for the AdoptOps SaaS CAP app",
+  "scripts": {
+    "install": "cd ../../code && npm install --include=dev",
+    "build": "npm run build:basic",
+    "build:basic": "cd ../../code && npm run build:basic"
+  }
+}

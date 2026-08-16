@@ -1,0 +1,32 @@
+{
+  "welcomeFile": "/index.html",
+  "routes": [
+    {
+      "source": "^/fiori/(.*)$",
+      "target": "/fiori/$1",
+      "destination": "adops-srv-api",
+      "preferLocal": true,
+      "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^/core/(.*)$",
+      "target": "/core/$1",
+      "destination": "adops-srv-api",
+      "preferLocal": true,
+      "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^/catalog/(.*)$",
+      "target": "/catalog/$1",
+      "destination": "adops-srv-api",
+      "preferLocal": true,
+      "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^(.*)$",
+      "target": "$1",
+      "service": "html5-apps-repo-rt",
+      "authenticationType": "xsuaa"
+    }
+  ]
+}

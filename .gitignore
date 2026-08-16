@@ -1,0 +1,47 @@
+node_modules/
+.npm-cache/
+default-*.json
+.env
+.yo-rc.json
+coverage/
+gen/
+dist/
+local/
+mta_archives/
+manifest-bundle.zip
+connection.properties
+*-private.http
+*-private.json
+*-private.MD
+*-private.mtaext
+*-private.yaml
+*-private.tfvars
+*.db
+*.mtar
+*.mta
+*.log
+*.zip
+_out
+.che/
+.gen/
+.DS_Store
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+db.sqlite.bak-*
+*.private.*
+# exclude sample file
+!default-*.sample.json
+!APIProxy*.zip
+!fts.zip
+!ext.zip
+code/srv/package.json
+code/api/package.json
+
+# Claude Code worktrees
+.claude/worktrees/
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Customer usage extracts (identified data) must never enter the repo
+adops_usage_*.json
