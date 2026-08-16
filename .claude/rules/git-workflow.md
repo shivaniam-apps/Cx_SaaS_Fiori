@@ -12,6 +12,27 @@ repo, personal account), so the `.githooks/pre-push` hook enforces this
 locally by rejecting direct pushes to main. `ALLOW_MAIN_PUSH=1` overrides
 it for genuine emergencies only; never use the override routinely.
 
+## Starting a Feature Branch
+
+Always cut a new branch from an up-to-date `main` — never from another
+feature branch or a stale local `main`:
+
+    git checkout main
+    git pull --ff-only origin main
+    git checkout -b <type>/<short-topic>
+
+`--ff-only` is deliberate: a plain `git pull` here builds a merge commit when
+it cannot fast-forward and drops into the editor; on this machine that editor
+is vi and it fails, stranding a half-finished merge on `main`. If `--ff-only`
+errors, local `main` has diverged — reconcile with
+`git reset --hard origin/main` (local `main` should never carry unique work),
+not by merging.
+
+Recommended once per machine so this never recurs:
+
+    git config --global pull.ff only
+    git config --global core.editor "code --wait"
+
 ## Workstreams
 
 Three parallel workstreams are used:
@@ -91,9 +112,10 @@ Run /dependency-check for significant or cross-cutting changes.
 When another required change has landed in main:
 
 git fetch origin
-git merge origin/main
+git merge --no-edit origin/main
 
-Resolve conflicts deliberately and rerun affected tests.
+Resolve conflicts deliberately and rerun affected tests. `--no-edit` avoids
+dropping into vi for the merge-commit message (see Starting a Feature Branch).
 
 Worktrees keep `.claude/launch.json` local via `git update-index
 --skip-worktree` (per-worktree ports). If a merge aborts with "local
