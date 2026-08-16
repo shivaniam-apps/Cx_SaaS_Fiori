@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/zip-html5.mjs",
     "lint": "eslint .",
-    "test": "node --test src/features/auth/memberAccess.test.js src/features/waves/waveModel.test.js",
+    "test": "node --test src/features/auth/memberAccess.test.js src/features/waves/waveModel.test.js src/features/systems/destinationCatalog.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
