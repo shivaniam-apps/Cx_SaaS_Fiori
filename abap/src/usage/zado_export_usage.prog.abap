@@ -40,7 +40,7 @@ SELECTION-SCREEN END OF LINE.
 INITIALIZATION.
   c_from  = 'Period from'.
   c_to    = 'Period to'.
-  c_top   = 'Top users per transaction'.
+  c_top   = 'Top users/transaction (0 = all)'.
   c_ident = 'Identified export (opt-in)'.
 
 CLASS lcl_export DEFINITION FINAL.
@@ -61,6 +61,10 @@ CLASS lcl_export IMPLEMENTATION.
     rv_out = iv_value.
     REPLACE ALL OCCURRENCES OF '\' IN rv_out WITH '\\'.
     REPLACE ALL OCCURRENCES OF '"' IN rv_out WITH '\"'.
+    " Raw SWNC fields can carry control bytes (observed on RD1: an all-NUL
+    " ACCOUNT from an aborted session) - invalid inside JSON string
+    " literals, and strict parsers then reject the whole file.
+    REPLACE ALL OCCURRENCES OF REGEX '[[:cntrl:]]' IN rv_out WITH ''.
   ENDMETHOD.
 
   METHOD run.
