@@ -1,0 +1,10 @@
+CLASS zbp_ado_act_i_log DEFINITION
+  PUBLIC
+  ABSTRACT
+  FINAL
+  FOR BEHAVIOR OF zado_act_i_log.
+ENDCLASS.
+
+
+CLASS zbp_ado_act_i_log IMPLEMENTATION.
+ENDCLASS.
