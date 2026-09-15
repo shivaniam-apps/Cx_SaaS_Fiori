@@ -235,6 +235,17 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   // read discipline - never shipped with the plan read).
   function readActivationStepMessages(stepId: UUID) returns LargeString;
 
+  // --- Activation runs (monitor) --------------------------------------------
+  // A run is one ACTIVATION_EXECUTION background task. The list read carries
+  // plan/wave/system labels and a status summary over the full filter scope
+  // (no child reads, no client-side counting); the run read is the ONE poll
+  // target while a run is active: task status + plan + steps + task logs in
+  // a single response (performance.md, activation run monitor).
+  // Resume and cancel reuse executeActivationPlan and cancelTask.
+
+  function queryActivationRuns(targetSystemId: UUID) returns LargeString;
+  function readActivationRun(runId: UUID) returns LargeString;
+
   // --- Transports (Phase 3) -------------------------------------------------
   // One composite read for the list page (plan/wave/system labels included);
   // release goes through the write unit's CTS step (simulate = release

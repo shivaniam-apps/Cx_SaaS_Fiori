@@ -194,6 +194,23 @@ export async function readActivationStepMessages(stepId) {
   return parseJsonActionResult(response.data);
 }
 
+// --- Activation runs (monitor) ------------------------------------------------
+
+export async function queryActivationRuns(targetSystemId) {
+  const path = targetSystemId
+    ? `queryActivationRuns(targetSystemId=${targetSystemId})`
+    : 'queryActivationRuns()';
+  const response = await http.get(`/fiori/${path}`);
+  return parseJsonActionResult(response.data);
+}
+
+// The single poll target while a run is active: task status + plan + steps +
+// task logs in one response.
+export async function readActivationRun(runId) {
+  const response = await http.get(`/fiori/readActivationRun(runId=${runId})`);
+  return parseJsonActionResult(response.data);
+}
+
 // --- Transports ---------------------------------------------------------------
 
 export async function queryTransportRequests(targetSystemId) {
