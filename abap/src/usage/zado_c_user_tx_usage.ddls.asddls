@@ -1,4 +1,4 @@
-@EndUserText.label: 'AdoptOps User x Transaction Usage (ST03N, live)'
+@EndUserText.label: 'AdoptOps User x Tx Usage (ST03N, live)'
 @ObjectModel.query.implementedBy: 'ABAP:ZCL_ADO_Q_USER_TX'
 define custom entity ZADO_C_USER_TX_USAGE
 {

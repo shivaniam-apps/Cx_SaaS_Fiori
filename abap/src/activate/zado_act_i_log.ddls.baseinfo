@@ -1,0 +1,7 @@
+{
+  "BASEINFO": {
+    "FROM": [
+      "ZADO_ACT_LOG"
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+@EndUserText.label: 'AdoptOps Activation Service'
+define service ZADO_ACTIVATE_SRV {
+  expose ZADO_ACT_I_LOG as Activate;
+}
