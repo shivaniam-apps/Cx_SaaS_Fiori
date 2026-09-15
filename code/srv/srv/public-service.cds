@@ -10,31 +10,46 @@ using {
 service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: ['Member', 'Approver', 'Activator', 'Admin']) {
 
   // --- Read surfaces --------------------------------------------------------
+  // Every projection is READ-ONLY over OData: business writes go through the
+  // role-gated actions below (approve/reject/defer, waves, plans, execution,
+  // transports), which are the only place the review-status, plan-status and
+  // step-status semantics are enforced. A direct PATCH would bypass those
+  // gates, so it is refused for every role. The two exceptions carry an
+  // explicit @restrict: TargetSystems (Admin registers/edits systems) and
+  // AdoptionWaves (Approver/Activator may delete; create goes via action).
 
+  @restrict: [
+    { grant: 'READ' },
+    { grant: ['CREATE', 'UPDATE'], to: 'Admin' }
+  ]
   entity TargetSystems as projection on db.TargetSystems;
-  entity ExtractionRuns as projection on db.ExtractionRuns;
-  entity UsageSnapshots as projection on db.UsageSnapshots;
-  entity TransactionUsage as projection on db.TransactionUsage;
-  entity UserTransactionUsage as projection on db.UserTransactionUsage;
-  entity FioriUsage as projection on db.FioriUsage;
-  entity UserInventory as projection on db.UserInventory;
-  entity RoleInventory as projection on db.RoleInventory;
-  entity RoleTransactions as projection on db.RoleTransactions;
-  entity RoleUsers as projection on db.RoleUsers;
-  entity BackendCatalogApps as projection on db.BackendCatalogApps;
-  entity BackendLaunchpadContent as projection on db.BackendLaunchpadContent;
+  @readonly entity ExtractionRuns as projection on db.ExtractionRuns;
+  @readonly entity UsageSnapshots as projection on db.UsageSnapshots;
+  @readonly entity TransactionUsage as projection on db.TransactionUsage;
+  @readonly entity UserTransactionUsage as projection on db.UserTransactionUsage;
+  @readonly entity FioriUsage as projection on db.FioriUsage;
+  @readonly entity UserInventory as projection on db.UserInventory;
+  @readonly entity RoleInventory as projection on db.RoleInventory;
+  @readonly entity RoleTransactions as projection on db.RoleTransactions;
+  @readonly entity RoleUsers as projection on db.RoleUsers;
+  @readonly entity BackendCatalogApps as projection on db.BackendCatalogApps;
+  @readonly entity BackendLaunchpadContent as projection on db.BackendLaunchpadContent;
   @readonly entity AppMappingOverlay as projection on db.AppMappingOverlay;
-  entity AnalysisRuns as projection on db.AnalysisRuns;
+  @readonly entity AnalysisRuns as projection on db.AnalysisRuns;
+  @restrict: [
+    { grant: 'READ' },
+    { grant: 'DELETE', to: ['Approver', 'Activator'] }
+  ]
   entity AdoptionWaves as projection on db.AdoptionWaves;
-  entity AppProposals as projection on db.AppProposals;
-  entity ProposalEvidence as projection on db.ProposalEvidence;
-  entity ProposalComments as projection on db.ProposalComments;
-  entity ActivationPlans as projection on db.ActivationPlans;
-  entity ActivationSteps as projection on db.ActivationSteps;
-  entity ActivationStepMessages as projection on db.ActivationStepMessages;
-  entity TransportRequests as projection on db.TransportRequests;
-  entity BackgroundTasks as projection on db.BackgroundTasks;
-  entity BackgroundTaskLogs as projection on db.BackgroundTaskLogs;
+  @readonly entity AppProposals as projection on db.AppProposals;
+  @readonly entity ProposalEvidence as projection on db.ProposalEvidence;
+  @readonly entity ProposalComments as projection on db.ProposalComments;
+  @readonly entity ActivationPlans as projection on db.ActivationPlans;
+  @readonly entity ActivationSteps as projection on db.ActivationSteps;
+  @readonly entity ActivationStepMessages as projection on db.ActivationStepMessages;
+  @readonly entity TransportRequests as projection on db.TransportRequests;
+  @readonly entity BackgroundTasks as projection on db.BackgroundTasks;
+  @readonly entity BackgroundTaskLogs as projection on db.BackgroundTaskLogs;
   @readonly entity AuditEvents as projection on db.AuditEvents;
 
   // --- Shared result types --------------------------------------------------

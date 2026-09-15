@@ -23,6 +23,8 @@ import {
   getServiceErrorMessage
 } from '../services/fioriService.js';
 import { listBtpDestinations, getBtpAccountInfo, isForbidden } from '../services/adminService.js';
+import { fetchUserInfo } from '../services/coreService.js';
+import { hasAdminAccess } from '../features/auth/memberAccess.js';
 import { buildDestinationCatalog, draftFromDestination, DESTINATION_STATUS } from '../features/systems/destinationCatalog.js';
 
 const ENVIRONMENTS = ['DEV', 'QAS', 'PRD', 'SANDBOX'];
@@ -67,6 +69,18 @@ export function TargetSystemsPage() {
   const [destError, setDestError] = useState('');
   const [refreshingDest, setRefreshingDest] = useState(false);
   const [destToken, setDestToken] = useState(0);
+  const [userInfo, setUserInfo] = useState(null);
+
+  // Registering and editing systems is Admin-only (PublicService @restrict);
+  // everyone with a business role may read and test them.
+  useEffect(() => {
+    let cancelled = false;
+    fetchUserInfo()
+      .then((info) => { if (!cancelled) setUserInfo(info); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const admin = hasAdminAccess(userInfo);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,9 +225,11 @@ export function TargetSystemsPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title level="H2">Target Systems</Title>
-        <Button design="Emphasized" icon="add" onClick={openCreate}>
-          Register System
-        </Button>
+        {admin ? (
+          <Button design="Emphasized" icon="add" onClick={openCreate}>
+            Register System
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -253,13 +269,15 @@ export function TargetSystemsPage() {
               <TableCell>{connectionTag(system, verdicts)}</TableCell>
               <TableCell>
                 <div style={{ display: 'flex', gap: 'var(--adops-space-xs)' }}>
-                  <Button
-                    design="Transparent"
-                    icon="edit"
-                    onClick={() => openEdit(system)}
-                  >
-                    Edit
-                  </Button>
+                  {admin ? (
+                    <Button
+                      design="Transparent"
+                      icon="edit"
+                      onClick={() => openEdit(system)}
+                    >
+                      Edit
+                    </Button>
+                  ) : null}
                   <Button
                     design="Transparent"
                     icon="connected"
