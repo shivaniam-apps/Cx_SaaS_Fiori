@@ -208,6 +208,18 @@ service AdminService @(path : '/catalog/AdminService', impl: 'srv/admin-service'
     grantRole: Boolean
   ) returns AccessRequests;
 
+  // Status counts over ALL access requests for the triage page's KPI strip -
+  // a server summary over the full scope, never counted from the bounded
+  // list read (performance.md). Pending + Approved + Declined + Other = Total.
+  type AccessRequestSummary {
+    Total    : Integer;
+    Pending  : Integer;
+    Approved : Integer;
+    Declined : Integer;
+    Other    : Integer;
+  };
+  function queryAccessRequestSummary() returns AccessRequestSummary;
+
   // Server-side aggregation: the Product Insights usage/performance views
   // consume these instead of downloading raw event tables.
   function queryUsageSummary(days: Integer) returns UsageSummary;
