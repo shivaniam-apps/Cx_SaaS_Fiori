@@ -176,7 +176,31 @@ function registerAccessRequestPublicHandlers(service) {
     });
 }
 
+// Grouped Status counts (SELECT Status, count(*) ... GROUP BY Status) into the
+// KPI summary. Pure so it is unit-testable; the vocabulary is PENDING /
+// APPROVED / DECLINED, anything else lands in Other so the cards still sum.
+function summarizeAccessRequestStatuses(groupedRows) {
+    const summary = { Total: 0, Pending: 0, Approved: 0, Declined: 0, Other: 0 };
+    for (const row of groupedRows || []) {
+        const count = Number(row.cnt ?? row.count ?? 0) || 0;
+        summary.Total += count;
+        switch (row.Status) {
+            case 'PENDING': summary.Pending += count; break;
+            case 'APPROVED': summary.Approved += count; break;
+            case 'DECLINED': summary.Declined += count; break;
+            default: summary.Other += count;
+        }
+    }
+    return summary;
+}
+
 function registerAccessRequestAdminHandlers(service) {
+    service.on('queryAccessRequestSummary', async () => {
+        if (isDatabaseLess()) return summarizeAccessRequestStatuses([]);
+        const grouped = await SELECT.from(ACCESS_REQUESTS).columns('Status', 'count(*) as cnt').groupBy('Status');
+        return summarizeAccessRequestStatuses(grouped);
+    });
+
     service.on('decideAccessRequest', async (req) => {
         if (isDatabaseLess()) return req.reject(501, TIER_MESSAGE);
 
@@ -230,4 +254,8 @@ function registerAccessRequestAdminHandlers(service) {
     });
 }
 
-module.exports = { registerAccessRequestPublicHandlers, registerAccessRequestAdminHandlers };
+module.exports = {
+    registerAccessRequestPublicHandlers,
+    registerAccessRequestAdminHandlers,
+    summarizeAccessRequestStatuses
+};
