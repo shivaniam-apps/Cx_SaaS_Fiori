@@ -40,6 +40,7 @@ import {
   TERMINAL_TASK_STATES
 } from '../services/fioriService.js';
 import useRunPolling from '../hooks/useRunPolling.js';
+import Kpi from '../components/Kpi.jsx';
 import {
   WAVE_STATUS_DESIGN,
   PLAN_STATUS_DESIGN,
@@ -55,20 +56,6 @@ import {
 } from '../features/waves/waveModel.js';
 
 const PROPOSAL_STATUS_DESIGN = { NEW: 'Information', APPROVED: 'Positive', REJECTED: 'Negative', DEFERRED: 'Neutral' };
-
-function Kpi({ label, value }) {
-  return (
-    <div style={{
-      flex: '1 1 8rem', minWidth: '8rem', padding: 'var(--adops-card-padding)',
-      border: 'var(--adops-card-border)', borderRadius: 'var(--adops-card-radius)',
-      background: 'var(--adops-card-background)'
-    }}>
-      <Text style={{ color: 'var(--sapNeutralTextColor, #6a6d70)', fontSize: '0.8rem' }}>{label}</Text>
-      <br />
-      <Text style={{ fontSize: '1.4rem', fontWeight: 700 }}>{value}</Text>
-    </div>
-  );
-}
 
 export function AdoptionWavesPage() {
   const { waveId } = useParams();
