@@ -81,8 +81,18 @@ describe('activation execution engine', function () {
     expect(transport.TransportRequestId).to.match(/^RD1K9\d{5}$/);
     expect(transport.Status).to.equal('MODIFIABLE');
 
-    const audits = await SELECT.from('adops.db.AuditEvents').where({ CorrelationId: plan.ID });
+    const audits = await SELECT.from('adops.db.AuditEvents').where({ CorrelationId: plan.ID }).orderBy('Sequence asc');
     expect(audits.length).to.equal(steps.length);
+    // Every step outcome is a chained row (roadmap A4): contiguous per-tenant
+    // sequence, each linked to its predecessor.
+    audits.forEach((audit, index) => {
+      expect(audit.TenantId).to.equal('T');
+      expect(audit.Hash).to.match(/^[0-9a-f]{64}$/);
+      if (index > 0) {
+        expect(audit.Sequence).to.equal(audits[index - 1].Sequence + 1);
+        expect(audit.PrevHash).to.equal(audits[index - 1].Hash);
+      }
+    });
 
     const messages = await SELECT.from('adops.db.ActivationStepMessages').where({ step_ID: steps[0].ID });
     expect(messages.length).to.be.greaterThan(0);

@@ -1,6 +1,7 @@
 const cds = require('@sap/cds');
 const { randomUUID } = require('node:crypto');
 const { shouldMockSap } = require('./s4-http-client.js');
+const { appendAuditEvent } = require('./audit-chain.js');
 
 const { SELECT, INSERT, UPDATE } = cds.ql;
 const LOG = cds.log('activation-execution');
@@ -119,10 +120,8 @@ async function writeStepMessages(step, messages, tenantId) {
 }
 
 async function writeAudit({ plan, step, status, executedBy, tenantId }) {
-  await INSERT.into('adops.db.AuditEvents').entries({
-    ID: randomUUID(),
+  await appendAuditEvent({
     TenantId: tenantId,
-    Timestamp: new Date().toISOString(),
     EventType: `ACTIVATION_STEP_${status}`,
     Severity: status === 'FAILED' ? 'ERROR' : 'INFO',
     ObjectType: 'ActivationSteps',

@@ -1,0 +1,42 @@
+{
+  "description": "ObjectKeyJson contract between the SaaS planner (code/srv/srv/utils/activation-plan.js, objectKey) and the ABAP dispatcher (abap/src/activate/zcl_ado_activate.clas.abap). 'planned' holds the key deriveActivationSteps emits per StepType for 'input' (first step of each type); 'other' holds keys built by objectKey outside the planner. Key NAMES are the contract (camelCase on the wire, snake_case in the ABAP types); values are illustrative - the BSP application name is an example, real ones come from BackendCatalogApps. activation-plan.test.js checks the planner against this file, activation-key-contract.test.js checks the ABAP dispatcher types and the zado_activate_smoke scenarios against it. See docu/09-activation-and-transport/object-key-contract.md.",
+  "input": {
+    "waveName": "Wave 1",
+    "proposals": [
+      { "ID": "p1", "FioriId": "F3893", "BusinessRoleId": "SAP_BR_INTERNAL_SALES_REP", "BspApplication": "SD_SO_MANV2" },
+      { "ID": "p2", "FioriId": "F0842A", "BusinessRoleId": "SAP_BR_PURCHASER" }
+    ]
+  },
+  "planned": {
+    "RUN_TASK_LIST": { "scenario": "SAP_FIORI_FOUNDATION_S4" },
+    "ACTIVATE_ODATA_SERVICE": { "fioriId": "F3893", "scenario": "SAP_GATEWAY_ACTIVATE_ODATA_SERV" },
+    "ACTIVATE_ICF_NODE": { "fioriId": "F3893", "url": "/sap/bc/ui5_ui5/sap/sd_so_manv2", "icfName": "sd_so_manv2" },
+    "CREATE_SPACE": { "spaceId": "ZADO_W1", "title": "Wave 1" },
+    "CREATE_PAGE": { "pageId": "ZADO_W1_P1", "apps": ["F3893", "F0842A"] },
+    "ASSIGN_PAGE_TO_SPACE": { "spaceId": "ZADO_W1", "pageId": "ZADO_W1_P1" },
+    "CREATE_PFCG_ROLE": { "role": "Z_ADO_W1", "text": "AdoptOps Wave 1", "referenceRoles": ["SAP_BR_INTERNAL_SALES_REP", "SAP_BR_PURCHASER"] },
+    "ADD_SPACE_TO_ROLE": { "role": "Z_ADO_W1", "spaceId": "ZADO_W1" },
+    "GENERATE_PROFILE": { "role": "Z_ADO_W1" },
+    "ADD_TO_TRANSPORT": { "text": "AdoptOps Wave 1" }
+  },
+  "other": {
+    "icfNodeWithoutCatalogRow": {
+      "note": "Second app of the input has no BspApplication: the key travels empty and the ABAP dispatcher fails fast before HTTP_ACTIVATE_NODE.",
+      "stepType": "ACTIVATE_ICF_NODE",
+      "params": { "fioriId": "F0842A", "bspApplication": "" },
+      "key": { "fioriId": "F0842A", "url": "", "icfName": "" }
+    },
+    "transportRelease": {
+      "note": "releaseTransport action: a TRKORR turns ADD_TO_TRANSPORT into a release (simulation = TRINT_RELEASE_REQUEST IV_SIMULATION).",
+      "stepType": "ADD_TO_TRANSPORT",
+      "params": { "trkorr": "RD1K900042", "simulation": true },
+      "key": { "trkorr": "RD1K900042", "simulation": true }
+    },
+    "assignRoleToUsers": {
+      "note": "Emitted when a plan has AssignUsers (client-local, never transported).",
+      "stepType": "ASSIGN_ROLE_TO_USERS",
+      "params": { "role": "Z_ADO_W1", "users": ["JDOE", "MMUSTER"] },
+      "key": { "role": "Z_ADO_W1", "users": ["JDOE", "MMUSTER"] }
+    }
+  }
+}

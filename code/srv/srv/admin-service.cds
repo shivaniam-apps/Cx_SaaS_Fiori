@@ -19,7 +19,9 @@ service AdminService @(path : '/catalog/AdminService', impl: 'srv/admin-service'
 
   entity BackgroundTasks as projection on db.BackgroundTasks;
   entity BackgroundTaskLogs as projection on db.BackgroundTaskLogs;
-  entity AuditEvents as projection on db.AuditEvents;
+  // Append-only, hash-chained (db/data-model.cds). Rows are written only by
+  // srv/utils/audit-chain.js; read-only here as on PublicService.
+  @readonly entity AuditEvents as projection on db.AuditEvents;
 
   entity Users as select from db.Users {
     *,
@@ -219,6 +221,23 @@ service AdminService @(path : '/catalog/AdminService', impl: 'srv/admin-service'
     Other    : Integer;
   };
   function queryAccessRequestSummary() returns AccessRequestSummary;
+
+  // Verdict of recomputing the current tenant's audit hash chain.
+  // Status OK | BROKEN | EMPTY; FirstBrokenSequence is set for BROKEN;
+  // UnchainedEvents counts rows written before the chain existed.
+  type AuditChainVerdict {
+    TenantId            : String(60);
+    Status              : String(10);
+    ChainedEvents       : Integer;
+    UnchainedEvents     : Integer;
+    LastSequence        : Integer;
+    LastHash            : String(64);
+    FirstBrokenSequence : Integer;
+    HeadConsistent      : Boolean;
+    Message             : String(500);
+    CheckedAt           : Timestamp;
+  };
+  function verifyAuditChain() returns AuditChainVerdict;
 
   // Server-side aggregation: the Product Insights usage/performance views
   // consume these instead of downloading raw event tables.
