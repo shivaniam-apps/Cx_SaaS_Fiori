@@ -33,6 +33,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 - [x] Road to Production roadmap checked in as plan of record — PR #8, 2026-09-16
 - [x] Parallel worktrees: per-workstream checkouts, port slots, worktree.mjs, with-env `?=` defaults, db:init:sqlite — PR #10, 2026-09-16
 - [x] Program tracker, tracker board script, git-workflow rule update, worktree one-pager — PR #11, 2026-09-16
+- [x] Worktree session brief: generated CLAUDE.local.md per worktree (add/next/sync), CLAUDE.md worktree section — PR #12, 2026-09-16
 
 ## Daily log
 
@@ -40,3 +41,4 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 - Roadmap approved (single-tenant RD1 pilot first). Surveys found: no Postgres schema deployment, two security blockers (writable projections, no audit chain), live activation stops at ABAP step 2.
 - A3 landed. Lesson: cds keeps the [development] profile active under NODE_ENV=test; API tests must pin `cds.env.requires.db` to in-memory and assert it, or they write into the developer's db.sqlite (happened once, two fixture rows removed).
 - Worktrees created for admin / scheduling / overview. Lesson: `cds serve --watch` children on this machine stop serving HTTP after a reload; all launch configs use the no-watch script.
+- Session start automated: each worktree gets a generated CLAUDE.local.md brief (Claude Code reads it with CLAUDE.md), so no start prompt has to be pasted and a forgotten prompt cannot cause a wrong-worktree session.

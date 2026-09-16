@@ -69,3 +69,19 @@ everything you read stays in context for the rest of the session.
 ## Local Ports
 
 AdoptOps dev servers use PORT=4104. ChronoPilot owns 4004 on this machine.
+Worktrees use their own slots (see `docu/14-local-development/parallel-worktrees.md`).
+
+## Worktree Sessions
+
+Development happens in per-workstream worktrees under `Cx_SaaS_Fiori.worktrees/`;
+the primary checkout stays on `main` for integration and PR review only.
+
+- If this checkout is a worktree, a generated `CLAUDE.local.md` sits next to
+  this file: it is the session brief (workstream, ports, branch, current
+  item, start-of-session steps). Follow it before doing anything else. If it
+  is missing, run `node scripts/worktree.mjs sync` and re-read it.
+- If this checkout is the primary one (branch `main`), do not develop here:
+  integrate, review, run `node scripts/tracker.mjs`, and hand feature work to
+  the right worktree.
+- Progress is tracked in `docu/00-overview/program-tracker.md`; every PR
+  updates its workstream's tracker file.
