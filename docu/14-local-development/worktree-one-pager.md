@@ -27,14 +27,15 @@ Three worktrees, three Claude Code sessions, one `main`. Details in
 7. **After merge** (from the main checkout):
    `node scripts/worktree.mjs next <workstream> <next-branch>`
 
-## Session prompt to paste
+## Session start is automatic
 
-```
-Work in the <workstream> worktree at C:\Dev\SAP Tools_Cx_Cpsaas\Cx_SaaS_Fiori.worktrees\<workstream>
-(branch <branch>, CAP <port>, client <port>). Item <ID> from docu/00-overview/road-to-production.md.
-Follow .claude/rules and docu/00-overview/program-tracker.md: mark In progress first,
-update tracker/<workstream>.md and ideas.md, finish with tests, then push and give me the PR text.
-```
+Every worktree carries a generated, gitignored `CLAUDE.local.md` next to `CLAUDE.md`.
+Claude Code reads it at session start, so a session opened in a worktree already knows its
+workstream, ports, branch and the In progress item from the tracker, and follows the
+start-of-session steps without a pasted prompt. `worktree.mjs add` and `next` write it;
+`node scripts/worktree.mjs sync` regenerates it (for example after the In progress item
+changed). Just open the session in the worktree folder and say what you want, or nothing
+at all ("continue") - the brief tells the session to report which item it is on first.
 
 ## Rules of the road
 

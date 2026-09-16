@@ -28,10 +28,14 @@ node scripts/worktree.mjs add admin feat/audit-hash-chain
 ```
 
 This fetches `origin`, creates the worktree from a fresh `origin/main`,
-creates the branch, writes the slot's `.claude/launch.json`, installs
-`node_modules` for the CAP project and the client (log in
-`.worktree-setup.log` inside the worktree), and creates the worktree's own
-sqlite database with `npm run db:init:sqlite`.
+creates the branch, writes the slot's `.claude/launch.json`, writes the
+session brief `CLAUDE.local.md` (gitignored; Claude Code reads it at session
+start, so no prompt has to be pasted), installs `node_modules` for the CAP
+project and the client (log in `.worktree-setup.log` inside the worktree),
+and creates the worktree's own sqlite database with `npm run db:init:sqlite`.
+
+`node scripts/worktree.mjs sync [<workstream>]` regenerates the session
+brief(s), for example after the In progress item in the tracker changed.
 
 `--link-modules` junctions `node_modules` to the main checkout instead of
 installing (seconds instead of minutes). Only do this while the branch does
