@@ -23,7 +23,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## Accomplished
 
-- [x] S2 ObjectKeyJson contract aligned planner <-> ABAP: `objectKey` single source in activation-plan.js (ICF `{fioriId,url,icfName}` from the catalog BSP, role `{role,text,referenceRoles}`, transport `{text}` / `{trkorr,simulation}`), shared fixture activation-object-keys.json, ABAP per-step key types with fail-fast guards, smoke ICF + custom scenarios, docu/09 object-key-contract — this PR, 2026-09-16
+- [x] S2 ObjectKeyJson contract aligned planner <-> ABAP: `objectKey` single source in activation-plan.js (ICF `{fioriId,url,icfName}` from the catalog BSP, role `{role,text,referenceRoles}`, transport `{text}` / `{trkorr,simulation}`), shared fixture activation-object-keys.json, ABAP per-step key types with fail-fast guards, smoke ICF + custom scenarios, docu/09 object-key-contract — PR #14, 2026-09-17
 - [x] ABAP mirror brought to parity with a4h_2023_zado main (DEV-only activation write unit, RAP OData V4 write service, RFC function group) — PR #5, 2026-09-15
 - [x] ST03 reader fixes from the RD1 export run (top-users 0 = unlimited, truncated-tcode aggregation, control bytes in JSON) — PR #4, 2026-09-15
 
