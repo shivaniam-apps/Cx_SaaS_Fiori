@@ -556,7 +556,18 @@ context adops.db {
       // Audit (business/compliance traceability)
       // ------------------------------------------------------------------
 
+      // Append-only and hash-chained per tenant (sap-backend.md). Every row is
+      // written by srv/utils/audit-chain.js appendAuditEvent(): Sequence is
+      // contiguous from 1, PrevHash is the previous row's Hash (a genesis
+      // constant for the first row) and Hash covers the business fields plus
+      // Sequence and PrevHash. UPDATE/DELETE are refused at the database
+      // service, the projections are @readonly, and AdminService
+      // verifyAuditChain() recomputes the chain. Rows without a Sequence
+      // predate the chain and are reported as unchained, never as broken.
       entity AuditEvents : cuid, managed, tenantScoped {
+            Sequence      : Integer;
+            PrevHash      : String(64);
+            Hash          : String(64);
             Timestamp     : Timestamp;
             EventType     : String(60);
             Severity      : String(30);
@@ -571,6 +582,18 @@ context adops.db {
             AfterValue    : String(120);
             SAPResponse   : String(1000);
             CorrelationId : String(120);
+      }
+
+      // One row per tenant: the chain tail the writer locks (SELECT ... FOR
+      // UPDATE) so concurrent appends, also across app instances, never fork
+      // the sequence. It is a lock and a cache, not the source of truth -
+      // verification recomputes the chain from AuditEvents and flags a head
+      // that disagrees with the last event.
+      entity AuditChainHeads {
+            key TenantId : String(60);
+            LastSequence : Integer;
+            LastHash     : String(64);
+            UpdatedAt    : Timestamp;
       }
 
       // ------------------------------------------------------------------

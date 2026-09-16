@@ -1,29 +1,32 @@
 const cds = require('@sap/cds');
-const { clampText } = require('./telemetry-sanitize.js');
+const { appendAuditEvent } = require('./audit-chain.js');
 
 const logger = cds.log('admin-audit');
 
-// Admin-triggered configuration and authorization changes belong in the
-// existing audit trail; failures must not block the change itself.
+// Admin-triggered configuration and authorization changes go through the
+// hash-chained writer like every other audit row. A failed audit write is
+// no longer swallowed: it propagates, so the request transaction rolls the
+// audited change back with it (roadmap A4 - a change without its audit row
+// is exactly what the chain must rule out). Callers outside a request
+// (schedulers) catch and log themselves.
 async function writeAdminAuditEvent(req, { eventType, objectType, objectName, objectId, message, beforeValue, afterValue, source = 'Product Insights' }) {
     try {
-        await INSERT.into('adops.db.AuditEvents').entries({
-            ID: cds.utils.uuid(),
-            Timestamp: new Date().toISOString(),
+        return await appendAuditEvent({
             EventType: eventType,
-            Severity: 'Information',
+            Severity: 'INFO',
             ObjectType: objectType,
-            ObjectName: clampText(objectName, 160),
-            ObjectId: clampText(objectId, 120),
+            ObjectName: objectName,
+            ObjectId: objectId,
             UserId: req.user?.id || 'anonymous',
             Source: source,
-            Message: clampText(message, 500),
-            BeforeValue: clampText(beforeValue, 120),
-            AfterValue: clampText(afterValue, 120),
-            CorrelationId: clampText(req.headers?.['x-correlation-id'], 120) || cds.utils.uuid(),
+            Message: message,
+            BeforeValue: beforeValue,
+            AfterValue: afterValue,
+            CorrelationId: req.headers?.['x-correlation-id'] || cds.context?.id
         });
     } catch (error) {
-        logger.warn(`Audit write for ${eventType} failed: ${error.message}`);
+        logger.error(`Audit write for ${eventType} failed: ${error.message}`);
+        throw error;
     }
 }
 

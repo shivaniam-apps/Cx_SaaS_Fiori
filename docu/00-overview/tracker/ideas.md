@@ -13,6 +13,9 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I5 (2026-09-16) `cds serve --watch` children stop serving HTTP after a reload on this machine; root cause unknown (cds-dk 8.9). Investigate or document a supported restart shortcut.
 - I6 (2026-09-16) Two "RD1 Development" target-system rows exist in the local dev sqlite (pre-existing); decide whether Target Systems should enforce unique destinationName per tenant.
 - I7 (2026-09-16) Activation Runs list: KPI cards could act as status filters once the run query accepts a status parameter (same server expression for card and slice).
+- I8 (2026-09-16) Audit chain proves internal consistency, not completeness: a DBA can truncate the tail and rewind AuditChainHeads undetected. Anchor the latest Hash externally (BTP Audit Log service, T3) or publish a periodic checkpoint.
+- I9 (2026-09-16) Subscription purge (T2) vs. append-only AuditEvents: the database guard refuses DELETE; decide whether a tenant's audit rows are exported-then-purged or retained under a legal hold, and give the purge an explicit bypass.
+- I10 (2026-09-16) verifyAuditChain walks the whole tenant chain (paged, 500 rows). Beyond ~1M events add an incremental mode that verifies from a stored checkpoint, and an index on (TenantId, Sequence) once the Postgres deployment (A1) exists.
 
 ## Parked
 
