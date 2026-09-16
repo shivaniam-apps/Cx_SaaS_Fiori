@@ -30,6 +30,10 @@ import '@ui5/webcomponents-icons/dist/settings.js';
 import '@ui5/webcomponents-icons/dist/shield.js';
 import '@ui5/webcomponents-icons/dist/shipping-status.js';
 import '@ui5/webcomponents-icons/dist/sys-monitor.js';
+import '@ui5/webcomponents-icons/dist/checklist.js';
+import '@ui5/webcomponents-icons/dist/simulate.js';
+import '@ui5/webcomponents-icons/dist/play.js';
+import '@ui5/webcomponents-icons/dist/download.js';
 import '@ui5/webcomponents-icons/dist/workflow-tasks.js';
 
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';

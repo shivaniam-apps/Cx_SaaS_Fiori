@@ -189,6 +189,16 @@ export async function executeActivationPlan(planId) {
   return postAction('executeActivationPlan', { planId });
 }
 
+// Cross-wave plan list: labels, latest run and a status summary over the
+// full filter scope in one response.
+export async function queryActivationPlans(targetSystemId) {
+  const path = targetSystemId
+    ? `queryActivationPlans(targetSystemId=${targetSystemId})`
+    : 'queryActivationPlans()';
+  const response = await http.get(`/fiori/${path}`);
+  return parseJsonActionResult(response.data);
+}
+
 export async function readActivationStepMessages(stepId) {
   const response = await http.get(`/fiori/readActivationStepMessages(stepId=${stepId})`);
   return parseJsonActionResult(response.data);

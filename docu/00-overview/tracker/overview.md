@@ -7,7 +7,6 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## In progress
 
-- [~] O1 Activation Plans page: cross-wave list + detail, create / simulate / execute, open run; reuse groupSteps, STEP_STATUS_DESIGN, Kpi, Activation Runs patterns — branch feat/activation-plans-page, started 2026-09-16
 
 ## To-do (milestone order)
 
@@ -20,6 +19,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## Accomplished
 
+- [x] O1 Activation Plans page: cross-wave list + detail, create / simulate / execute, open run; queryActivationPlans + readActivationPlan Wave/Transport/Runs — PR #15, 2026-09-17
 - [x] Access Requests triage page + Request Access flow on the Member gate, AdminService summary function — PR #7, 2026-09-15
 - [x] Activation Runs monitor page, queryActivationRuns / readActivationRun, shared Kpi tile — PR #6, 2026-09-15
 
