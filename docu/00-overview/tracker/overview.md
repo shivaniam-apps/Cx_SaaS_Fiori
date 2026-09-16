@@ -7,7 +7,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## In progress
 
-- [~] O1 Activation Plans page: cross-wave list + detail, create / simulate / execute, open run; reuse groupSteps, STEP_STATUS_DESIGN, Kpi, Activation Runs patterns — branch feat/activation-plans-page, started 2026-09-16
+- [~] O1 Activation Plans page: cross-wave list + detail, create / simulate / execute, open run; reuse groupSteps, STEP_STATUS_DESIGN, Kpi, Activation Runs patterns — branch feat/activation-plans-page, started 2026-09-16, pushed 2026-09-17 awaiting PR
 
 ## To-do (milestone order)
 
