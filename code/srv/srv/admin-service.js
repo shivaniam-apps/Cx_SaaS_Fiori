@@ -5,6 +5,8 @@ const { isDatabaseLess, currentTier } = require('./utils/tier.js');
 const { registerTelemetryAdminHandlers } = require('./utils/telemetry-admin-handlers.js');
 const { registerAccessRequestAdminHandlers } = require('./utils/access-request-handlers.js');
 const { registerTenantScope } = require('./utils/tenant-scope.js');
+const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
+const { verifyAuditChain } = require('./utils/audit-chain.js');
 const { listDestinations, getBtpAccountInfo, callS4Destination } = require('./utils/s4-http-client.js');
 const { checkTargetSystemConnection } = require('./utils/s4-fiori-adapter.js');
 
@@ -17,6 +19,21 @@ module.exports = cds.service.impl(async function () {
     // tier; each handler degrades internally when persistence is absent.
     registerTelemetryAdminHandlers(this);
     registerAccessRequestAdminHandlers(this);
+    registerIdentifiedUsageAudit(this);
+
+    // --- Audit chain ---------------------------------------------------------
+
+    // Recomputes the current tenant's hash chain (roadmap A4). Bounded by
+    // paging inside verifyAuditChain; the Audit Log page (O3) shows the verdict.
+    this.on('verifyAuditChain', async () => {
+        if (isDatabaseLess()) {
+            return {
+                Status: 'EMPTY', ChainedEvents: 0, UnchainedEvents: 0, LastSequence: 0, HeadConsistent: true,
+                Message: 'Audit persistence is available in Standard or Enterprise tiers.', CheckedAt: new Date().toISOString()
+            };
+        }
+        return verifyAuditChain();
+    });
 
     // --- Connectivity --------------------------------------------------------
 

@@ -5,9 +5,12 @@ const { registerTenantScope, currentTenant } = require('./utils/tenant-scope.js'
 const { checkTargetSystemConnection, getBackendCapabilities } = require('./utils/s4-fiori-adapter.js');
 const { shouldMockSap } = require('./utils/s4-http-client.js');
 const { enqueueTask } = require('./utils/task-runner.js');
+const { appendAuditEvent } = require('./utils/audit-chain.js');
+const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
 
 module.exports = cds.service.impl(async function () {
     registerTenantScope(this);
+    registerIdentifiedUsageAudit(this);
 
     // --- Connectivity / discovery ------------------------------------------
 
@@ -357,8 +360,7 @@ module.exports = cds.service.impl(async function () {
             TargetWave: targetWave || proposal.TargetWave,
             wave_ID: waveId
         }).where({ ID: proposalId });
-        await INSERT.into('adops.db.AuditEvents').entries({
-            ID: randomUUID(),
+        await appendAuditEvent({
             TenantId: proposal.TenantId,
             Timestamp: now,
             EventType: `PROPOSAL_${decision}`,
@@ -368,10 +370,9 @@ module.exports = cds.service.impl(async function () {
             ObjectId: proposalId,
             UserId: req.user?.id || '',
             Source: 'PublicService',
-            Message: String(notes || '').slice(0, 500),
+            Message: String(notes || ''),
             BeforeValue: proposal.ReviewStatus,
-            AfterValue: decision,
-            CorrelationId: cds.context?.id || ''
+            AfterValue: decision
         });
         return SELECT.one.from('adops.db.AppProposals').where({ ID: proposalId });
     };

@@ -6,35 +6,11 @@
 // Activator+Member, carol = Member) so a regression that reopens a direct
 // PATCH/POST path fails here, not in a customer system.
 //
-// NODE_ENV=test makes shouldMockSap() short-circuit every S/4 call. It does
-// NOT drop the [development] profile (cds keeps it active outside production),
-// whose db points at the shared ../db.sqlite - so the database is forced
-// in-memory explicitly below and asserted before any write.
-process.env.NODE_ENV = 'test';
-process.env.CDS_REQUIRES_DB_KIND = 'sqlite';
-process.env.CDS_REQUIRES_DB_CREDENTIALS_URL = ':memory:';
-
+// The CAP server, the in-memory database pin and the mocked-user helpers are
+// shared with the other HTTP suites via test/helpers/cds-http-test.mjs (one
+// cds.test server per mocha process).
 import { expect } from 'chai';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-
-const require = createRequire(import.meta.url);
-const cds = require('@sap/cds');
-
-// Load-order independent: when another suite has already resolved cds.env,
-// the process.env overrides above are ignored, so pin the db here as well.
-cds.env.requires.db = { kind: 'sqlite', credentials: { url: ':memory:' } };
-
-const projectDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'srv');
-const test = cds.test(projectDir);
-
-const as = (user) => ({ auth: { username: user, password: '' }, validateStatus: () => true });
-const json = (user) => ({ ...as(user), headers: { 'content-type': 'application/json' } });
-
-// @readonly answers 405 (method not allowed) in CAP 8; a role-based @restrict
-// denial answers 403. Both mean "the write did not happen".
-const REFUSED = [403, 405];
+import { test, as, json, REFUSED, expectInMemoryDb } from './helpers/cds-http-test.mjs';
 
 describe('PublicService write authorization', function () {
   this.timeout(30000);
@@ -43,8 +19,7 @@ describe('PublicService write authorization', function () {
 
   before(async () => {
     // Never let this suite touch the developer's sqlite file.
-    const url = String(cds.db?.options?.credentials?.url || '');
-    expect(url, `database must be in-memory, got "${url}"`).to.match(/memory/);
+    expectInMemoryDb();
 
     // Admin registers the target system every other check hangs off.
     const created = await test.axios.post('/fiori/TargetSystems', {

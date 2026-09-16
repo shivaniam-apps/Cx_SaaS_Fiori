@@ -89,6 +89,11 @@ cds.on('bootstrap', async (app) => {
 // real without an operator remembering to click. Interval via
 // ADOPTOPS_TELEMETRY_CLEANUP_INTERVAL_HOURS (default 24, <=0 disables).
 cds.on('served', () => {
+    // AuditEvents is append-only: refuse UPDATE/DELETE at the database
+    // service so no handler, present or future, can alter an audit row.
+    const { registerAuditLogGuard } = require('./utils/audit-chain.js');
+    registerAuditLogGuard(cds.db);
+
     scheduleTelemetryRetentionCleanup();
 
     // Async S/4 work: register handlers, then start the claim/heartbeat poller.
