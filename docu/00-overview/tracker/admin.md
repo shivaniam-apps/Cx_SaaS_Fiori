@@ -29,7 +29,8 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## Accomplished
 
-- [x] A4 Hash-chained append-only audit log: AuditEvents Sequence/PrevHash/Hash, per-tenant AuditChainHeads lock, one writer (audit-chain.js) for every audit row, @readonly projections + database-level UPDATE/DELETE guard, AdminService verifyAuditChain, IDENTIFIED_USAGE_CHANGED event, docu/10 chapter — this PR, 2026-09-16
+- [x] Integration housekeeping after the first parallel round: A4 tracker line carries PR #13, client lint fixed (unused `userInfo` prop in AdopsShell, idea I13) so the lint gate can go red only for real problems — PR #16, 2026-09-17
+- [x] A4 Hash-chained append-only audit log: AuditEvents Sequence/PrevHash/Hash, per-tenant AuditChainHeads lock, one writer (audit-chain.js) for every audit row, @readonly projections + database-level UPDATE/DELETE guard, AdminService verifyAuditChain, IDENTIFIED_USAGE_CHANGED event, docu/10 chapter — PR #13, 2026-09-16
 - [x] A3 Read-only PublicService projections, writes via role-gated actions, Admin-only target-system edits, cds.test auth suite — PR #9, 2026-09-16
 - [x] Road to Production roadmap checked in as plan of record — PR #8, 2026-09-16
 - [x] Parallel worktrees: per-workstream checkouts, port slots, worktree.mjs, with-env `?=` defaults, db:init:sqlite — PR #10, 2026-09-16
@@ -44,3 +45,6 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 - Worktrees created for admin / scheduling / overview. Lesson: `cds serve --watch` children on this machine stop serving HTTP after a reload; all launch configs use the no-watch script.
 - Session start automated: each worktree gets a generated CLAUDE.local.md brief (Claude Code reads it with CLAUDE.md), so no start prompt has to be pasted and a forgotten prompt cannot cause a wrong-worktree session.
 - A4 landed. Design notes: a table-level UNIQUE via `@sql.append` compiles to invalid DDL (lands after the closing parenthesis) on sqlite and Postgres, so the sequence is serialised through a per-tenant head row read FOR UPDATE plus an in-process mutex instead. `writeAdminAuditEvent` no longer swallows failures: the audited change and its audit row now commit or roll back together. Pre-A4 rows in dev databases stay as "unchained" legacy events.
+
+### 2026-09-17
+- First parallel round merged: #13 A4 (admin), #14 S2 (scheduling), #15 O1 (overview); all suites green on main (111 server, 49 client); ABAP mirror has zero drift against a4h_2023_zado after its PR #18. Worktrees re-pointed to A1 / S1 / O4.

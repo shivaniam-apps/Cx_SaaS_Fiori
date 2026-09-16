@@ -53,7 +53,7 @@ function selectedPath(pathname) {
   return hit?.path || '/dashboard';
 }
 
-export function AdopsShell({ userInfo, children }) {
+export function AdopsShell({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const current = selectedPath(location.pathname);
