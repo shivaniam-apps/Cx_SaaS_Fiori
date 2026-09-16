@@ -40,11 +40,69 @@ function waveTechnicalKey(name, maxLength = 12) {
   return (cleaned || 'WAVE').slice(0, maxLength).replace(/_+$/g, '');
 }
 
+// ---------------------------------------------------------------------------
+// ObjectKeyJson builders - the SINGLE source of the key shapes the ABAP
+// dispatcher (zcl_ado_activate) deserializes per step type: camelCase on the
+// wire, snake_case in the ABAP types (/ui2/cl_json pretty_mode-camel_case).
+// The contract is captured in test/fixtures/activation-object-keys.json,
+// enforced by activation-plan.test.js (this module) and
+// activation-key-contract.test.js (the ABAP mirror), and explained in
+// docu/09-activation-and-transport/object-key-contract.md. Keys carry only
+// what the executor needs - no API names or documentation fields.
+// ---------------------------------------------------------------------------
+
+const ICF_UI5_ROOT = '/sap/bc/ui5_ui5/sap/';
+
+// SAP text limits the keys are bound by: AGR_TITLE (80), AS4TEXT (60).
+const sapText = (value, max) => String(value || '').trim().slice(0, max);
+
+// SAPUI5 apps are served by the BSP application the catalog knows
+// (BackendCatalogApps.BspApplication): the ICF node is /sap/bc/ui5_ui5/sap/
+// <bsp> and the node name is the BSP name. Without a catalog row both stay
+// empty on purpose - the ABAP dispatcher then fails that step fast with a
+// message naming the app, before HTTP_ACTIVATE_NODE is touched.
+function icfNodeFor(bspApplication) {
+  const bsp = String(bspApplication || '').trim().toLowerCase();
+  return bsp ? { url: `${ICF_UI5_ROOT}${bsp}`, icfName: bsp } : { url: '', icfName: '' };
+}
+
+const OBJECT_KEY_BUILDERS = {
+  RUN_TASK_LIST: ({ scenario }) => ({ scenario }),
+  ACTIVATE_ODATA_SERVICE: ({ fioriId }) => ({ fioriId, scenario: 'SAP_GATEWAY_ACTIVATE_ODATA_SERV' }),
+  ACTIVATE_ICF_NODE: ({ fioriId, bspApplication }) => ({ fioriId, ...icfNodeFor(bspApplication) }),
+  CREATE_SPACE: ({ spaceId, title }) => ({ spaceId, title }),
+  CREATE_PAGE: ({ pageId, apps }) => ({ pageId, apps: [...(apps || [])] }),
+  ASSIGN_PAGE_TO_SPACE: ({ spaceId, pageId }) => ({ spaceId, pageId }),
+  CREATE_PFCG_ROLE: ({ role, text, referenceRoles }) => ({ role, text: sapText(text, 80), referenceRoles: [...(referenceRoles || [])] }),
+  ADD_SPACE_TO_ROLE: ({ role, spaceId }) => ({ role, spaceId }),
+  GENERATE_PROFILE: ({ role }) => ({ role }),
+  ASSIGN_ROLE_TO_USERS: ({ role, users }) => ({ role, users: [...(users || [])] }),
+  // Two variants share the step type, exactly as the ABAP dispatcher decides:
+  // a TRKORR releases that request, otherwise a new request is created.
+  ADD_TO_TRANSPORT: ({ text, trkorr, simulation }) => (trkorr
+    ? { trkorr: String(trkorr).trim(), simulation: Boolean(simulation) }
+    : { text: sapText(text, 60) })
+};
+
+function objectKey(stepType, params = {}) {
+  const build = OBJECT_KEY_BUILDERS[stepType];
+  if (!build) throw new Error(`No ObjectKeyJson builder for step type ${stepType}`);
+  return build(params);
+}
+
+function objectKeyJson(stepType, params) {
+  return JSON.stringify(objectKey(stepType, params));
+}
+
+// proposals: approved AppProposals rows, optionally enriched with the
+// catalog's BspApplication per Fiori ID (createActivationPlan does this per
+// target system) so ICF steps carry real node URLs.
 function deriveActivationSteps({ proposals, waveName }) {
   const key = waveTechnicalKey(waveName);
   const spaceId = `ZADO_${key}`;
   const pageId = `ZADO_${key}_P1`;
   const roleName = `Z_ADO_${key}`;
+  const title = `AdoptOps ${String(waveName || '').trim()}`.trim();
 
   let seq = 0;
   const steps = [];
@@ -66,7 +124,7 @@ function deriveActivationSteps({ proposals, waveName }) {
     StepGroup: 'FOUNDATION', StepType: 'RUN_TASK_LIST',
     ObjectType: 'STC_SCENARIO', ObjectName: 'SAP_FIORI_FOUNDATION_S4',
     Transportable: false, LocalReplay: true, Reversible: false,
-    ObjectKeyJson: JSON.stringify({ scenario: 'SAP_FIORI_FOUNDATION_S4', driver: 'STC_TM_SESSION_BEGIN' })
+    ObjectKeyJson: objectKeyJson('RUN_TASK_LIST', { scenario: 'SAP_FIORI_FOUNDATION_S4' })
   });
 
   for (const p of proposals) {
@@ -75,7 +133,7 @@ function deriveActivationSteps({ proposals, waveName }) {
       ObjectType: 'FIORI_APP', ObjectName: p.FioriId, proposal_ID: p.ID,
       Transportable: false, LocalReplay: true, Reversible: true,
       dependsOn_ID: foundation.ID,
-      ObjectKeyJson: JSON.stringify({ fioriId: p.FioriId, scenario: 'SAP_GATEWAY_ACTIVATE_ODATA_SERV' })
+      ObjectKeyJson: objectKeyJson('ACTIVATE_ODATA_SERVICE', { fioriId: p.FioriId })
     });
   }
   for (const p of proposals) {
@@ -84,7 +142,7 @@ function deriveActivationSteps({ proposals, waveName }) {
       ObjectType: 'FIORI_APP', ObjectName: p.FioriId, proposal_ID: p.ID,
       Transportable: false, LocalReplay: true, Reversible: false,
       dependsOn_ID: foundation.ID,
-      ObjectKeyJson: JSON.stringify({ fioriId: p.FioriId, api: 'HTTP_ACTIVATE_NODE', stateColumn: 'ICFSERVICE.ICF_NOACT' })
+      ObjectKeyJson: objectKeyJson('ACTIVATE_ICF_NODE', { fioriId: p.FioriId, bspApplication: p.BspApplication })
     });
   }
 
@@ -92,21 +150,21 @@ function deriveActivationSteps({ proposals, waveName }) {
     StepGroup: 'CONTENT', StepType: 'CREATE_SPACE',
     ObjectType: 'FLP_SPACE', ObjectName: spaceId,
     Transportable: true, LocalReplay: false, Reversible: true,
-    ObjectKeyJson: JSON.stringify({ spaceId, title: waveName })
+    ObjectKeyJson: objectKeyJson('CREATE_SPACE', { spaceId, title: waveName })
   });
   const page = step({
     StepGroup: 'CONTENT', StepType: 'CREATE_PAGE',
     ObjectType: 'FLP_PAGE', ObjectName: pageId,
     Transportable: true, LocalReplay: false, Reversible: true,
     dependsOn_ID: space.ID,
-    ObjectKeyJson: JSON.stringify({ pageId, apps: proposals.map((p) => p.FioriId) })
+    ObjectKeyJson: objectKeyJson('CREATE_PAGE', { pageId, apps: proposals.map((p) => p.FioriId) })
   });
   step({
     StepGroup: 'CONTENT', StepType: 'ASSIGN_PAGE_TO_SPACE',
     ObjectType: 'FLP_PAGE', ObjectName: pageId,
     Transportable: true, LocalReplay: false, Reversible: true,
     dependsOn_ID: page.ID,
-    ObjectKeyJson: JSON.stringify({ spaceId, pageId })
+    ObjectKeyJson: objectKeyJson('ASSIGN_PAGE_TO_SPACE', { spaceId, pageId })
   });
 
   const referenceRoles = [...new Set(proposals.map((p) => p.BusinessRoleId).filter(Boolean))];
@@ -114,21 +172,21 @@ function deriveActivationSteps({ proposals, waveName }) {
     StepGroup: 'ROLE', StepType: 'CREATE_PFCG_ROLE',
     ObjectType: 'PFCG_ROLE', ObjectName: roleName,
     Transportable: true, LocalReplay: false, Reversible: true,
-    ObjectKeyJson: JSON.stringify({ role: roleName, api: 'PRGN_RFC_CREATE_ACTIVITY_GROUP', referenceRoles })
+    ObjectKeyJson: objectKeyJson('CREATE_PFCG_ROLE', { role: roleName, text: title, referenceRoles })
   });
   const spaceToRole = step({
     StepGroup: 'ROLE', StepType: 'ADD_SPACE_TO_ROLE',
     ObjectType: 'PFCG_ROLE', ObjectName: roleName,
     Transportable: true, LocalReplay: false, Reversible: true,
     dependsOn_ID: role.ID,
-    ObjectKeyJson: JSON.stringify({ role: roleName, spaceId, menuPath: 'AGR_HIER via HIERARCHY_NODES' })
+    ObjectKeyJson: objectKeyJson('ADD_SPACE_TO_ROLE', { role: roleName, spaceId })
   });
   const profile = step({
     StepGroup: 'ROLE', StepType: 'GENERATE_PROFILE',
     ObjectType: 'PFCG_ROLE', ObjectName: roleName,
     Transportable: true, LocalReplay: false, Reversible: true,
     dependsOn_ID: spaceToRole.ID,
-    ObjectKeyJson: JSON.stringify({ role: roleName, api: 'PRGN_AUTO_GENERATE_PROFILE_NEW' })
+    ObjectKeyJson: objectKeyJson('GENERATE_PROFILE', { role: roleName })
   });
 
   step({
@@ -136,7 +194,7 @@ function deriveActivationSteps({ proposals, waveName }) {
     ObjectType: 'TRANSPORT', ObjectName: `${key}_TR`,
     Transportable: true, LocalReplay: false, Reversible: true,
     dependsOn_ID: profile.ID,
-    ObjectKeyJson: JSON.stringify({ apis: ['TR_INSERT_NEW_COMM', 'TR_APPEND_TO_COMM_OBJS_KEYS'], simulation: 'IV_SIMULATION' })
+    ObjectKeyJson: objectKeyJson('ADD_TO_TRANSPORT', { text: title })
   });
 
   return { steps, spaceId, pageId, roleName };
@@ -186,6 +244,9 @@ function simulateSteps(steps, probe) {
 
 module.exports = {
   waveTechnicalKey,
+  icfNodeFor,
+  objectKey,
+  objectKeyJson,
   deriveActivationSteps,
   simulateSteps,
   mockSimulationProbe,

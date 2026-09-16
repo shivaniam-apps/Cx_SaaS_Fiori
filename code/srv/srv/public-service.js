@@ -587,7 +587,19 @@ module.exports = cds.service.impl(async function () {
             return req.reject(400, `Target system "${target.displayName}" is ${target.environment} - activation plans write to development systems only; QA/PROD receive the content via transport.`);
         }
 
-        const { steps, spaceId, roleName } = deriveActivationSteps({ proposals: approved, waveName: wave.Name });
+        // ICF nodes are addressed by BSP application - catalog truth per
+        // target system (BackendCatalogApps, filled by catalog derivation).
+        // Apps without a row get an empty url on purpose: the ABAP dispatcher
+        // fails that step fast (docu/09-activation-and-transport/object-key-contract.md).
+        const fioriIds = [...new Set(approved.map((p) => p.FioriId).filter(Boolean))];
+        const catalogRows = fioriIds.length
+            ? await SELECT.from('adops.db.BackendCatalogApps')
+                .columns('FioriId', 'BspApplication')
+                .where({ targetSystem_ID: target.ID, FioriId: { in: fioriIds } })
+            : [];
+        const bspByFioriId = new Map(catalogRows.filter((r) => r.BspApplication).map((r) => [r.FioriId, r.BspApplication]));
+        const proposals = approved.map((p) => ({ ...p, BspApplication: bspByFioriId.get(p.FioriId) || '' }));
+        const { steps, spaceId, roleName } = deriveActivationSteps({ proposals, waveName: wave.Name });
 
         const crossSystem = target.ID !== wave.targetSystem_ID;
         const planId = randomUUID();
@@ -772,11 +784,12 @@ module.exports = cds.service.impl(async function () {
             const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: transport.targetSystem_ID });
             if (!targetSystem?.destinationName) return req.reject(400, 'The transport\'s target system has no destination.');
             const { executeStepRemote } = require('./utils/s4-activate-adapter.js');
+            const { objectKeyJson } = require('./utils/activation-plan.js');
             result = await executeStepRemote({
                 targetSystem,
                 step: {
                     StepType: 'ADD_TO_TRANSPORT',
-                    ObjectKeyJson: JSON.stringify({ trkorr: transport.TransportRequestId, simulation: Boolean(simulate) })
+                    ObjectKeyJson: objectKeyJson('ADD_TO_TRANSPORT', { trkorr: transport.TransportRequestId, simulation: Boolean(simulate) })
                 }
             });
         }
