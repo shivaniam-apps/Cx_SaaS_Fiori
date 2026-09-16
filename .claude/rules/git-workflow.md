@@ -37,11 +37,31 @@ Recommended once per machine so this never recurs:
 
 Three parallel workstreams are used:
 
-1. Overview
-2. Scheduling
-3. Admin & Operations
+1. Overview (journey pages in the React client; roadmap O items)
+2. Scheduling (background tasks, S/4 adapters, ABAP mirror; S items)
+3. Admin & Operations (deploy, security, audit, CI, docs; A and T items)
 
-Each active Claude Code session should use an isolated Git worktree.
+Each active Claude Code session uses its workstream's worktree, created
+with `node scripts/worktree.mjs add <workstream> <branch>` from the primary
+checkout (see `docu/14-local-development/parallel-worktrees.md`). The
+primary checkout stays on `main` for integration and PR review only; never
+develop in it. Port slots: main 4104/5273, overview 4114/5283, scheduling
+4124/5293, admin 4134/5303, spare 4144/5313.
+
+## Program Tracking
+
+`docu/00-overview/program-tracker.md` is the program's single source of
+progress. Each workstream owns one file under `docu/00-overview/tracker/`
+and edits only that file, so parallel PRs never conflict on it:
+
+- Every PR moves its item from "To-do" or "In progress" to
+  "Accomplished" (with the PR number and date) in its workstream file and
+  adds a dated line to that file's "Daily log".
+- Work that starts writes an "In progress" line first (branch, date).
+- New ideas, risks and follow-ups discovered while working go to
+  `tracker/ideas.md` immediately, never into a commit message alone.
+- `node scripts/tracker.mjs` prints the combined board; `--check` fails
+  when an item lacks an ID or a done item lacks a PR reference.
 
 ## Before Editing
 
