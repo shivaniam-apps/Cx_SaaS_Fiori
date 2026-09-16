@@ -4,11 +4,13 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   waveTechnicalKey,
+  objectKey,
   deriveActivationSteps,
   simulateSteps,
   mockSimulationProbe,
   isActivationTargetEnvironment
 } = require('../srv/srv/utils/activation-plan.js');
+const fixture = require('./fixtures/activation-object-keys.json');
 
 describe('isActivationTargetEnvironment', () => {
   it('refuses QA/PROD-like environments in any casing', () => {
@@ -128,5 +130,44 @@ describe('simulateSteps with the mock probe', () => {
     const again = simulateSteps(steps, mockSimulationProbe);
     expect(again.steps).to.deep.equal(verdicts);
     expect(again.rollup).to.deep.equal(rollup);
+  });
+});
+
+// The fixture is the ObjectKeyJson contract with the ABAP dispatcher
+// (activation-key-contract.test.js checks the ABAP side against it).
+describe('ObjectKeyJson: the planner emits the shared fixture shapes', () => {
+  const { steps } = deriveActivationSteps(fixture.input);
+
+  it('matches the fixture key for every planned step type, and plans nothing else', () => {
+    for (const [stepType, key] of Object.entries(fixture.planned)) {
+      const step = steps.find((s) => s.StepType === stepType);
+      expect(step, stepType).to.exist;
+      expect(JSON.parse(step.ObjectKeyJson), stepType).to.deep.equal(key);
+    }
+    expect(new Set(steps.map((s) => s.StepType))).to.deep.equal(new Set(Object.keys(fixture.planned)));
+  });
+
+  it('builds the non-planner variants (release, user assignment) from the same source', () => {
+    for (const [name, entry] of Object.entries(fixture.other)) {
+      expect(objectKey(entry.stepType, entry.params), name).to.deep.equal(entry.key);
+    }
+  });
+
+  it('resolves the ICF node from the catalog BSP application and leaves it empty otherwise', () => {
+    const icf = steps.filter((s) => s.StepType === 'ACTIVATE_ICF_NODE').map((s) => JSON.parse(s.ObjectKeyJson));
+    expect(icf).to.deep.equal([
+      { fioriId: 'F3893', url: '/sap/bc/ui5_ui5/sap/sd_so_manv2', icfName: 'sd_so_manv2' },
+      { fioriId: 'F0842A', url: '', icfName: '' }
+    ]);
+  });
+
+  it('bounds SAP text fields (AGR_TITLE 80, AS4TEXT 60)', () => {
+    const long = 'x'.repeat(100);
+    expect(objectKey('CREATE_PFCG_ROLE', { role: 'Z', text: long, referenceRoles: [] }).text).to.have.length(80);
+    expect(objectKey('ADD_TO_TRANSPORT', { text: long }).text).to.have.length(60);
+  });
+
+  it('refuses unknown step types instead of emitting an empty key', () => {
+    expect(() => objectKey('NOT_A_STEP', {})).to.throw(/NOT_A_STEP/);
   });
 });

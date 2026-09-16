@@ -7,7 +7,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## In progress
 
-- [~] S2 ObjectKeyJson contract alignment planner <-> ABAP (ICF, role, transport keys), shared fixture for activation-plan.test.js and zado_activate_smoke — branch feat/activation-key-contract, started 2026-09-16
+(none)
 
 ## To-do (critical path first)
 
@@ -23,6 +23,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## Accomplished
 
+- [x] S2 ObjectKeyJson contract aligned planner <-> ABAP: `objectKey` single source in activation-plan.js (ICF `{fioriId,url,icfName}` from the catalog BSP, role `{role,text,referenceRoles}`, transport `{text}` / `{trkorr,simulation}`), shared fixture activation-object-keys.json, ABAP per-step key types with fail-fast guards, smoke ICF + custom scenarios, docu/09 object-key-contract — this PR, 2026-09-16
 - [x] ABAP mirror brought to parity with a4h_2023_zado main (DEV-only activation write unit, RAP OData V4 write service, RFC function group) — PR #5, 2026-09-15
 - [x] ST03 reader fixes from the RD1 export run (top-users 0 = unlimited, truncated-tcode aggregation, control bytes in JSON) — PR #4, 2026-09-15
 
@@ -30,3 +31,4 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ### 2026-09-16
 - Survey result to keep in mind: the planner emits seven step types the ABAP dispatcher hard-fails, so a live run stops at step 2 until S3 lands; S2 is the cheap, high-value precursor.
+- S2 done on branch feat/activation-key-contract. ABAP changed in a4h_2023_zado (branch of the same name) and mirrored; the CAP suite now parses the ABAP mirror (dispatcher TYPES + smoke literals) against the fixture, so a drift fails `npm test`. NOT yet smoke-tested on RD1 DEV/100 - no system access from this session; the ABAP syntax check and the four smoke scenarios (Transport, Role, Profile, ICF with the default ushell node) are the acceptance run. ICF URLs stay empty until catalog derivation (S9) fills BackendCatalogApps.BspApplication; the dispatcher fails such steps fast with an explicit message instead of calling HTTP_ACTIVATE_NODE with an empty URL.
