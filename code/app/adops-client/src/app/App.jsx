@@ -10,6 +10,7 @@ import UsageInsightPage from '../pages/UsageInsightPage.jsx';
 import ProposalsPage from '../pages/ProposalsPage.jsx';
 import AdoptionWavesPage from '../pages/AdoptionWavesPage.jsx';
 import TransportsPage from '../pages/TransportsPage.jsx';
+import ActivationPlansPage from '../pages/ActivationPlansPage.jsx';
 import ActivationRunsPage from '../pages/ActivationRunsPage.jsx';
 import AccessRequestsPage from '../pages/AccessRequestsPage.jsx';
 
@@ -26,7 +27,7 @@ function AppRoutes({ userInfo }) {
       <Route path="/landscape/:view?" element={<PlaceholderPage title="User & Role Landscape" phase="Phase 2" />} />
       <Route path="/proposals/:proposalId?" element={<ProposalsPage />} />
       <Route path="/waves/:waveId?" element={<AdoptionWavesPage />} />
-      <Route path="/activation/:planId?" element={<PlaceholderPage title="Activation Plans" phase="Phase 3" />} />
+      <Route path="/activation/:planId?" element={<ActivationPlansPage />} />
       <Route path="/activation-runs/:runId?" element={<ActivationRunsPage />} />
       <Route path="/transports/:trId?" element={<TransportsPage />} />
       <Route path="/settings/:view?" element={<PlaceholderPage title="Settings" phase="Phase 1" />} />

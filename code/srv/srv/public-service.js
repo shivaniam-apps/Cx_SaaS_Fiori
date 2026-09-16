@@ -541,13 +541,80 @@ module.exports = cds.service.impl(async function () {
         if (!plan) return null;
         const steps = await SELECT.from('adops.db.ActivationSteps')
             .where({ plan_ID: planId }).orderBy('SequenceNo asc');
-        const targetSystem = plan.targetSystem_ID
-            ? await SELECT.one.from('adops.db.TargetSystems')
-                .columns('ID', 'displayName', 'environment', 'client', 'systemId')
-                .where({ ID: plan.targetSystem_ID })
-            : null;
-        return { Plan: plan, Steps: steps, TargetSystem: targetSystem };
+        // Labels and the plan's recent runs travel with the plan so the
+        // Activation Plans page has ONE poll target while a run is active.
+        const [targetSystem, wave, transport, runs] = await Promise.all([
+            plan.targetSystem_ID
+                ? SELECT.one.from('adops.db.TargetSystems')
+                    .columns('ID', 'displayName', 'environment', 'client', 'systemId')
+                    .where({ ID: plan.targetSystem_ID })
+                : null,
+            plan.wave_ID
+                ? SELECT.one.from('adops.db.AdoptionWaves').columns('ID', 'Name', 'Status').where({ ID: plan.wave_ID })
+                : null,
+            plan.transportRequest_ID
+                ? SELECT.one.from('adops.db.TransportRequests')
+                    .columns('ID', 'TransportRequestId', 'Status').where({ ID: plan.transportRequest_ID })
+                : null,
+            SELECT.from('adops.db.BackgroundTasks')
+                .columns('ID', 'Status', 'Phase', 'ProgressPercent', 'ProcessedItems', 'TotalItems',
+                    'QueuedAt', 'ClaimedAt', 'CompletedAt', 'RequestedBy', 'CancelRequested', 'ErrorText')
+                .where({ ObjectId: planId, TaskType: 'ACTIVATION_EXECUTION' })
+                .orderBy('QueuedAt desc', 'createdAt desc').limit(20)
+        ]);
+        return { Plan: plan, Steps: steps, TargetSystem: targetSystem, Wave: wave, Transport: transport, Runs: runs };
     };
+
+    this.on('queryActivationPlans', async (req) => {
+        const { targetSystemId } = req.data;
+        const where = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
+        const { summarizePlanStatuses, latestRunByPlan, decoratePlanRow } = require('./utils/activation-plans.js');
+
+        // Rows are bounded; the summary is a grouped count over the SAME
+        // scope so the KPI cards never disagree with the list.
+        const [plans, grouped] = await Promise.all([
+            SELECT.from('adops.db.ActivationPlans')
+                .columns('ID', 'Name', 'Description', 'Status', 'StepCount', 'SucceededCount', 'WarningCount',
+                    'FailedCount', 'SkippedCount', 'SimulatedAt', 'SimulatedBy', 'ExecutedAt', 'ExecutedBy',
+                    'createdAt', 'createdBy', 'wave_ID', 'targetSystem_ID', 'transportRequest_ID')
+                .where(where).orderBy('createdAt desc').limit(200),
+            SELECT.from('adops.db.ActivationPlans').columns('Status', 'count(*) as cnt')
+                .where(where).groupBy('Status')
+        ]);
+
+        // Labels in one pass per entity - the list page must not do child reads.
+        const planIds = plans.map((p) => p.ID);
+        const waveIds = [...new Set(plans.map((p) => p.wave_ID).filter(Boolean))];
+        const systemIds = [...new Set(plans.map((p) => p.targetSystem_ID).filter(Boolean))];
+        const transportIds = [...new Set(plans.map((p) => p.transportRequest_ID).filter(Boolean))];
+        const [waves, systems, transports, tasks] = await Promise.all([
+            waveIds.length
+                ? SELECT.from('adops.db.AdoptionWaves').columns('ID', 'Name').where({ ID: { in: waveIds } })
+                : [],
+            systemIds.length
+                ? SELECT.from('adops.db.TargetSystems').columns('ID', 'displayName', 'environment', 'systemId').where({ ID: { in: systemIds } })
+                : [],
+            transportIds.length
+                ? SELECT.from('adops.db.TransportRequests').columns('ID', 'TransportRequestId').where({ ID: { in: transportIds } })
+                : [],
+            planIds.length
+                ? SELECT.from('adops.db.BackgroundTasks').columns('ID', 'ObjectId', 'Status', 'QueuedAt', 'createdAt')
+                    .where({ ObjectId: { in: planIds }, TaskType: 'ACTIVATION_EXECUTION' })
+                : []
+        ]);
+        const waveById = new Map(waves.map((w) => [w.ID, w]));
+        const systemById = new Map(systems.map((s) => [s.ID, s]));
+        const transportById = new Map(transports.map((t) => [t.ID, t]));
+        const runByPlan = latestRunByPlan(tasks);
+
+        const items = plans.map((plan) => decoratePlanRow(plan, {
+            wave: waveById.get(plan.wave_ID) || null,
+            system: systemById.get(plan.targetSystem_ID) || null,
+            transport: transportById.get(plan.transportRequest_ID) || null,
+            run: runByPlan.get(plan.ID) || null
+        }));
+        return JSON.stringify({ Items: items, Count: items.length, Summary: summarizePlanStatuses(grouped) });
+    });
 
     this.on('createActivationPlan', async (req) => {
         const { waveId, name, targetSystemId } = req.data;

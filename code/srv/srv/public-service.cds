@@ -238,7 +238,15 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   action createActivationPlan(waveId: UUID, name: String, targetSystemId: UUID) returns LargeString;
   @(requires: 'Activator')
   action simulateActivationPlan(planId: UUID) returns LargeString;
+  // readActivationPlan is the ONE poll target of the Activation Plans page
+  // while a run is active: plan + steps + target system + wave + transport +
+  // the plan's recent runs in a single response (performance.md).
   function readActivationPlan(planId: UUID) returns LargeString;
+
+  // Cross-wave plan list with wave/system/transport labels, the latest run
+  // per plan and a status summary over the full filter scope (no child
+  // reads, no client-side counting) - the Activation Runs list pattern.
+  function queryActivationPlans(targetSystemId: UUID) returns LargeString;
 
   // Execution is async (ACTIVATION_EXECUTION task, single attempt - the
   // runner never retries writes; re-invoking the action RESUMES a PARTIAL/
