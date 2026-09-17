@@ -37,6 +37,10 @@ REPORT zado_activate_smoke.
 " - Custom:    StepType + ObjectKeyJson exactly as the planner wrote
 "              them (copy from ActivationSteps).
 "
+" "Probe only" runs the same scenario through ZCL_ADO_ACT_PROBE (the
+" simulation path): it reports verdict + exists_already and writes
+" nothing - the way to check a scenario before executing it.
+"
 " This report performs REAL writes in the logged-on system/client.
 " It ships with the write unit and must never leave DEV.
 "---------------------------------------------------------------------
@@ -69,6 +73,13 @@ SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN BEGIN OF LINE.
 SELECTION-SCREEN COMMENT 1(31) c_cust FOR FIELD p_cust.
 PARAMETERS p_cust RADIOBUTTON GROUP g1.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN SKIP.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_probe FOR FIELD p_probe.
+PARAMETERS p_probe AS CHECKBOX.
 SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN SKIP.
@@ -117,6 +128,7 @@ INITIALIZATION.
   c_app   = 'Append smoke role to transport'.
   c_cust  = 'Custom (planner StepType+JSON)'.
   c_trk   = 'Transport for Append (SE10)'.
+  c_probe = 'Probe only (read state, no write)'.
   c_rname = 'Smoke role name'.
   c_ttext = 'Transport description'.
   c_url   = 'ICF node URL'.
@@ -161,6 +173,24 @@ CLASS lcl_smoke IMPLEMENTATION.
     ELSE.
       lv_step_type = p_step.
       lv_json      = p_json.
+    ENDIF.
+
+    " Probe only: the simulation path (ZCL_ADO_ACT_PROBE) - reads the
+    " target state for the same key and writes nothing.
+    IF p_probe = abap_true.
+      DATA(ls_probe) = zcl_ado_act_probe=>probe_step(
+        iv_step_type       = lv_step_type
+        iv_object_key_json = lv_json ).
+      WRITE: / 'AdoptOps activation state probe (read-only)'.
+      WRITE: / '------------------------------------------------------'.
+      WRITE: / |System/client:  { sy-sysid }/{ sy-mandt } as { sy-uname }|.
+      WRITE: / |Step type:      { lv_step_type }|.
+      WRITE: / |ObjectKeyJson:  { lv_json }|.
+      WRITE: / '------------------------------------------------------'.
+      WRITE: / |Verdict:        { ls_probe-verdict }|.
+      WRITE: / |Exists already: { COND string( WHEN ls_probe-exists_already = abap_true THEN 'X' ELSE '-' ) }|.
+      WRITE: / |Message:        { ls_probe-message }|.
+      RETURN.
     ENDIF.
 
     DATA(ls_result) = zcl_ado_activate=>execute_step(

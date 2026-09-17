@@ -288,19 +288,22 @@ function mockSimulationProbe(step) {
   return { verdict: 'SIMULATED_OK', existsAlready: false, message: `${step.StepType} ${step.ObjectName}: no conflict found (mock probe).` };
 }
 
-// Pure: apply probe verdicts to steps, produce updated step rows + plan
-// rollup. Blocked steps make the plan SIMULATED with a blocked count;
-// otherwise SIMULATED (READY is a separate explicit gate before execution).
-function simulateSteps(steps, probe) {
-  const updated = steps.map((step) => {
-    const { verdict, existsAlready, message } = probe(step);
-    return {
+// Apply probe verdicts to steps, produce updated step rows + plan rollup.
+// The probe may be sync (mock) or async (live ZADO state probe); steps are
+// probed in sequence so the DEV system sees one read at a time. Blocked
+// steps make the plan SIMULATED with a blocked count; otherwise SIMULATED
+// (READY is a separate explicit gate before execution).
+async function simulateSteps(steps, probe) {
+  const updated = [];
+  for (const step of steps) {
+    const { verdict, existsAlready, message } = await probe(step);
+    updated.push({
       ID: step.ID,
       Status: verdict,
       ExistsAlready: Boolean(existsAlready),
       SimulationMessage: String(message || '').slice(0, 1000)
-    };
-  });
+    });
+  }
   const count = (v) => updated.filter((s) => s.Status === v).length;
   return {
     steps: updated,

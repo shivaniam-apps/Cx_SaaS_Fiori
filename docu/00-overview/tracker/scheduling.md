@@ -7,12 +7,11 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## In progress
 
-- [~] S3 Implement ABAP step types returning not_implemented (ACTIVATE_ODATA_SERVICE, CREATE_SPACE, CREATE_PAGE, ASSIGN_PAGE_TO_SPACE, ADD_SPACE_TO_ROLE, ASSIGN_BUSINESS_CATALOG, ADD_CATALOG_TO_ROLE) + transport-append step; verify-first / verify-after / one commit per step — XL, needs RD1 DEV/100 — branch feat/abap-activation-steps, started 2026-09-17 (part 1: transport-first sequencing, APPEND_TO_TRANSPORT step, plan TRKORR threaded into keys, RD1 probe report for the three open checks; part 2 after the probe run)
+- [~] S3 Implement ABAP step types returning not_implemented (ACTIVATE_ODATA_SERVICE, CREATE_SPACE, CREATE_PAGE, ASSIGN_PAGE_TO_SPACE, ADD_SPACE_TO_ROLE, ASSIGN_BUSINESS_CATALOG, ADD_CATALOG_TO_ROLE) + transport-append step; verify-first / verify-after / one commit per step — XL, needs RD1 DEV/100 — branch feat/abap-activation-steps, started 2026-09-17 (part 1 merged PR #23, 2026-09-17: transport-first sequencing, APPEND_TO_TRANSPORT step, plan TRKORR threaded into keys, ZADO_PROBE_ACTIVATION report; part 2 = the seven executors, blocked until the probe output from RD1 DEV/100 is available)
 
 ## To-do (critical path first)
 
 - [ ] S3 Implement ABAP step types returning not_implemented (ACTIVATE_ODATA_SERVICE, CREATE_SPACE, CREATE_PAGE, ASSIGN_PAGE_TO_SPACE, ADD_SPACE_TO_ROLE, ASSIGN_BUSINESS_CATALOG, ADD_CATALOG_TO_ROLE) + transport-append step; verify-first / verify-after / one commit per step — XL, needs RD1 DEV/100
-- [ ] S4 Live simulation: ZADO read-side state probe so simulate reports existsAlready from the real system
 - [ ] S5 Operator skip and rollback actions (skipActivationStep, rollbackActivationStep); ICF stays audit-only
 - [ ] S6 Forward topUsersPerTcode / minExecutions to ABAP (CDS parameters on ZADO_C_USER_TX_USAGE)
 - [ ] S7 ABAP snapshot collector: ZADO_CFG, ZADO_RUN, ZADO_AUDIT, snapshot tables, background job; CAP reads snapshots instead of live ST03N — XL
@@ -22,6 +21,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## Accomplished
 
+- [x] S4 Live simulation: read-only state probe ZCL_ADO_ACT_PROBE behind the ICF handler (`probe: true`) and the RAP action (`Probe`), same StepType + ObjectKeyJson contract, verdicts SIMULATED_OK / WARN / BLOCKED with existsAlready from ICFSERVICE, AGR_DEFINE, E070/E071; steps without an executor and incomplete keys are BLOCKED at plan time; CAP adapter probeStepRemote / liveSimulationProbeFor, async simulateSteps, simulateActivationPlan probes live per target system; smoke "Probe only" checkbox — this PR, 2026-09-17
 - [x] S1 Connection check covers the activation service: per-endpoint verdicts (USAGE read service, ACTIVATE write unit) in checkTargetSystemConnection / getBackendCapabilities, activation judged against the environment (reachable on DEV, UNPUBLISHED required on QA/PROD, EXPOSED = safety finding), persisted in TargetSystems.lastCheckEndpointsJson, badges on the Target Systems page — PR #20, 2026-09-17
 - [x] S2 ObjectKeyJson contract aligned planner <-> ABAP: `objectKey` single source in activation-plan.js (ICF `{fioriId,url,icfName}` from the catalog BSP, role `{role,text,referenceRoles}`, transport `{text}` / `{trkorr,simulation}`), shared fixture activation-object-keys.json, ABAP per-step key types with fail-fast guards, smoke ICF + custom scenarios, docu/09 object-key-contract — PR #14, 2026-09-17
 - [x] ABAP mirror brought to parity with a4h_2023_zado main (DEV-only activation write unit, RAP OData V4 write service, RFC function group) — PR #5, 2026-09-15
@@ -30,6 +30,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 ## Daily log
 
 ### 2026-09-17
+- S4 on branch feat/live-simulation (both repos). The probe reuses the executors' verify-first reads (is_node_active, role_exists, read_status, read_objects), so simulation and execution can never disagree on "exists". Transport failures and foreign payloads map to SIMULATED_BLOCKED - a plan never claims a state it could not read. ABAP not compiled here: RD1 acceptance = syntax check of ZCL_ADO_ACT_PROBE / ZCL_ADO_ACT_HTTP / ZBP_ADO_ACT_I_LOG + abstract entity ZADO_A_ACT_INPUT (new Probe field, republish the service binding), then smoke "Probe only" on Role (exists after the Role scenario) and Simulate on a DEV plan (role/ICF steps report existsAlready, space/page steps BLOCKED until S3 part 2).
 - S3 part 1 on branch feat/abap-activation-steps: the plan now creates its transport request before the first transportable write and ends with APPEND_TO_TRANSPORT (verify-first on E071, `zcl_ado_act_cts=>append_missing`); the engine threads the plan's TRKORR into the role and append keys at dispatch (rows keep the planned key), so PFCG records the role on the request. New read-only report ZADO_PROBE_ACTIVATION (src/core) answers the three S3 open checks on RD1: task-list parameter FMs for SAP_GATEWAY_ACTIVATE_ODATA_SERV, /UI2/ FDM space/page API surface + transport object types, AGR_HIER node shape for catalogs and spaces. Part 2 (the seven executors) is written from that output. ABAP not compiled here - RD1 syntax check + smoke Transport -> Role -> Append (second Append run must be SKIPPED) is the acceptance run for part 1.
 - S1 done on branch feat/connection-check-activation. New CDS type TargetEndpointCheck, `Endpoints` on TargetConnectionCheck, optional `targetSystemId` on the action (old two-argument calls keep working, usage-only), additive column lastCheckEndpointsJson. Browser check on 5293 in mock mode: DEV row shows Connected / Usage ok / Activation ok, PRD row Connected / Usage ok / Activation unpublished, both persisted across reload. Not exercised against RD1 (no session access); the live path reuses probeActivateService, which the S1 acceptance run on RD1 DEV and PROD will prove.
 

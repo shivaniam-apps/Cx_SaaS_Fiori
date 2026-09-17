@@ -8,8 +8,10 @@ const {
   isODataRoot,
   extractResultJson,
   mapRemoteStepResult,
+  mapRemoteProbeResult,
   executeStepRemote,
-  liveStepExecutorFor
+  liveStepExecutorFor,
+  liveSimulationProbeFor
 } = require('../srv/srv/utils/s4-activate-adapter.js');
 
 describe('activation transport mode selection', () => {
@@ -97,6 +99,34 @@ describe('s4 activate adapter (the CAP side of ZIF_ADO_ACT_STEP)', () => {
       });
       expect(result.status).to.equal('FAILED');
       expect(result.messages[0].message).to.match(/invalid step result/i);
+    } finally {
+      delete process.env.ADOPTOPS_MOCK_S4;
+    }
+  });
+});
+
+describe('simulation state probe (the CAP side of ZCL_ADO_ACT_PROBE)', () => {
+  it('maps probe verdicts onto the simulation statuses, tolerating ABAP booleans and short verdicts', () => {
+    expect(mapRemoteProbeResult({ verdict: 'SIMULATED_OK', existsAlready: 'X', message: 'role exists' }))
+      .to.deep.equal({ verdict: 'SIMULATED_OK', existsAlready: true, message: 'role exists' });
+    expect(mapRemoteProbeResult({ verdict: 'warn', existsAlready: false, message: 'irreversible' }).verdict).to.equal('SIMULATED_WARN');
+    expect(mapRemoteProbeResult({ verdict: 'SIMULATED_WARNING' }).verdict).to.equal('SIMULATED_WARN');
+    expect(mapRemoteProbeResult({ verdict: 'blocked' }).verdict).to.equal('SIMULATED_BLOCKED');
+  });
+
+  it('turns a foreign or empty payload into SIMULATED_BLOCKED (never an unprobed OK)', () => {
+    expect(mapRemoteProbeResult({ status: 'SUCCESS' })).to.include({ verdict: 'SIMULATED_BLOCKED', existsAlready: false });
+    expect(mapRemoteProbeResult(null).message).to.match(/invalid probe result/);
+  });
+
+  it('refuses to build a live probe without a destination and blocks on the mocked transport payload', async () => {
+    expect(() => liveSimulationProbeFor({})).to.throw(/destination/i);
+    process.env.ADOPTOPS_MOCK_S4 = 'true';
+    try {
+      const probe = liveSimulationProbeFor({ destinationName: 'S4H_2023' });
+      const verdict = await probe({ StepType: 'CREATE_PFCG_ROLE', ObjectKeyJson: '{"role":"Z_X"}' });
+      expect(verdict.verdict).to.equal('SIMULATED_BLOCKED');
+      expect(verdict.message).to.match(/invalid probe result/i);
     } finally {
       delete process.env.ADOPTOPS_MOCK_S4;
     }

@@ -81,18 +81,62 @@ function transportFailure(path, response) {
   };
 }
 
-// ICF handler transport: POST { stepType, objectKeyJson } -> step result.
-async function executeStepViaIcf({ targetSystem, step, path }) {
+// ---------------------------------------------------------------------------
+// Read-side state probe (simulateActivationPlan): same transport and key as
+// a step execution, with probe=true; ZCL_ADO_ACT_PROBE answers
+// { verdict, existsAlready, message } without a LUW. Verdicts are the
+// simulation statuses of ActivationSteps; anything else (transport failure,
+// foreign payload) becomes SIMULATED_BLOCKED so a plan never claims a state
+// it could not read.
+// ---------------------------------------------------------------------------
+
+const PROBE_VERDICTS = ['SIMULATED_OK', 'SIMULATED_WARN', 'SIMULATED_BLOCKED'];
+
+function mapRemoteProbeResult(data) {
+  let verdict = String(data?.verdict || '').toUpperCase();
+  if (verdict && !verdict.startsWith('SIMULATED_')) verdict = `SIMULATED_${verdict}`;
+  if (verdict === 'SIMULATED_WARNING') verdict = 'SIMULATED_WARN';
+  if (!PROBE_VERDICTS.includes(verdict)) {
+    return {
+      verdict: 'SIMULATED_BLOCKED',
+      existsAlready: false,
+      message: `Activation service returned an invalid probe result: ${safeResponseData(data) || '(empty)'}`
+    };
+  }
+  return {
+    verdict,
+    existsAlready: data.existsAlready === true || data.existsAlready === 'X' || data.existsAlready === 'true',
+    message: String(data.message || '')
+  };
+}
+
+function probeFailure(path, response) {
+  return {
+    verdict: 'SIMULATED_BLOCKED',
+    existsAlready: false,
+    message: `State probe via ${path} answered ${response.status}: ${safeResponseData(response.data) || '(no body)'}`
+  };
+}
+
+// One failure/result mapping per mode so both transports share it.
+const failureFor = (probe, path, response) => (probe ? probeFailure(path, response) : transportFailure(path, response));
+const resultFor = (probe, data) => (probe ? mapRemoteProbeResult(data) : mapRemoteStepResult(data));
+const invalidPayload = (probe, message) => (probe
+  ? { verdict: 'SIMULATED_BLOCKED', existsAlready: false, message }
+  : { status: 'FAILED', existsAlready: false, trkorr: '', messages: [{ type: 'E', message }] });
+
+// ICF handler transport: POST { stepType, objectKeyJson, probe } -> result.
+async function executeStepViaIcf({ targetSystem, step, path, probe = false }) {
   const response = await callS4Destination({
     destinationName: targetSystem.destinationName,
     path,
     method: 'POST',
-    body: { stepType: step.StepType, objectKeyJson: step.ObjectKeyJson || '{}' },
+    body: { stepType: step.StepType, objectKeyJson: step.ObjectKeyJson || '{}', probe: Boolean(probe) },
     timeoutMs: STEP_TIMEOUT_MS,
     maxAttempts: 1
   });
-  if (!response.ok) return transportFailure(path, response);
-  return mapRemoteStepResult(response.data);
+  if (!response.ok) return failureFor(probe, path, response);
+  return resultFor(probe, response.data);
 }
 
 // A RAP static action with result [1] <abstract entity> can serialize over
@@ -119,7 +163,7 @@ function extractResultJson(body) {
 // from $metadata (like the read services' bound actions). The action returns
 // the single result entity, whose ResultJson field carries the step-result
 // JSON - same contract the ICF handler serializes.
-async function executeStepViaOData({ targetSystem, step, path }) {
+async function executeStepViaOData({ targetSystem, step, path, probe = false }) {
   const serviceRoot = serviceRootFromPath(`${path.replace(/\/?$/, '/')}${ODATA_ENTITY_SET}`);
   const candidates = await boundActionNameCandidates({
     destinationName: targetSystem.destinationName,
@@ -134,43 +178,53 @@ async function executeStepViaOData({ targetSystem, step, path }) {
       destinationName: targetSystem.destinationName,
       path: actionPath,
       method: 'POST',
-      body: { StepType: step.StepType, ObjectKeyJson: step.ObjectKeyJson || '{}' },
+      body: { StepType: step.StepType, ObjectKeyJson: step.ObjectKeyJson || '{}', Probe: Boolean(probe) },
       timeoutMs: STEP_TIMEOUT_MS,
       maxAttempts: 1
     });
     lastResponse = response;
     if (response.status === 404) continue; // wrong action FQN candidate - try next
-    if (!response.ok) return transportFailure(actionPath, response);
+    if (!response.ok) return failureFor(probe, actionPath, response);
 
     // Unwrap ResultJson across the shapes a RAP static action can return over
     // OData V4 (single object, value-wrapped, or value-array), then parse it
-    // into the step-result contract.
+    // into the step-result (or probe) contract.
     const resultJson = extractResultJson(response.data);
     if (typeof resultJson !== 'string') {
-      return {
-        status: 'FAILED', existsAlready: false, trkorr: '',
-        messages: [{ type: 'E', message: `Activation action returned no ResultJson: ${safeResponseData(body) || '(empty)'}` }]
-      };
+      return invalidPayload(probe, `Activation action returned no ResultJson: ${safeResponseData(response.data) || '(empty)'}`);
     }
     let parsed;
     try {
       parsed = JSON.parse(resultJson);
     } catch {
-      return {
-        status: 'FAILED', existsAlready: false, trkorr: '',
-        messages: [{ type: 'E', message: `Activation action ResultJson was not valid JSON: ${resultJson.slice(0, 200)}` }]
-      };
+      return invalidPayload(probe, `Activation action ResultJson was not valid JSON: ${resultJson.slice(0, 200)}`);
     }
-    return mapRemoteStepResult(parsed);
+    return resultFor(probe, parsed);
   }
-  return transportFailure(serviceRoot, lastResponse || { status: 0, data: 'no response' });
+  return failureFor(probe, serviceRoot, lastResponse || { status: 0, data: 'no response' });
 }
 
-async function executeStepRemote({ targetSystem, step }) {
+async function executeStepRemote({ targetSystem, step, probe = false }) {
   const path = activateRootFor(targetSystem);
   return isODataRoot(path)
-    ? executeStepViaOData({ targetSystem, step, path })
-    : executeStepViaIcf({ targetSystem, step, path });
+    ? executeStepViaOData({ targetSystem, step, path, probe })
+    : executeStepViaIcf({ targetSystem, step, path, probe });
+}
+
+// Read-only: the plan's steps are probed one by one against the DEV
+// system's real state; nothing is written.
+async function probeStepRemote({ targetSystem, step }) {
+  return executeStepRemote({ targetSystem, step, probe: true });
+}
+
+// Probe with the signature simulateSteps expects (mirrors
+// mockSimulationProbe); the caller awaits each verdict.
+function liveSimulationProbeFor(targetSystem) {
+  if (!targetSystem?.destinationName) {
+    throw new Error('Live simulation needs a target system with a configured BTP destination.');
+  }
+  LOG.info(`Live simulation probe for ${targetSystem.displayName || targetSystem.ID} via ${activateRootFor(targetSystem)}`);
+  return (step) => probeStepRemote({ targetSystem, step });
 }
 
 // Existence/identity probe for connection checks (never writes). ICF returns
@@ -216,7 +270,10 @@ module.exports = {
   isODataRoot,
   extractResultJson,
   mapRemoteStepResult,
+  mapRemoteProbeResult,
   executeStepRemote,
+  probeStepRemote,
+  liveSimulationProbeFor,
   probeActivateService,
   liveStepExecutorFor
 };
