@@ -36,6 +36,9 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I22 (2026-09-17) Users/Roles admin handlers run only under the hybrid/production profiles and read XSUAA through UserManagement; the tenant filter on their db reads is in place but untested locally. Cover them in the two-tenant suite once a hybrid test binding exists (A12).
 - I23 (2026-09-17) PilotFeedback carries a plain TenantId (stamped per tenant since A5) but not the aspect; align it with the other seven when the entity is next touched.
 
+- I24 (2026-09-17) The pre-push hook only blocks pushes to main; consider a fast `npm run lint` (server + client) in pre-push now that both exist, leaving the slow suites to CI.
+- I25 (2026-09-17) worktree.mjs add --link-modules junctions node_modules; the first `npm install` in a worktree silently replaces the junction with a real directory. Document or detect it in the planned doctor command (I4, I18).
+
 ## Parked
 
 (none)

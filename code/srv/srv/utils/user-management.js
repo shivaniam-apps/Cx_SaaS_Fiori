@@ -234,12 +234,8 @@ class UserManagement {
     }
 
     async deleteUser(user) {
-        try {
-            await this.deleteShadowUser(user.shadowId);
-            this.ias && await this.deleteIASUser(user.iasLocation);
-        } catch (error) {
-            throw error;
-        }
+        await this.deleteShadowUser(user.shadowId);
+        this.ias && await this.deleteIASUser(user.iasLocation);
     }
 
     async removeRoleCollectionFromUser(roleId, shadowId) {
