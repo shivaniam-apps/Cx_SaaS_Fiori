@@ -17,6 +17,7 @@ import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { Select } from '@ui5/webcomponents-react/Select';
 import { Option } from '@ui5/webcomponents-react/Option';
 import { Label } from '@ui5/webcomponents-react/Label';
+import { Input } from '@ui5/webcomponents-react/Input';
 import { ProgressIndicator } from '@ui5/webcomponents-react/ProgressIndicator';
 import { fetchUserInfo } from '../services/coreService.js';
 import { hasActivatorAccess } from '../features/auth/memberAccess.js';
@@ -27,6 +28,8 @@ import {
   executeActivationPlan,
   cancelTask,
   readActivationStepMessages,
+  skipActivationStep,
+  rollbackActivationStep,
   getServiceErrorMessage
 } from '../services/fioriService.js';
 import useRunPolling from '../hooks/useRunPolling.js';
@@ -45,7 +48,9 @@ import {
   canResumeRun,
   canCancelRun,
   summaryCards,
-  shouldRefetchStepMessages
+  shouldRefetchStepMessages,
+  stepOperatorActions,
+  operatorLabel
 } from '../features/activation-runs/runModel.js';
 
 const POLL_KEY_SEPARATOR = '|';
@@ -68,6 +73,8 @@ export function ActivationRunsPage() {
   const [list, setList] = useState(null);           // { Items, Summary }
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(null);       // { design, text }
+  const [stepAction, setStepAction] = useState(null); // { kind: 'skip' | 'rollback', step, auditOnly }
+  const [stepReason, setStepReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [detailReload, setDetailReload] = useState(0);
@@ -171,6 +178,34 @@ export function ActivationRunsPage() {
     } finally {
       setBusy(false);
       setConfirmCancel(false);
+    }
+  };
+
+  // Operator decision on one step (confirmed in the dialog below). The
+  // server applies the same predicate; the page re-reads the run afterwards.
+  const runStepAction = async () => {
+    if (!stepAction) return;
+    const { kind, step } = stepAction;
+    try {
+      setBusy(true);
+      const outcome = kind === 'skip'
+        ? await skipActivationStep(step.ID, stepReason)
+        : await rollbackActivationStep(step.ID, stepReason);
+      const failed = outcome?.Result && !['SUCCESS', 'WARNING', 'SKIPPED'].includes(outcome.Result.status);
+      const detail = (outcome?.Result?.messages || []).map((m) => m.message).join(' ');
+      setNotice({
+        design: failed ? 'Negative' : 'Information',
+        text: failed
+          ? `Rollback of step ${step.SequenceNo} failed: ${detail}`
+          : `Step ${step.SequenceNo} ${step.StepType} ${step.ObjectName}: ${outcome?.OperatorAction === 'ROLLBACK_REQUESTED' ? 'rollback recorded (irreversible step)' : outcome?.StepStatus || 'updated'}. ${detail}`
+      });
+      setDetailReload((d) => d + 1);
+    } catch (e) {
+      setError(getServiceErrorMessage(e));
+    } finally {
+      setBusy(false);
+      setStepAction(null);
+      setStepReason('');
     }
   };
 
@@ -346,6 +381,7 @@ export function ActivationRunsPage() {
                           <TableHeaderCell><span>Status</span></TableHeaderCell>
                           <TableHeaderCell><span>Completed</span></TableHeaderCell>
                           <TableHeaderCell><span>Duration</span></TableHeaderCell>
+                          {activator ? <TableHeaderCell><span>Actions</span></TableHeaderCell> : null}
                         </TableHeaderRow>
                       }
                     >
@@ -357,11 +393,33 @@ export function ActivationRunsPage() {
                           <TableCell><span>{s.Transportable ? 'Transport' : 'Per system'}</span></TableCell>
                           <TableCell>
                             <Tag design={STEP_STATUS_DESIGN[s.Status] || 'Neutral'}>
-                              {s.Status}{s.ExistsAlready ? ' · EXISTS' : ''}
+                              {s.Status}{s.ExistsAlready ? ' · EXISTS' : ''}{operatorLabel(s) ? ` · ${operatorLabel(s)}` : ''}
                             </Tag>
                           </TableCell>
                           <TableCell><span>{formatTimestamp(s.CompletedAt) || '—'}</span></TableCell>
                           <TableCell><span>{stepDurationLabel(s)}</span></TableCell>
+                          {activator ? (
+                            <TableCell>
+                              {(() => {
+                                const actions = stepOperatorActions(s, run);
+                                if (!actions.canSkip && !actions.canRollback) return <span>—</span>;
+                                return (
+                                  <div style={{ display: 'flex', gap: 'var(--adops-space-xs)' }} onClick={(e) => e.stopPropagation()}>
+                                    {actions.canSkip ? (
+                                      <Button design="Transparent" disabled={busy} onClick={() => setStepAction({ kind: 'skip', step: s, auditOnly: false })}>
+                                        Skip
+                                      </Button>
+                                    ) : null}
+                                    {actions.canRollback ? (
+                                      <Button design="Transparent" disabled={busy} onClick={() => setStepAction({ kind: 'rollback', step: s, auditOnly: actions.rollbackAuditOnly })}>
+                                        {actions.rollbackAuditOnly ? 'Record rollback' : 'Roll back'}
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
+                            </TableCell>
+                          ) : null}
                         </TableRow>
                       ))}
                     </Table>
@@ -406,6 +464,32 @@ export function ActivationRunsPage() {
           ) : null}
         </div>
       ) : null}
+
+      <Dialog
+        open={Boolean(stepAction)}
+        headerText={stepAction?.kind === 'skip' ? 'Skip Step' : stepAction?.auditOnly ? 'Record Rollback' : 'Roll Back Step'}
+        onClose={() => { setStepAction(null); setStepReason(''); }}
+      >
+        {stepAction ? (
+          <div style={{ padding: 'var(--adops-space-sm)', minWidth: '24rem', display: 'flex', flexDirection: 'column', gap: 'var(--adops-space-sm)' }}>
+            <Text>
+              {stepAction.kind === 'skip'
+                ? `Skip step ${stepAction.step.SequenceNo} ${stepAction.step.StepType} ${stepAction.step.ObjectName}? Nothing is written to ${run?.TargetSystemName || 'the target system'}; steps that depend on it run on the next resume as if it had succeeded.`
+                : stepAction.auditOnly
+                  ? `${stepAction.step.StepType} ${stepAction.step.ObjectName} is irreversible on this release. The rollback request is recorded in the audit trail; the object stays as executed.`
+                  : `Roll back step ${stepAction.step.SequenceNo} ${stepAction.step.StepType} ${stepAction.step.ObjectName} on ${run?.TargetSystemName || 'the target system'}? The object is removed through the write unit and every step that depended on it is re-opened for the next resume.`}
+            </Text>
+            <Label for="adops-step-reason">Reason (recorded with the decision)</Label>
+            <Input id="adops-step-reason" value={stepReason} onInput={(e) => setStepReason(e.target.value)} style={{ width: '100%' }} />
+          </div>
+        ) : null}
+        <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
+          <Button design="Transparent" onClick={() => { setStepAction(null); setStepReason(''); }}>Cancel</Button>
+          <Button design={stepAction?.kind === 'skip' ? 'Emphasized' : 'Negative'} disabled={busy} onClick={runStepAction}>
+            {stepAction?.kind === 'skip' ? 'Skip step' : stepAction?.auditOnly ? 'Record' : 'Roll back'}
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog
         open={confirmCancel}

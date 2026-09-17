@@ -20,7 +20,7 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I12 (2026-09-16) The planner's ADD_TO_TRANSPORT step is last, but `PRGN_RFC_CREATE_ACTIVITY_GROUP` takes the TRKORR at role-creation time and the dispatcher does not pass one; role/profile steps currently land on no request. S3's transport-append step needs either a create-request step first in the sequence or a plan-level TRKORR threaded into the role keys. -> addressed in S3 part 1 (both: request created before the first transportable write, engine injects the TRKORR into role/append keys)
 - I13 (2026-09-17) `npm run lint` fails on `main` (unused `userInfo` prop in `AdopsShell.jsx:56`); fix in a tiny chore PR so the client lint gate (A6) starts green. -> done in PR #16 (integration housekeeping)
 - I14 (2026-09-17) Icons are registered one by one in `ui5Assets.js`; `restart`/`stop` (Activation Runs) are still missing and log "No loader registered" errors. Audit every `icon=` prop against the list, or add an eslint check.
-- I15 (2026-09-17) Fresh worktree databases are empty, so a browser check of the Activate journey needs a manual seed chain (target system -> mock extraction -> proposals -> wave -> approvals). Add `scripts/seed-dev.mjs` (mock mode only) that performs it against a CAP port.
+- I15 (2026-09-17) Fresh worktree databases are empty, so a browser check of the Activate journey needs a manual seed chain (target system -> mock extraction -> proposals -> wave -> approvals). Add `scripts/seed-dev.mjs` (mock mode only) that performs it against a CAP port. -> the S5 browser check drove exactly this chain through the public actions with a 60-line node script (runUsageExtraction -> generateProposals -> queryProposals -> createAdoptionWave -> approveProposal -> assignProposalsToWave -> createActivationPlan -> simulate -> execute, polling getTaskStatus); promote it into scripts/ under the worktree tooling.
 - I16 (2026-09-17) Crash reporting covers React render errors only (O5). recordClientError also accepts WINDOW_ERROR / UNHANDLED_REJECTION / API_FAILURE: add window error + unhandledrejection listeners and an axios response-error hook (rate-limited, A13) so non-render failures are reported too. -> done in the global-error-reporting PR (client-side dedupe + session cap; server-side rate limiting stays with A13).
 
 - I16 (2026-09-17) The db deployer (code/db/package.json) has no lockfile; the CF buildpack resolves ^8.9.4 / ^1.10.0 at staging. Pin a lockfile under T5 so deployer and runtime cannot drift.
@@ -38,6 +38,10 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 
 - I24 (2026-09-17) The pre-push hook only blocks pushes to main; consider a fast `npm run lint` (server + client) in pre-push now that both exist, leaving the slow suites to CI.
 - I25 (2026-09-17) worktree.mjs add --link-modules junctions node_modules; the first `npm install` in a worktree silently replaces the junction with a real directory. Document or detect it in the planned doctor command (I4, I18).
+
+- I26 (2026-09-17) The direct-access variables (ADOPTOPS_S4_URL_OVERRIDES, DIRECT_USER/PASSWORD, INSECURE_TLS) are development conveniences; add a boot-time warning (or refusal under the production profile) when any of them is set in a Cloud Foundry instance.
+
+- I27 (2026-09-17) server.js registers the /-/basic/saas-provisioning callbacks only when the tier is basic; a standard-tier instance (same shared PostgreSQL, same registry entry) would answer 404 on subscribe. Register them for every non-enterprise tier as part of T2 (subscription lifecycle).
 
 ## Parked
 

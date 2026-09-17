@@ -73,6 +73,23 @@ destination gets the structural simulation with an explicit "not probed"
 suffix. `ZADO_ACTIVATE_SMOKE` has a "Probe only" checkbox that runs a
 scenario through the probe instead of the executor.
 
+## Operator decisions: skip and rollback
+
+Two Activator actions act on a single step while no run is active
+(`skipActivationStep`, `rollbackActivationStep`; predicates in
+`activation-operator.js`, mirrored for the buttons in the client's
+`runModel.js`):
+
+| Action | Allowed on | Effect | Write unit |
+|---|---|---|---|
+| Skip | unsatisfied, non-running steps (FAILED, PENDING, dependency-skipped) | `SKIPPED` + `OperatorAction SKIPPED`, which satisfies dependents; the next resume runs past it | none |
+| Roll back | executed steps (SUCCESS/WARNING), `Reversible = true` | `ROLLBACK_<StepType>` with the step's key (reduced by a builder where one exists); on SUCCESS/SKIPPED the step becomes `ROLLED_BACK` and every transitive dependent goes back to PENDING; the plan becomes PARTIAL | `ROLLBACK_CREATE_PFCG_ROLE` → `zcl_ado_act_role=>delete_role` (Z_ADO_* only, verify-first/verify-after); `ROLLBACK_GENERATE_PROFILE` → nothing to undo |
+| Record rollback | executed steps with `Reversible = false` (ICF node, task list) | audit-only: `OperatorAction ROLLBACK_REQUESTED`, status unchanged, audit event `ACTIVATION_STEP_ROLLBACK_AUDIT_ONLY` | none |
+
+Every decision writes a step message and an audit-chain event with the
+operator's user and reason. A failed rollback (FAILED from the write unit)
+changes nothing on the step and returns the messages.
+
 ## Rules
 
 - **Only what the executor needs.** Keys carry no documentation fields (API

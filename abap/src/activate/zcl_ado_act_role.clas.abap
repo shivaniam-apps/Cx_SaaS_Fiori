@@ -45,6 +45,15 @@ CLASS zcl_ado_act_role DEFINITION
                 it_users         TYPE string_table
       RETURNING VALUE(rs_result) TYPE zif_ado_act_step=>ty_result.
 
+    " Rollback of create_role (verify-first: absent -> SKIPPED). The
+    " deletion FM is not confirmed by the API matrix yet, so the
+    " candidates are called DYNAMICALLY (a missing FM or parameter is
+    " caught, never a syntax error) and verify-after on AGR_DEFINE
+    " decides. Only Z_ADO_* customer roles are ever deleted.
+    CLASS-METHODS delete_role
+      IMPORTING iv_role          TYPE agr_name
+      RETURNING VALUE(rs_result) TYPE zif_ado_act_step=>ty_result.
+
 ENDCLASS.
 
 
@@ -211,6 +220,76 @@ CLASS zcl_ado_act_role IMPLEMENTATION.
         type    = 'S'
         message = |{ lines( it_users ) - lv_failed } of { lines( it_users ) } user(s) assigned to { iv_role }.| )
       TO rs_result-messages.
+  ENDMETHOD.
+
+  METHOD delete_role.
+    IF iv_role NP 'Z_ADO_*'.
+      rs_result-status = zif_ado_act_step=>c_status-failed.
+      APPEND VALUE bapiret2(
+          type    = 'E'
+          message = |Refused: { iv_role } is not an AdoptOps role (Z_ADO_*) - only roles this unit created are deleted.| )
+        TO rs_result-messages.
+      RETURN.
+    ENDIF.
+
+    IF role_exists( iv_role ) = abap_false.
+      rs_result-status         = zif_ado_act_step=>c_status-skipped.
+      rs_result-exists_already = abap_true.
+      APPEND VALUE bapiret2(
+          type    = 'S'
+          message = |Role { iv_role } does not exist - nothing to roll back (idempotent).| )
+        TO rs_result-messages.
+      RETURN.
+    ENDIF.
+
+    DATA lv_role TYPE agr_name.
+    DATA lv_fm   TYPE rs38l_fnam.
+    DATA lv_used TYPE string.
+    lv_role = iv_role.
+    LOOP AT VALUE string_table( ( `PRGN_RFC_DELETE_AGR` )
+                                ( `PRGN_DELETE_AGR` )
+                                ( `PRGN_RFC_DELETE_ACTIVITY_GROUP` ) ) INTO DATA(lv_candidate).
+      lv_fm = lv_candidate.
+      TRY.
+          CALL FUNCTION lv_fm
+            EXPORTING
+              activity_group = lv_role
+            EXCEPTIONS
+              OTHERS         = 1.
+          lv_used = lv_candidate.
+          APPEND VALUE bapiret2(
+              type    = COND #( WHEN sy-subrc = 0 THEN 'S' ELSE 'W' )
+              message = |{ lv_candidate } called for { iv_role } (subrc { sy-subrc }).| )
+            TO rs_result-messages.
+          EXIT.
+        CATCH cx_sy_dyn_call_illegal_func cx_sy_dyn_call_param_not_found.
+          CONTINUE.
+      ENDTRY.
+    ENDLOOP.
+
+    IF lv_used IS INITIAL.
+      rs_result-status = zif_ado_act_step=>c_status-failed.
+      APPEND VALUE bapiret2(
+          type    = 'E'
+          message = |No role-deletion function module found (tried PRGN_RFC_DELETE_AGR, PRGN_DELETE_AGR, PRGN_RFC_DELETE_ACTIVITY_GROUP) - delete { iv_role } in PFCG and record the rollback.| )
+        TO rs_result-messages.
+      RETURN.
+    ENDIF.
+
+    " Verify-after decides, not sy-subrc.
+    IF role_exists( iv_role ) = abap_false.
+      rs_result-status = zif_ado_act_step=>c_status-success.
+      APPEND VALUE bapiret2(
+          type    = 'S'
+          message = |Role { iv_role } deleted and verified absent (via { lv_used }).| )
+        TO rs_result-messages.
+    ELSE.
+      rs_result-status = zif_ado_act_step=>c_status-failed.
+      APPEND VALUE bapiret2(
+          type    = 'E'
+          message = |Role { iv_role } still exists after { lv_used } - rollback not performed.| )
+        TO rs_result-messages.
+    ENDIF.
   ENDMETHOD.
 
 ENDCLASS.

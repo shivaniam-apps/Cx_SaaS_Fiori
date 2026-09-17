@@ -21,6 +21,18 @@
     "APPEND_TO_TRANSPORT": { "trkorr": "", "objects": [{ "pgmid": "R3TR", "object": "ACGR", "objName": "Z_ADO_W1" }] }
   },
   "other": {
+    "rollbackRole": {
+      "note": "rollbackActivationStep sends ROLLBACK_<StepType> with a reduced key; ABAP deletes the role verify-first/verify-after.",
+      "stepType": "ROLLBACK_CREATE_PFCG_ROLE",
+      "params": { "role": "Z_ADO_W1", "text": "ignored", "referenceRoles": [], "trkorr": "RD1K900042" },
+      "key": { "role": "Z_ADO_W1" }
+    },
+    "rollbackProfile": {
+      "note": "The profile is dropped with its role; the ABAP side answers SUCCESS with nothing to undo.",
+      "stepType": "ROLLBACK_GENERATE_PROFILE",
+      "params": { "role": "Z_ADO_W1" },
+      "key": { "role": "Z_ADO_W1" }
+    },
     "roleOnPlanTransport": {
       "note": "At dispatch time the engine (withPlanTrkorr) fills trkorr on CREATE_PFCG_ROLE and APPEND_TO_TRANSPORT with the request the plan's ADD_TO_TRANSPORT step created.",
       "stepType": "CREATE_PFCG_ROLE",

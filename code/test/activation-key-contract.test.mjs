@@ -89,7 +89,7 @@ describe('ObjectKeyJson contract: ABAP dispatcher mirrors the fixture', () => {
     // The remaining planner step types return not_implemented until S3 lands.
     expect(Object.keys(dispatch).sort()).to.deep.equal([
       'ACTIVATE_ICF_NODE', 'ADD_TO_TRANSPORT', 'APPEND_TO_TRANSPORT', 'ASSIGN_ROLE_TO_USERS',
-      'CREATE_PFCG_ROLE', 'GENERATE_PROFILE', 'RUN_TASK_LIST'
+      'CREATE_PFCG_ROLE', 'GENERATE_PROFILE', 'ROLLBACK_CREATE_PFCG_ROLE', 'ROLLBACK_GENERATE_PROFILE', 'RUN_TASK_LIST'
     ]);
   });
 });

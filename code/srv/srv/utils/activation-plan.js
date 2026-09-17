@@ -88,6 +88,10 @@ const OBJECT_KEY_BUILDERS = {
   ADD_SPACE_TO_ROLE: ({ role, spaceId }) => ({ role, spaceId }),
   GENERATE_PROFILE: ({ role }) => ({ role }),
   ASSIGN_ROLE_TO_USERS: ({ role, users }) => ({ role, users: [...(users || [])] }),
+  // Operator rollback (rollbackActivationStep): ROLLBACK_<type> carries only
+  // what undoing needs; types without a builder travel with the original key.
+  ROLLBACK_CREATE_PFCG_ROLE: ({ role }) => ({ role }),
+  ROLLBACK_GENERATE_PROFILE: ({ role }) => ({ role }),
   // Two variants share the step type, exactly as the ABAP dispatcher decides:
   // a TRKORR releases that request, otherwise a new request is created.
   ADD_TO_TRANSPORT: ({ text, trkorr, simulation }) => (trkorr

@@ -891,6 +891,49 @@ module.exports = cds.service.impl(async function () {
         return JSON.stringify({ Status: fresh.Status, Simulated: Boolean(simulate), StepStatus: result.status, Messages: result.messages || [] });
     });
 
+    // --- Operator decisions on steps (S5) ----------------------------------------
+
+    const {
+        skipStepAllowed, rollbackStepAllowed, applyOperatorSkip, applyOperatorRollback
+    } = require('./utils/activation-operator.js');
+
+    const loadStepAndPlan = async (stepId) => {
+        const step = await SELECT.one.from('adops.db.ActivationSteps').where({ ID: stepId });
+        const plan = step ? await SELECT.one.from('adops.db.ActivationPlans').where({ ID: step.plan_ID }) : null;
+        return { step, plan };
+    };
+
+    this.on('skipActivationStep', async (req) => {
+        const { stepId, reason } = req.data;
+        const { step, plan } = await loadStepAndPlan(stepId);
+        if (!step || !plan) return req.reject(404, 'Activation step not found.');
+        const verdict = skipStepAllowed(step, plan);
+        if (!verdict.ok) return req.reject(400, verdict.reason);
+        return JSON.stringify(await applyOperatorSkip({ step, plan, reason, user: req.user?.id }));
+    });
+
+    this.on('rollbackActivationStep', async (req) => {
+        const { stepId, reason } = req.data;
+        const { step, plan } = await loadStepAndPlan(stepId);
+        if (!step || !plan) return req.reject(404, 'Activation step not found.');
+        const verdict = rollbackStepAllowed(step, plan);
+        if (!verdict.ok) return req.reject(400, verdict.reason);
+
+        // One write-unit step, synchronous like releaseTransport: mock mode
+        // answers deterministically, live mode goes through the adapter.
+        const { mockStepExecutor } = require('./utils/activation-execution.js');
+        let executor = mockStepExecutor;
+        let systemId = 'MCK';
+        if (!shouldMockSap() && verdict.mode === 'EXECUTE') {
+            const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID });
+            if (!targetSystem?.destinationName) return req.reject(400, 'Rollback needs a target system with a configured BTP destination.');
+            const { liveStepExecutorFor } = require('./utils/s4-activate-adapter.js');
+            executor = liveStepExecutorFor(targetSystem);
+            systemId = targetSystem.systemId || targetSystem.displayName || '';
+        }
+        return JSON.stringify(await applyOperatorRollback({ step, plan, reason, user: req.user?.id, executor, systemId }));
+    });
+
     // --- Activation runs (monitor) ---------------------------------------------
 
     const { decorateRun, summarizeRunStatuses } = require('./utils/activation-runs.js');
@@ -975,7 +1018,8 @@ module.exports = cds.service.impl(async function () {
                 ? SELECT.from('adops.db.ActivationSteps')
                     .columns('ID', 'SequenceNo', 'StepGroup', 'StepType', 'ObjectType', 'ObjectName', 'Status',
                         'ExistsAlready', 'Transportable', 'LocalReplay', 'Reversible', 'IsDestructive',
-                        'SimulationMessage', 'StartedAt', 'CompletedAt', 'DurationMs', 'RetryCount', 'dependsOn_ID')
+                        'SimulationMessage', 'StartedAt', 'CompletedAt', 'DurationMs', 'RetryCount', 'dependsOn_ID',
+                        'OperatorAction', 'OperatorNote', 'OperatorBy')
                     .where({ plan_ID: labels.plan.ID }).orderBy('SequenceNo asc')
                 : [],
             SELECT.from('adops.db.BackgroundTaskLogs')

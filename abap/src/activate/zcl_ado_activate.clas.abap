@@ -244,6 +244,44 @@ CLASS zcl_ado_activate IMPLEMENTATION.
             it_objects = lt_objects ).
         ENDIF.
 
+      " Operator rollback (rollbackActivationStep): ROLLBACK_<type> undoes
+      " an executed step. Reversible types only - ICF activation and task
+      " lists are irreversible on this release and stay audit-only on the
+      " SaaS side.
+      WHEN 'ROLLBACK_CREATE_PFCG_ROLE'.
+        DATA ls_rb_role TYPE ty_profile_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_rb_role ).
+        IF ls_rb_role-role IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'role is empty.' ).
+        ELSE.
+          rs_result = zcl_ado_act_role=>delete_role(
+            iv_role = CONV #( ls_rb_role-role ) ).
+        ENDIF.
+
+      WHEN 'ROLLBACK_GENERATE_PROFILE'.
+        DATA ls_rb_profile TYPE ty_profile_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_rb_profile ).
+        " The generated profile lives and dies with its role
+        " (ROLLBACK_CREATE_PFCG_ROLE); there is nothing separate to undo.
+        rs_result-status = zif_ado_act_step=>c_status-success.
+        APPEND VALUE bapiret2(
+            type    = 'S'
+            message = |Authorization profile of { ls_rb_profile-role } is dropped with the role - nothing to undo here.| )
+          TO rs_result-messages.
+
+      WHEN 'ROLLBACK_ACTIVATE_ICF_NODE' OR 'ROLLBACK_RUN_TASK_LIST'.
+        rs_result = not_implemented(
+          iv_step_type = iv_step_type
+          iv_reason    = 'Irreversible on this release (no HTTP_DEACTIVATE_NODE, no task-list undo) - rollback is audit-only.' ).
+
       WHEN 'ACTIVATE_ODATA_SERVICE'.
         rs_result = not_implemented(
           iv_step_type = iv_step_type

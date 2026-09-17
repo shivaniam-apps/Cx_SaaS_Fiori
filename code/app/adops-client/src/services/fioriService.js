@@ -215,6 +215,18 @@ export async function readActivationStepMessages(stepId) {
   return parseJsonActionResult(response.data);
 }
 
+// Operator decisions on a single step; both answer { StepStatus,
+// OperatorAction, PlanStatus, Result } for the notice, the page re-reads.
+export async function skipActivationStep(stepId, reason) {
+  const response = await http.post('/fiori/skipActivationStep', { stepId, reason: reason || null });
+  return parseJsonActionResult(response.data);
+}
+
+export async function rollbackActivationStep(stepId, reason) {
+  const response = await http.post('/fiori/rollbackActivationStep', { stepId, reason: reason || null });
+  return parseJsonActionResult(response.data);
+}
+
 // --- Activation runs (monitor) ------------------------------------------------
 
 export async function queryActivationRuns(targetSystemId) {
