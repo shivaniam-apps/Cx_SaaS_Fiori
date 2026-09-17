@@ -40,6 +40,8 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I25 (2026-09-17) worktree.mjs add --link-modules junctions node_modules; the first `npm install` in a worktree silently replaces the junction with a real directory. Document or detect it in the planned doctor command (I4, I18).
 
 - I26 (2026-09-17) The direct-access variables (ADOPTOPS_S4_URL_OVERRIDES, DIRECT_USER/PASSWORD, INSECURE_TLS) are development conveniences; add a boot-time warning (or refusal under the production profile) when any of them is set in a Cloud Foundry instance.
+- I27 (2026-09-17) S8 leaves UserInventory.UsesFioriToday and RoleInventory.HasFioriCatalog / BusinessCatalogCount at false / 0: they need the FIORI usage source (launchpad usage, /UI2 tables) and the catalog derivation (S9). Also FullName / Email / Department stay empty by design in pseudonymised mode; identified mode (audited opt-in) could read USR21/ADRP through a dedicated entity later.
+- I28 (2026-09-17) The DistinctTcodeCount rollup in usage-extraction.js issues one UPDATE per inventory user with usage (bounded by tcodes x topUsersPerTcode). On PostgreSQL a single UPDATE ... FROM (subquery) would replace the loop; do it when S7 moves the extraction onto snapshots.
 
 - I27 (2026-09-17) server.js registers the /-/basic/saas-provisioning callbacks only when the tier is basic; a standard-tier instance (same shared PostgreSQL, same registry entry) would answer 404 on subscribe. Register them for every non-enterprise tier as part of T2 (subscription lifecycle).
 
