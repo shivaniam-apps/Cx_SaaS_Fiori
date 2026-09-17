@@ -15,18 +15,28 @@ module.exports = cds.service.impl(async function () {
     // --- Connectivity / discovery ------------------------------------------
 
     this.on('checkTargetSystemConnection', async (req) => {
-        const { destinationName, path } = req.data;
+        const { destinationName, path, targetSystemId } = req.data;
         if (!destinationName) return req.reject(400, 'destinationName is required.');
-        const verdict = await checkTargetSystemConnection({ destinationName, path, req });
+        // The environment decides what "healthy" means for the activation
+        // endpoint (DEV: reachable, QA/PROD: unpublished), so the probe needs
+        // the registered system - by ID when given, else by destination. An
+        // unregistered destination gets the usage probe only.
+        const targetSystem = targetSystemId
+            ? await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId })
+            : await SELECT.one.from('adops.db.TargetSystems').where({ destinationName });
+        const verdict = await checkTargetSystemConnection({
+            destinationName: targetSystem?.destinationName || destinationName, path, targetSystem, req
+        });
         // Persist the last verdict on the matching target system so the list
-        // page shows health without re-testing.
+        // page shows health per endpoint without re-testing.
         await UPDATE('adops.db.TargetSystems')
             .set({
                 lastCheckedAt: verdict.TestedAt,
                 lastCheckStatus: verdict.Stage,
-                lastCheckMessage: verdict.Message
+                lastCheckMessage: verdict.Message,
+                lastCheckEndpointsJson: JSON.stringify(verdict.Endpoints || [])
             })
-            .where({ destinationName });
+            .where(targetSystem ? { ID: targetSystem.ID } : { destinationName });
         return verdict;
     });
 

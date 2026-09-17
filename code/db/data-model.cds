@@ -37,8 +37,9 @@ context adops.db {
             defaultPackage          : String(30);
             // Last connection verdict (checkTargetSystemConnection)
             lastCheckedAt           : Timestamp;
-            lastCheckStatus         : String(20);    // OK | DESTINATION | SERVICE
+            lastCheckStatus         : String(20);    // OK | DESTINATION | SERVICE | ACTIVATION
             lastCheckMessage        : String(500);
+            lastCheckEndpointsJson  : LargeString;   // [{Endpoint, Ok, Stage, HttpStatus, Path, Transport, Message}] per ZADO endpoint
             extractions             : Composition of many ExtractionRuns
                                             on extractions.targetSystem = $self;
       }

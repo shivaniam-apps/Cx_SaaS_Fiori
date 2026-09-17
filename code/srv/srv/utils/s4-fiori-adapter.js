@@ -10,6 +10,8 @@ const {
   shouldMockSap,
   unwrapODataPayload
 } = require('./s4-http-client.js');
+const { probeActivateService, activateRootFor, isODataRoot } = require('./s4-activate-adapter.js');
+const { isActivationTargetEnvironment } = require('./activation-plan.js');
 
 const LOG = cds.log('s4-fiori-adapter');
 
@@ -37,12 +39,81 @@ function trimConnectionCheckMessage(value) {
   return String(value || '').trim().slice(0, 500);
 }
 
+// ---------------------------------------------------------------------------
+// Per-endpoint connection verdicts. A destination fronts two ZADO endpoints:
+// the usage read service (every system) and the activation write unit, which
+// ships to DEV only (CLAUDE.md safety contract). The check therefore reports
+// one verdict per endpoint, and what counts as healthy for ACTIVATE depends
+// on the environment: reachable on DEV/SANDBOX, unpublished on QA/PROD.
+// ---------------------------------------------------------------------------
+
+const ENDPOINT_USAGE = 'USAGE';
+const ENDPOINT_ACTIVATE = 'ACTIVATE';
+const PROBE_TIMEOUT_MS = 15000; // the user is waiting; a dead tunnel must answer fast
+
+// Pure: judge the activation probe (probeActivateService result, or the
+// error that prevented it) against the environment.
+function activationEndpointVerdict({ environment, probe, error }) {
+  const expected = isActivationTargetEnvironment(environment);
+  const env = String(environment || '').trim().toUpperCase() || 'non-DEV';
+  const base = {
+    Endpoint: ENDPOINT_ACTIVATE,
+    Ok: false,
+    Stage: 'SERVICE',
+    HttpStatus: Number(probe?.status) || 0,
+    Path: String(probe?.path || ''),
+    Transport: String(probe?.transport || ''),
+    Message: ''
+  };
+  const identity = probe?.system ? ` (${probe.system}/${probe.client}, v${probe.version || 0})` : '';
+
+  if (error) {
+    return expected
+      ? { ...base, Message: trimConnectionCheckMessage(`Activation service unreachable: ${error}`) }
+      : { ...base, Ok: true, Stage: 'UNPUBLISHED', Message: trimConnectionCheckMessage(`Activation service not reachable on this ${env} system, as required outside DEV (${error}).`) };
+  }
+  if (probe?.ok) {
+    return expected
+      ? { ...base, Ok: true, Stage: 'OK', Message: `Activation write unit reachable${identity}.` }
+      : { ...base, Stage: 'EXPOSED', Message: `Activation write unit is reachable on a ${env} system${identity} - it must stay unpublished outside DEV. Remove the SICF node or service binding.` };
+  }
+  return expected
+    ? { ...base, Message: `Activation service at ${base.Path} answered ${base.HttpStatus || 'nothing'} - publish the DEV-only node (ZCL_ADO_ACT_HTTP) or correct activationRootPath.` }
+    : { ...base, Ok: true, Stage: 'UNPUBLISHED', Message: `Activation service not published on this ${env} system (status ${base.HttpStatus || 'none'}), as required outside DEV.` };
+}
+
+async function probeActivationEndpoint({ targetSystem }) {
+  if (shouldMockSap()) {
+    const expected = isActivationTargetEnvironment(targetSystem?.environment);
+    const path = activateRootFor(targetSystem);
+    const verdict = activationEndpointVerdict({
+      environment: targetSystem?.environment,
+      probe: {
+        ok: expected, status: expected ? 200 : 404, path,
+        transport: isODataRoot(path) ? 'odata' : 'icf',
+        system: targetSystem?.systemId || 'MCK', client: targetSystem?.client || '100', version: 1
+      }
+    });
+    return { ...verdict, Message: `${verdict.Message} [mock]` };
+  }
+  try {
+    const probe = await probeActivateService({ targetSystem });
+    return activationEndpointVerdict({ environment: targetSystem?.environment, probe });
+  } catch (error) {
+    return activationEndpointVerdict({ environment: targetSystem?.environment, error: error.message });
+  }
+}
+
 // Structured connectivity verdict for the Target Systems "Test Connection"
 // action. Unlike the generic testS4Destination proxy (whose consumers parse
 // whatever payload comes back), a non-2xx S/4 answer here is a FAILED check:
 // the test exists to catch wrong service paths, authorization problems and
 // tunnel outages, so it must never report success for them.
-async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATION, path, req } = {}) {
+//
+// With a registered targetSystem the activation endpoint is probed too and
+// the rollup (Ok/Stage/Message) reflects both endpoints; Endpoints carries
+// the per-endpoint detail the Target Systems page shows.
+async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATION, path, targetSystem, req } = {}) {
   const startedAt = Date.now();
   const finish = (partial) => ({
     Ok: false,
@@ -54,17 +125,41 @@ async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATI
     Path: '',
     ResolvedLocationId: '',
     TestedAt: new Date().toISOString(),
+    Endpoints: [],
     ...partial
   });
+  const readPath = String(path || `${DEFAULT_S4_SERVICE_ROOT}/UsagePeriods`).trim();
 
-  if (shouldMockSap()) {
+  // Rollup over the endpoint verdicts: usage failure is a SERVICE stage, an
+  // activation finding is its own ACTIVATION stage (the usage path is fine,
+  // the write unit is missing on DEV or exposed on QA/PROD).
+  const rollup = (usage, activate, extra) => {
+    const endpoints = activate ? [usage, activate] : [usage];
+    if (!usage.Ok) {
+      return finish({ ...extra, Stage: 'SERVICE', HttpStatus: usage.HttpStatus, Message: usage.Message, Endpoints: endpoints });
+    }
+    if (activate && !activate.Ok) {
+      return finish({ ...extra, Stage: 'ACTIVATION', HttpStatus: usage.HttpStatus, Message: activate.Message, Endpoints: endpoints });
+    }
     return finish({
+      ...extra,
       Ok: true,
       Stage: 'OK',
-      HttpStatus: 200,
-      Path: path || `${DEFAULT_S4_SERVICE_ROOT}/UsagePeriods`,
-      Message: 'Mock mode: connection check simulated as successful.'
+      HttpStatus: usage.HttpStatus,
+      Message: activate
+        ? `Destination, usage service and activation endpoint verified (${activate.Stage === 'UNPUBLISHED' ? 'write unit unpublished, as required' : 'write unit reachable'}).`
+        : 'Destination, service path and authorization verified.',
+      Endpoints: endpoints
     });
+  };
+
+  if (shouldMockSap()) {
+    const usage = {
+      Endpoint: ENDPOINT_USAGE, Ok: true, Stage: 'OK', HttpStatus: 200, Path: readPath, Transport: 'odata',
+      Message: 'Mock mode: usage service check simulated as successful.'
+    };
+    const activate = targetSystem ? await probeActivationEndpoint({ targetSystem }) : null;
+    return rollup(usage, activate, { Path: readPath });
   }
 
   let config = {};
@@ -79,55 +174,40 @@ async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATI
   // see which Cloud Connector location the destination routes through.
   const resolvedLocationId = cloudConnectorLocationId(config);
 
-  const readPath = String(path || `${DEFAULT_S4_SERVICE_ROOT}/UsagePeriods`).trim();
   // $top=1 with $count proves service path, authorization and data access in
   // one round trip while keeping the payload a single row. ($count alone can
   // succeed on an entity whose row reads fail - see sap-backend.md.)
   const probePath = appendQuery(readPath, { '$top': 1, '$count': 'true' });
-
-  let result;
+  const usage = { Endpoint: ENDPOINT_USAGE, Ok: false, Stage: 'SERVICE', HttpStatus: 0, Path: readPath, Transport: 'odata', Message: '' };
   try {
-    result = await callS4Destination({
-      destinationName,
-      path: probePath,
-      req,
-      // The user is waiting on this verdict; retrying a dead tunnel only
-      // delays the answer.
-      timeoutMs: 15000,
-      maxAttempts: 1
-    });
+    // Retrying a dead tunnel only delays the answer the user is waiting on.
+    const result = await callS4Destination({ destinationName, path: probePath, req, timeoutMs: PROBE_TIMEOUT_MS, maxAttempts: 1 });
+    usage.HttpStatus = Number(result.status) || 0;
+    if (result.ok) {
+      usage.Ok = true;
+      usage.Stage = 'OK';
+      usage.HttpStatus = usage.HttpStatus || 200;
+      usage.Message = 'Usage service path and authorization verified.';
+    } else {
+      usage.Message = trimConnectionCheckMessage(safeResponseData(result.data) || `S/4 responded with status ${result.status}.`);
+    }
   } catch (error) {
-    return finish({
-      Stage: 'SERVICE',
-      Path: readPath,
-      ResolvedLocationId: resolvedLocationId,
-      Message: trimConnectionCheckMessage(error.message)
-    });
+    usage.Message = trimConnectionCheckMessage(error.message);
   }
 
-  if (!result.ok) {
-    return finish({
-      Stage: 'SERVICE',
-      Path: readPath,
-      ResolvedLocationId: resolvedLocationId,
-      HttpStatus: Number(result.status) || 0,
-      Message: trimConnectionCheckMessage(safeResponseData(result.data) || `S/4 responded with status ${result.status}.`)
-    });
-  }
-
-  return finish({
-    Ok: true,
-    Stage: 'OK',
-    Path: readPath,
-    ResolvedLocationId: resolvedLocationId,
-    HttpStatus: Number(result.status) || 200,
-    Message: 'Destination, service path and authorization verified.'
-  });
+  // The activation probe needs the environment to judge its result, so it
+  // runs only for a registered system (an ad-hoc destination test stays a
+  // usage-only check).
+  const activate = targetSystem ? await probeActivationEndpoint({ targetSystem: { ...targetSystem, destinationName } }) : null;
+  return rollup(usage, activate, { Path: readPath, ResolvedLocationId: resolvedLocationId });
 }
 
 // System identity + data-source availability from the add-on's
-// ZADO_C_SYSTEM_INFO custom entity (single row).
+// ZADO_C_SYSTEM_INFO custom entity (single row), plus the activation
+// endpoint verdict so one capability read answers "can this system be
+// activated from here" without a separate connection check.
 async function getBackendCapabilities({ targetSystem, req }) {
+  const ActivationEndpoint = await probeActivationEndpoint({ targetSystem });
   if (shouldMockSap()) {
     return {
       mocked: true,
@@ -136,7 +216,8 @@ async function getBackendCapabilities({ targetSystem, req }) {
       S4Release: '2023',
       SapUi5Version: '1.120',
       CollectorRunning: true,
-      AddOnVersion: '0.1.0-mock'
+      AddOnVersion: '0.1.0-mock',
+      ActivationEndpoint
     };
   }
 
@@ -153,7 +234,7 @@ async function getBackendCapabilities({ targetSystem, req }) {
     );
   }
   const [row] = unwrapODataPayload(result.data);
-  return row || {};
+  return { ...(row || {}), ActivationEndpoint };
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +372,7 @@ async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodT
 
 module.exports = {
   checkTargetSystemConnection,
+  activationEndpointVerdict,
   getBackendCapabilities,
   fetchPagedEntity,
   fetchUsagePeriods,

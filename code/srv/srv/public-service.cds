@@ -54,9 +54,23 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
 
   // --- Shared result types --------------------------------------------------
 
+  // One verdict per ZADO endpoint behind a destination. USAGE is the read
+  // service every system must expose; ACTIVATE is the DEV-only write unit,
+  // whose healthy state depends on the environment: reachable on DEV,
+  // UNPUBLISHED on QA/PROD (EXPOSED there is a safety finding).
+  type TargetEndpointCheck {
+    Endpoint   : String;   // USAGE | ACTIVATE
+    Ok         : Boolean;
+    Stage      : String;   // OK | SERVICE | UNPUBLISHED | EXPOSED
+    HttpStatus : Integer;
+    Path       : String;
+    Transport  : String;   // odata | icf
+    Message    : String;
+  };
+
   type TargetConnectionCheck {
     Ok                 : Boolean;
-    Stage              : String;   // DESTINATION | SERVICE | OK
+    Stage              : String;   // DESTINATION | SERVICE | ACTIVATION | OK
     HttpStatus         : Integer;
     Message            : String;
     LatencyMs          : Integer;
@@ -64,6 +78,7 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
     Path               : String;
     ResolvedLocationId : String;
     TestedAt           : Timestamp;
+    Endpoints          : many TargetEndpointCheck;
   };
 
   // Async contract: every slow S/4 operation returns a TaskHandle
@@ -123,7 +138,9 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
 
   // --- Connectivity / discovery --------------------------------------------
 
-  action checkTargetSystemConnection(destinationName: String, path: String) returns TargetConnectionCheck;
+  // targetSystemId is optional: with it (or a registered destination) the
+  // check also judges the activation endpoint against the environment.
+  action checkTargetSystemConnection(destinationName: String, path: String, targetSystemId: UUID) returns TargetConnectionCheck;
   function getBackendCapabilities(targetSystemId: UUID) returns LargeString;
 
   // --- Extraction (async) ---------------------------------------------------
