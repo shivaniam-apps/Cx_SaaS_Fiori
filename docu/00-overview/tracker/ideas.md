@@ -26,6 +26,7 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I16 (2026-09-17) The db deployer (code/db/package.json) has no lockfile; the CF buildpack resolves ^8.9.4 / ^1.10.0 at staging. Pin a lockfile under T5 so deployer and runtime cannot drift.
 - I17 (2026-09-17) First cf deploy against a Postgres instance that was schema-deployed by hand (no cds_model row) fails on existing tables; docu/05 describes the --model-only seeding. Add a worktree script for it if the dev space instance turns out to be in that state.
 - I18 (2026-09-17) worktree.mjs doctor (I4) should also flag junctioned client node_modules as "mbt build unsafe here", since mbt's npm ci would wipe the primary checkout's modules.
+- I19 (2026-09-17) The connection check reports USAGE and ACTIVATE endpoints; S9 should add a CATALOG endpoint verdict (ZADO_CATALOG read unit) to the same `Endpoints` list so the Target Systems page needs no new shape. An EXPOSED activation verdict on QA/PROD is only shown today; consider also writing an audit event (A4 chain) since it is a safety finding.
 
 ## Parked
 

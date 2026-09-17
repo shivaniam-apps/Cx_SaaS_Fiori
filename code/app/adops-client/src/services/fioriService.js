@@ -59,8 +59,8 @@ export async function updateTargetSystem(id, patch) {
   return response.data;
 }
 
-export async function checkConnection(destinationName, path) {
-  return postAction('checkTargetSystemConnection', { destinationName, path: path || null });
+export async function checkConnection(destinationName, path, targetSystemId) {
+  return postAction('checkTargetSystemConnection', { destinationName, path: path || null, targetSystemId: targetSystemId || null });
 }
 
 // --- Extractions -------------------------------------------------------------

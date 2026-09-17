@@ -11,7 +11,6 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## To-do (critical path first)
 
-- [ ] S1 Connection check covers the activation service: wire probeActivateService into checkTargetSystemConnection / getBackendCapabilities, per-endpoint verdicts on Target Systems page
 - [ ] S3 Implement ABAP step types returning not_implemented (ACTIVATE_ODATA_SERVICE, CREATE_SPACE, CREATE_PAGE, ASSIGN_PAGE_TO_SPACE, ADD_SPACE_TO_ROLE, ASSIGN_BUSINESS_CATALOG, ADD_CATALOG_TO_ROLE) + transport-append step; verify-first / verify-after / one commit per step — XL, needs RD1 DEV/100
 - [ ] S4 Live simulation: ZADO read-side state probe so simulate reports existsAlready from the real system
 - [ ] S5 Operator skip and rollback actions (skipActivationStep, rollbackActivationStep); ICF stays audit-only
@@ -23,11 +22,15 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## Accomplished
 
+- [x] S1 Connection check covers the activation service: per-endpoint verdicts (USAGE read service, ACTIVATE write unit) in checkTargetSystemConnection / getBackendCapabilities, activation judged against the environment (reachable on DEV, UNPUBLISHED required on QA/PROD, EXPOSED = safety finding), persisted in TargetSystems.lastCheckEndpointsJson, badges on the Target Systems page — PR #20, 2026-09-17
 - [x] S2 ObjectKeyJson contract aligned planner <-> ABAP: `objectKey` single source in activation-plan.js (ICF `{fioriId,url,icfName}` from the catalog BSP, role `{role,text,referenceRoles}`, transport `{text}` / `{trkorr,simulation}`), shared fixture activation-object-keys.json, ABAP per-step key types with fail-fast guards, smoke ICF + custom scenarios, docu/09 object-key-contract — PR #14, 2026-09-17
 - [x] ABAP mirror brought to parity with a4h_2023_zado main (DEV-only activation write unit, RAP OData V4 write service, RFC function group) — PR #5, 2026-09-15
 - [x] ST03 reader fixes from the RD1 export run (top-users 0 = unlimited, truncated-tcode aggregation, control bytes in JSON) — PR #4, 2026-09-15
 
 ## Daily log
+
+### 2026-09-17
+- S1 done on branch feat/connection-check-activation. New CDS type TargetEndpointCheck, `Endpoints` on TargetConnectionCheck, optional `targetSystemId` on the action (old two-argument calls keep working, usage-only), additive column lastCheckEndpointsJson. Browser check on 5293 in mock mode: DEV row shows Connected / Usage ok / Activation ok, PRD row Connected / Usage ok / Activation unpublished, both persisted across reload. Not exercised against RD1 (no session access); the live path reuses probeActivateService, which the S1 acceptance run on RD1 DEV and PROD will prove.
 
 ### 2026-09-16
 - Survey result to keep in mind: the planner emits seven step types the ABAP dispatcher hard-fails, so a live run stops at step 2 until S3 lands; S2 is the cheap, high-value precursor.

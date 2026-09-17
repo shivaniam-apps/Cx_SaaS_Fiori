@@ -26,6 +26,7 @@ import { listBtpDestinations, getBtpAccountInfo, isForbidden } from '../services
 import { fetchUserInfo } from '../services/coreService.js';
 import { hasAdminAccess } from '../features/auth/memberAccess.js';
 import { buildDestinationCatalog, draftFromDestination, DESTINATION_STATUS } from '../features/systems/destinationCatalog.js';
+import { connectionSummary, endpointBadges } from '../features/systems/connectionVerdict.js';
 
 const ENVIRONMENTS = ['DEV', 'QAS', 'PRD', 'SANDBOX'];
 
@@ -44,12 +45,24 @@ const EMPTY_DRAFT = {
   s4Release: '2023'
 };
 
-function connectionTag(system, liveVerdicts) {
+// Rollup tag plus one badge per ZADO endpoint (usage read service,
+// activation write unit); the model decides labels and designs.
+function connectionCell(system, liveVerdicts) {
   const verdict = liveVerdicts[system.destinationName];
-  const status = verdict ? (verdict.Ok ? 'OK' : verdict.Stage) : system.lastCheckStatus;
-  if (!status) return <Tag design="Neutral">Untested</Tag>;
-  if (status === 'OK') return <Tag design="Positive">Connected</Tag>;
-  return <Tag design="Negative">{status === 'DESTINATION' ? 'Destination failed' : 'Service failed'}</Tag>;
+  const summary = connectionSummary(system, verdict);
+  const badges = endpointBadges(system, verdict);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--adops-space-xs)', alignItems: 'flex-start' }}>
+      <Tag design={summary.design}>{summary.label}</Tag>
+      {badges.length ? (
+        <div style={{ display: 'flex', gap: 'var(--adops-space-xs)', flexWrap: 'wrap' }}>
+          {badges.map((badge) => (
+            <Tag key={badge.endpoint} design={badge.design} title={badge.message}>{badge.label}</Tag>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function TargetSystemsPage() {
@@ -207,7 +220,7 @@ export function TargetSystemsPage() {
   const testSystem = async (system) => {
     setTesting((t) => ({ ...t, [system.ID]: true }));
     try {
-      const verdict = await checkConnection(system.destinationName, system.serviceRootPath || null);
+      const verdict = await checkConnection(system.destinationName, system.serviceRootPath || null, system.ID);
       setVerdicts((v) => ({ ...v, [system.destinationName]: verdict }));
     } catch (e) {
       setVerdicts((v) => ({
@@ -266,7 +279,7 @@ export function TargetSystemsPage() {
               <TableCell><span>{system.environment || '—'}</span></TableCell>
               <TableCell><span>{system.systemId || '—'} / {system.client || '—'}</span></TableCell>
               <TableCell><span>{system.s4Release || '—'}</span></TableCell>
-              <TableCell>{connectionTag(system, verdicts)}</TableCell>
+              <TableCell>{connectionCell(system, verdicts)}</TableCell>
               <TableCell>
                 <div style={{ display: 'flex', gap: 'var(--adops-space-xs)' }}>
                   {admin ? (
