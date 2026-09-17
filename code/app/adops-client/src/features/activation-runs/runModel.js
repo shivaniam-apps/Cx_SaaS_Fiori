@@ -96,6 +96,39 @@ export function canCancelRun(run) {
   return isRunActive(run) && !run.CancelRequested;
 }
 
+// Operator decisions on single steps (skipActivationStep /
+// rollbackActivationStep). The same rules gate the server actions; here
+// they gate the buttons, so a click never answers "not allowed".
+export const OPERATOR_ACTION = { SKIPPED: 'SKIPPED', ROLLED_BACK: 'ROLLED_BACK', ROLLBACK_REQUESTED: 'ROLLBACK_REQUESTED' };
+const EXECUTED_STEP_STATES = ['SUCCESS', 'WARNING'];
+
+function stepSatisfied(step) {
+  return EXECUTED_STEP_STATES.includes(step.Status)
+    || (step.Status === 'SKIPPED' && (Boolean(step.ExistsAlready) || step.OperatorAction === OPERATOR_ACTION.SKIPPED));
+}
+
+export function stepOperatorActions(step, run) {
+  const none = { canSkip: false, canRollback: false, rollbackAuditOnly: false };
+  if (!step || !run) return none;
+  if (isRunActive(run) || ['EXECUTING', 'SIMULATING'].includes(run.PlanStatus)) return none;
+  const executed = EXECUTED_STEP_STATES.includes(step.Status);
+  return {
+    canSkip: step.Status !== 'RUNNING' && !stepSatisfied(step) && step.OperatorAction !== OPERATOR_ACTION.SKIPPED,
+    canRollback: executed,
+    rollbackAuditOnly: executed && step.Reversible === false
+  };
+}
+
+// Suffix for the status tag when an operator decided on the step.
+export function operatorLabel(step) {
+  switch (step?.OperatorAction) {
+    case OPERATOR_ACTION.SKIPPED: return 'by operator';
+    case OPERATOR_ACTION.ROLLED_BACK: return 'by operator';
+    case OPERATOR_ACTION.ROLLBACK_REQUESTED: return 'rollback recorded';
+    default: return '';
+  }
+}
+
 // KPI cards partition Summary.Total exactly (Active + Succeeded + Failed +
 // Cancelled [+ Other]); "Other" only appears when the runner produced a status
 // the buckets do not know, so the strip still sums to the total.

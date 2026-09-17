@@ -475,6 +475,11 @@ context adops.db {
             CompletedAt       : Timestamp;
             DurationMs        : Integer;
             RetryCount        : Integer;
+            // Operator decisions (skipActivationStep / rollbackActivationStep)
+            OperatorAction    : String(20);   // SKIPPED | ROLLED_BACK | ROLLBACK_REQUESTED (audit-only)
+            OperatorNote      : String(500);
+            OperatorAt        : Timestamp;
+            OperatorBy        : String(120);
             messages          : Composition of many ActivationStepMessages
                                       on messages.step = $self;
       }

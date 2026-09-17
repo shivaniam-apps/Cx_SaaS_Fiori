@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  stepOperatorActions,
+  operatorLabel,
   isRunActive,
   isRunTerminal,
   progressLabel,
@@ -119,4 +121,28 @@ test('shouldRefetchStepMessages re-fetches while RUNNING and once on leaving RUN
   assert.equal(shouldRefetchStepMessages({ Status: 'SUCCESS' }, { Status: 'SUCCESS' }), false);
   assert.equal(shouldRefetchStepMessages({ Status: 'PENDING' }, { Status: 'PENDING' }), false);
   assert.equal(shouldRefetchStepMessages({ Status: 'RUNNING' }, null), false);
+});
+
+test('stepOperatorActions gates skip and rollback like the server predicates', () => {
+  const idle = { Status: 'SUCCEEDED', PlanStatus: 'PARTIAL' };
+  const none = { canSkip: false, canRollback: false, rollbackAuditOnly: false };
+  assert.deepEqual(stepOperatorActions({ Status: 'FAILED' }, idle), { canSkip: true, canRollback: false, rollbackAuditOnly: false });
+  assert.equal(stepOperatorActions({ Status: 'PENDING' }, idle).canSkip, true);
+  assert.equal(stepOperatorActions({ Status: 'SKIPPED', ExistsAlready: false }, idle).canSkip, true, 'dependency-skipped steps can be skipped');
+  assert.equal(stepOperatorActions({ Status: 'SKIPPED', ExistsAlready: true }, idle).canSkip, false, 'verify-first skips are satisfied');
+  assert.equal(stepOperatorActions({ Status: 'SKIPPED', OperatorAction: 'SKIPPED' }, idle).canSkip, false);
+  assert.equal(stepOperatorActions({ Status: 'RUNNING' }, idle).canSkip, false);
+  assert.deepEqual(stepOperatorActions({ Status: 'SUCCESS', Reversible: true }, idle), { canSkip: false, canRollback: true, rollbackAuditOnly: false });
+  assert.deepEqual(stepOperatorActions({ Status: 'WARNING', Reversible: false }, idle), { canSkip: false, canRollback: true, rollbackAuditOnly: true });
+  assert.deepEqual(stepOperatorActions({ Status: 'FAILED' }, { Status: 'RUNNING', PlanStatus: 'EXECUTING' }), none, 'nothing while the run is active');
+  assert.deepEqual(stepOperatorActions({ Status: 'SUCCESS' }, { Status: 'SUCCEEDED', PlanStatus: 'EXECUTING' }), none, 'nothing while the plan executes');
+  assert.deepEqual(stepOperatorActions(null, idle), none);
+});
+
+test('operatorLabel names the operator decision on the status tag', () => {
+  assert.equal(operatorLabel({ OperatorAction: 'SKIPPED' }), 'by operator');
+  assert.equal(operatorLabel({ OperatorAction: 'ROLLED_BACK' }), 'by operator');
+  assert.equal(operatorLabel({ OperatorAction: 'ROLLBACK_REQUESTED' }), 'rollback recorded');
+  assert.equal(operatorLabel({ Status: 'SUCCESS' }), '');
+  assert.equal(operatorLabel(null), '');
 });
