@@ -259,7 +259,7 @@ async function fetchPagedEntity({ targetSystem, entitySet, filter, orderBy, top 
   if (!result.ok) {
     throw Object.assign(
       new Error(`${entitySet} read failed with status ${result.status}: ${safeResponseData(result.data)}`),
-      { status: 502 }
+      { status: 502, remoteStatus: Number(result.status) || 0 }
     );
   }
 
@@ -345,27 +345,50 @@ async function fetchTransactionUsagePage({ targetSystem, periodFrom, periodTo, t
   return { ...page, rows: page.rows.map(mapTransactionUsage) };
 }
 
+// Extraction parameters travel as CDS entity parameters of
+// ZADO_C_USER_TX_USAGE (S6): the reader keeps only the top-N users per
+// transaction above the execution threshold BEFORE rows leave ABAP. OData V4
+// addresses a parameterized entity as <set>(P_...=...)/Set.
+const DEFAULT_TOP_USERS_PER_TCODE = 20;
+const DEFAULT_MIN_EXECUTIONS = 1;
+
+function extractionParameters({ topUsersPerTcode, minExecutions } = {}) {
+  const top = Number.isFinite(Number(topUsersPerTcode)) ? Math.max(0, Math.trunc(Number(topUsersPerTcode))) : DEFAULT_TOP_USERS_PER_TCODE;
+  const min = Number.isFinite(Number(minExecutions)) ? Math.max(1, Math.trunc(Number(minExecutions))) : DEFAULT_MIN_EXECUTIONS;
+  return { topUsersPerTcode: top, minExecutions: min };
+}
+
+function userTransactionUsageEntity(params) {
+  const { topUsersPerTcode, minExecutions } = extractionParameters(params);
+  return `UserTransactionUsage(P_TopUsers=${topUsersPerTcode},P_MinExecutions=${minExecutions})/Set`;
+}
+
 async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, top = 1000, skip = 0, req }) {
   const filters = [];
   if (periodFrom) filters.push(`PeriodFrom ge ${periodFrom}`);
   if (periodTo) filters.push(`PeriodTo le ${periodTo}`);
-  // Volume is bounded at the SOURCE: ZCL_ADO_Q_USER_TX keeps only the top-N
-  // users per tcode (default 20) before rows ever leave ABAP. Passing the N
-  // over the wire becomes a view parameter in the persisted-snapshot
-  // iteration; until then the requested values document intent.
-  void topUsersPerTcode;
-  void minExecutions;
-
-  const page = await fetchPagedEntity({
-    targetSystem,
-    entitySet: 'UserTransactionUsage',
+  const page = {
     filter: filters.join(' and ') || undefined,
     orderBy: 'TransactionCode asc,UserKey asc',
     top,
     skip,
     req
-  });
-  return { ...page, rows: page.rows.map(mapUserTransactionUsage) };
+  };
+
+  let result;
+  let parametersApplied = true;
+  try {
+    result = await fetchPagedEntity({ targetSystem, entitySet: userTransactionUsageEntity({ topUsersPerTcode, minExecutions }), ...page });
+  } catch (error) {
+    // An add-on without the parameterized entity (older than S6) answers
+    // 404 on the parameter path: fall back to the plain set, where the
+    // reader defaults apply, and tell the caller so the run log says so.
+    if (error?.remoteStatus !== 404) throw error;
+    LOG.warn(`UserTransactionUsage parameters not supported by ${targetSystem?.displayName || targetSystem?.destinationName || 'target'} (404 on the parameterized entity) - reader defaults apply.`);
+    parametersApplied = false;
+    result = await fetchPagedEntity({ targetSystem, entitySet: 'UserTransactionUsage', ...page });
+  }
+  return { ...result, parametersApplied, rows: result.rows.map(mapUserTransactionUsage) };
 }
 
 module.exports = {
@@ -373,6 +396,8 @@ module.exports = {
   activationEndpointVerdict,
   getBackendCapabilities,
   fetchPagedEntity,
+  extractionParameters,
+  userTransactionUsageEntity,
   fetchUsagePeriods,
   fetchTransactionUsagePage,
   fetchUserTransactionUsagePage,

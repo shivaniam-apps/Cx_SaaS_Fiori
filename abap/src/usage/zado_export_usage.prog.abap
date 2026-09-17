@@ -33,6 +33,11 @@ PARAMETERS p_top TYPE i DEFAULT 20.
 SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_min FOR FIELD p_min.
+PARAMETERS p_min TYPE i DEFAULT 1.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
 SELECTION-SCREEN COMMENT 1(31) c_ident FOR FIELD p_ident.
 PARAMETERS p_ident AS CHECKBOX DEFAULT ''.
 SELECTION-SCREEN END OF LINE.
@@ -41,6 +46,7 @@ INITIALIZATION.
   c_from  = 'Period from'.
   c_to    = 'Period to'.
   c_top   = 'Top users/transaction (0 = all)'.
+  c_min   = 'Min. executions per user row'.
   c_ident = 'Identified export (opt-in)'.
 
 CLASS lcl_export DEFINITION FINAL.
@@ -71,10 +77,11 @@ CLASS lcl_export IMPLEMENTATION.
     zcl_ado_st03_reader=>get_window(
       EXPORTING iv_from         = p_from
                 iv_to           = p_to
-                iv_pseudonymise = xsdbool( p_ident IS INITIAL )
-                iv_top_users    = p_top
-      IMPORTING et_tx_usage     = DATA(lt_tx)
-                et_user_tx      = DATA(lt_user) ).
+                iv_pseudonymise   = xsdbool( p_ident IS INITIAL )
+                iv_top_users      = p_top
+                iv_min_executions = p_min
+      IMPORTING et_tx_usage       = DATA(lt_tx)
+                et_user_tx        = DATA(lt_user) ).
 
     IF lt_tx IS INITIAL.
       WRITE: / 'No ST03N data in the selected window - nothing exported.'.

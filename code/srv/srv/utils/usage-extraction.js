@@ -108,9 +108,18 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
       const snapshotId = await createSnapshot(db, run, targetSystem, 'ST03N', granularity, periodFrom, periodTo, 'USERTCODE');
 
       const pseudonymise = run.Pseudonymised !== false && !targetSystem.identifiedUsageAllowed;
+      await log('INFO', 'USERTCODE', `Source bound: top ${topUsersPerTcode || 'all'} users per transaction, at least ${minExecutions} execution(s) per user row.`);
+      let parameterWarningLogged = false;
       const fetchPage = shouldMockSap()
-        ? (skip) => mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top: PAGE_SIZE, topUsersPerTcode })
-        : (skip) => fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, top: PAGE_SIZE, skip });
+        ? (skip) => mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top: PAGE_SIZE, topUsersPerTcode, minExecutions })
+        : async (skip) => {
+          const page = await fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, top: PAGE_SIZE, skip });
+          if (page.parametersApplied === false && !parameterWarningLogged) {
+            parameterWarningLogged = true;
+            await log('WARN', 'USERTCODE', 'The add-on ignored topUsersPerTcode / minExecutions (no parameterized UserTransactionUsage entity - ZADO older than S6); the reader defaults (20 users, 1 execution) apply.');
+          }
+          return page;
+        };
 
       rollup.users = await pageInto(db, {
         fetchPage,
@@ -294,11 +303,14 @@ function mockTransactionUsagePage({ periodFrom, periodTo, skip, top }) {
   return { rows: page, totalCount: rows.length, hasMore: skip + page.length < rows.length };
 }
 
-function mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top, topUsersPerTcode = 20 }) {
+// Mirrors the ABAP reader's bounds (S6): threshold first, then top-N per
+// transaction; topUsersPerTcode <= 0 means no limit.
+function mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top, topUsersPerTcode = 20, minExecutions = 1 }) {
   const random = seededRandom(4711);
   const rows = [];
+  const threshold = Math.max(1, Number(minExecutions) || 1);
   for (const r of mockRows()) {
-    const userCount = Math.min(r.users, topUsersPerTcode);
+    const userCount = topUsersPerTcode > 0 ? Math.min(r.users, topUsersPerTcode) : r.users;
     for (let i = 0; i < userCount; i++) {
       const department = MOCK_DEPARTMENTS[(r.weight + i) % MOCK_DEPARTMENTS.length];
       rows.push({
@@ -313,9 +325,10 @@ function mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top, topUser
       });
     }
   }
-  rows.sort((a, b) => a.TransactionCode.localeCompare(b.TransactionCode) || a.UserKey.localeCompare(b.UserKey));
-  const page = rows.slice(skip, skip + top);
-  return { rows: page, totalCount: rows.length, hasMore: skip + page.length < rows.length };
+  const kept = rows.filter((row) => row.ExecutionCount >= threshold);
+  kept.sort((a, b) => a.TransactionCode.localeCompare(b.TransactionCode) || a.UserKey.localeCompare(b.UserKey));
+  const page = kept.slice(skip, skip + top);
+  return { rows: page, totalCount: kept.length, hasMore: skip + page.length < kept.length, parametersApplied: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -485,5 +498,6 @@ module.exports = {
   isCustomTcode,
   parseSwncEntryId,
   filterDialogRows,
-  sanitizeExtractJson
+  sanitizeExtractJson,
+  mockUserTransactionUsagePage
 };
