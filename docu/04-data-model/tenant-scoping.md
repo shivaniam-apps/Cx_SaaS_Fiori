@@ -16,7 +16,7 @@ writes `GLOBAL` everywhere, and switching multitenancy on later is a
 configuration change, not a data migration.
 
 Mocked users lose their `tenant` attribute while `cds.requires.multitenancy`
-is off, so the two-tenant test (`test/tenant-scope.test.js`) assigns tenants
+is off, so the two-tenant test (`test/tenant-scope.test.mjs`) assigns tenants
 in a post-auth middleware keyed by user id, mirroring what XSUAA does.
 
 ## Rules

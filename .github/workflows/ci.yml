@@ -1,0 +1,78 @@
+# CI gate (roadmap A6). Runs on every pull request and on main after a
+# merge. Three independent jobs so a client lint failure and a server test
+# failure show up side by side.
+#
+# Branch protection is unavailable on this plan, so a red check does not
+# block the merge button by itself: the rule (git-workflow.md) is that a PR
+# merges only with every job green. See docu/14-local-development/ci-gate.md.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 22
+
+jobs:
+  server:
+    name: CAP server (lint, mocha, production build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: code/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+        env:
+          NODE_ENV: test
+      # cds build --production plus the deployer/runtime CSN check
+      # (scripts/prepare-basic-runtime.mjs): a model change that breaks the
+      # PostgreSQL deployer fails here, not on cf deploy.
+      - run: npm run build:basic
+
+  client:
+    name: Client (lock check, lint, node --test, Linux build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code/app/adops-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: code/app/adops-client/package-lock.json
+      # Before npm ci: a lock stripped of the Linux rolldown binary fails
+      # the build with a misleading module-not-found error.
+      - run: node scripts/check-rolldown-lock.mjs
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  tracker:
+    name: Program tracker consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: node scripts/tracker.mjs --check

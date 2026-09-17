@@ -87,8 +87,7 @@ module.exports = cds.service.impl(async function () {
             return SELECT.one.from('adops.db.AppMappingOverlay').where({ ID: existing.ID });
         }
         row.Revision = 1;
-        const inserted = await INSERT.into('adops.db.AppMappingOverlay').entries(row);
-        const key = inserted?.results?.[0]?.values?.[0] || row.ID;
+        await INSERT.into('adops.db.AppMappingOverlay').entries(row);
         return SELECT.one.from('adops.db.AppMappingOverlay').where({ MappingKey: mappingKey, Origin: 'CUSTOMER' });
     });
 
