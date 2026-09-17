@@ -41,12 +41,14 @@ describe('s4 fiori adapter row mappers (the ABAP<->CAP contract)', () => {
 });
 
 describe('usage extraction helpers', () => {
-  it('pseudonymisation is stable per tenant and never echoes the user id', () => {
-    const a = pseudonymiseUser('JSMITH', 't1');
-    expect(a).to.equal(pseudonymiseUser('jsmith', 't1'));       // case-insensitive stable
-    expect(a).to.not.equal(pseudonymiseUser('JSMITH', 't2'));   // per-tenant salt
+  it('pseudonymisation is stable per salt, differs across salts and never echoes the user id', () => {
+    const a = pseudonymiseUser('JSMITH', 'salt-of-tenant-a');
+    expect(a).to.equal(pseudonymiseUser('jsmith', 'salt-of-tenant-a'));       // case-insensitive stable
+    expect(a).to.not.equal(pseudonymiseUser('JSMITH', 'salt-of-tenant-b'));   // per-tenant secret
     expect(a).to.have.lengthOf(24);
     expect(a.toUpperCase()).to.not.contain('JSMITH');
+    // A9: the tenant id itself is no longer an acceptable salt.
+    expect(() => pseudonymiseUser('JSMITH', '')).to.throw(/salt/);
   });
 
   it('derives line of business from the application component', () => {

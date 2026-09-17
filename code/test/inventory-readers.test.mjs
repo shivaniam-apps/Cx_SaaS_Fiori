@@ -21,6 +21,7 @@ const {
   mockRoleUsersPage,
   mockRoleTransactionsPage
 } = require('../srv/srv/utils/usage-extraction.js');
+const { pseudonymSaltFor } = require('../srv/srv/utils/tenant-secrets.js');
 
 // ---------------------------------------------------------------------------
 // S8: roles and users readers (USR02, AGR_*) fill the inventory tables.
@@ -136,7 +137,9 @@ describe('extraction fills the inventory tables (mock, in-memory db)', function 
     const inventoryKeys = new Set(users.map((u) => u.UserKey));
     expect([...usageKeys].every((k) => inventoryKeys.has(k))).to.equal(true, 'every usage user exists in the inventory');
     expect(assignments.every((a) => inventoryKeys.has(a.UserKey))).to.equal(true);
-    expect(users[0].UserKey).to.equal(pseudonymiseUser(mockUserInventoryPage({ periodTo: '2026-06-30', skip: 0, top: 1 }).rows[0].UserKey, 'T'));
+    // Pseudonymised with the tenant's secret salt (A9), never the tenant id.
+    const salt = await pseudonymSaltFor('T');
+    expect(users[0].UserKey).to.equal(pseudonymiseUser(mockUserInventoryPage({ periodTo: '2026-06-30', skip: 0, top: 1 }).rows[0].UserKey, salt));
 
     // Rollups: active dialog users, role counts, distinct tcodes from usage.
     expect(users.some((u) => u.IsActiveDialogUser)).to.equal(true);

@@ -45,6 +45,9 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 
 - I27 (2026-09-17) server.js registers the /-/basic/saas-provisioning callbacks only when the tier is basic; a standard-tier instance (same shared PostgreSQL, same registry entry) would answer 404 on subscribe. Register them for every non-enterprise tier as part of T2 (subscription lifecycle).
 
+- I28 (2026-09-17) A9 CAP side passes P_TopUsers / P_MinExecutions to the usage entity whenever $metadata declares them, which is the CAP half of S6; scheduling should verify on RD1 and close S6 instead of re-implementing it.
+- I29 (2026-09-17) docu/15 target-system onboarding (A10) must include "run ZADO_CFG_INIT in every productive client" and the check that the connection verdict reports the pseudonym secret as configured (add a SystemInfo field for it in the usage service).
+
 ## Parked
 
 (none)

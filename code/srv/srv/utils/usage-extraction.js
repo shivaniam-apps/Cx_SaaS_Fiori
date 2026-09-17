@@ -10,6 +10,7 @@ const {
   fetchRoleTransactionsPage,
   INVENTORY_PAGE_SIZE
 } = require('./s4-fiori-adapter.js');
+const { pseudonymSaltFor } = require('./tenant-secrets.js');
 
 const { SELECT, INSERT, UPDATE } = cds.ql;
 const LOG = cds.log('usage-extraction');
@@ -63,7 +64,8 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
   // Applied identically to usage, inventory and assignment rows so the
   // pseudonyms still correlate across the four tables.
   const pseudonymise = run.Pseudonymised !== false && !targetSystem.identifiedUsageAllowed;
-  const userKeyOf = (key) => (pseudonymise ? pseudonymiseUser(key, run.TenantId) : key);
+  const salt = pseudonymise ? await pseudonymSaltFor(run.TenantId) : null;
+  const userKeyOf = (key) => (pseudonymise ? pseudonymiseUser(key, salt) : key);
   let userTcodeSnapshotId = null;
 
   try {
@@ -125,7 +127,7 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
       const fetchPage = shouldMockSap()
         ? (skip) => mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top: PAGE_SIZE, topUsersPerTcode, minExecutions })
         : async (skip) => {
-          const page = await fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, top: PAGE_SIZE, skip });
+          const page = await fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, tenantId: run.TenantId, top: PAGE_SIZE, skip });
           if (page.parametersApplied === false && !parameterWarningLogged) {
             parameterWarningLogged = true;
             await log('WARN', 'USERTCODE', 'The add-on ignored topUsersPerTcode / minExecutions (no parameterized UserTransactionUsage entity - ZADO older than S6); the reader defaults (20 users, 1 execution) apply.');
@@ -365,9 +367,14 @@ async function pageInto(db, { fetchPage, snapshotId, mapRow, into, reportProgres
   return written;
 }
 
-function pseudonymiseUser(userKey, tenantId) {
+// SHA-256 over a per-tenant random secret (tenant-secrets.js) and the
+// uppercased user id, 24 hex chars like the add-on's ZCL_ADO_PSEUDONYM. The
+// salt is a secret, never the tenant id: a pseudonym must not be
+// reproducible by anyone who merely knows which tenant it belongs to.
+function pseudonymiseUser(userKey, salt) {
+  if (!salt) throw new Error('pseudonymiseUser: a tenant salt is required');
   return createHash('sha256')
-    .update(`${tenantId || 'GLOBAL'}::${String(userKey || '').toUpperCase()}`)
+    .update(`ADOPS::${salt}::${String(userKey || '').toUpperCase()}`)
     .digest('hex')
     .slice(0, 24);
 }
@@ -696,12 +703,13 @@ async function importUsageExtract({ targetSystem, extract, requestedBy, tenantId
     // Defence in depth: hash again unless the file explicitly declares an
     // identified export AND the system allows identified usage.
     const keepIdentified = !pseudonymisedRequired(extract, targetSystem);
+    const salt = keepIdentified || pseudonymised ? null : await pseudonymSaltFor(tenantId);
     await db.run(INSERT.into('adops.db.UserTransactionUsage').entries(userTcodes.map((row) => ({
       ID: randomUUID(),
       snapshot_ID: userSnapshot,
       targetSystem_ID: targetSystem.ID,
       TenantId: tenantId,
-      UserKey: keepIdentified ? row.user : (pseudonymised ? row.user : pseudonymiseUser(row.user, tenantId)),
+      UserKey: keepIdentified ? row.user : (pseudonymised ? row.user : pseudonymiseUser(row.user, salt)),
       TransactionCode: row.tcode,
       PeriodFrom: periodFrom,
       PeriodTo: periodTo,
