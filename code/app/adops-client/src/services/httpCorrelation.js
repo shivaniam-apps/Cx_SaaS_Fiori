@@ -20,7 +20,7 @@ export function setApiTimingListener(listener) {
 
 const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
-function notifyTiming(config, { status, failed }) {
+function notifyTiming(config, { status, failed, message }) {
   if (!apiTimingListener || !config || config.adopsRequestStart === undefined) return;
   try {
     apiTimingListener({
@@ -29,6 +29,7 @@ function notifyTiming(config, { status, failed }) {
       status: status ?? null,
       durationMs: now() - config.adopsRequestStart,
       failed: Boolean(failed),
+      message: String(message || ''),
       correlationId: correlation.lastCorrelationId
     });
   } catch {
@@ -51,7 +52,11 @@ export function installCorrelation(http) {
     },
     (error) => {
       correlation.adoptResponseHeaders(error?.response?.headers);
-      notifyTiming(error?.config, { status: error?.response?.status, failed: true });
+      notifyTiming(error?.config, {
+        status: error?.response?.status,
+        failed: true,
+        message: error?.response?.data?.error?.message || error?.message
+      });
       return Promise.reject(error);
     }
   );

@@ -2,7 +2,7 @@ import React from 'react';
 import { IllustratedMessage } from '@ui5/webcomponents-react/IllustratedMessage';
 import { Button } from '@ui5/webcomponents-react/Button';
 import { Text } from '@ui5/webcomponents-react/Text';
-import { reportRenderError } from '../services/coreService.js';
+import { reportRenderError } from '../services/telemetryService.js';
 
 // Keyed on the route pathname by the caller so a crash on one page never
 // strands the whole app: navigating remounts a fresh boundary.

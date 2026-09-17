@@ -14,6 +14,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## Accomplished
 
+- [x] I16 Global error reporting: WINDOW_ERROR, UNHANDLED_REJECTION and API_FAILURE (network / 5xx) crash reports through recordClientError, deduped and session-capped client-side — this PR, 2026-09-17
 - [x] I17 Client telemetry emitter: PAGE_VIEWED + activation usage events and APP_LOAD / slow ROUTE_RENDER / slow API performance events batched to recordTelemetryBatch, gated by getTelemetrySettings — PR #29, 2026-09-17
 - [x] O7 Product Insights page on AdopsPageTabs (/product-insights/:view?): Feedback triage, Crash reports triage, Usage and Performance server summaries — this PR, 2026-09-17
 - [x] O3 Audit Log page: bounded, server-filtered AuditEvents read (type / object type / object / user / severity, load more) with the verifyAuditChain verdict and per-event hash detail — this PR, 2026-09-17
@@ -27,6 +28,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 ## Daily log
 
 ### 2026-09-17
+- I16 done on feat/global-error-reporting: features/telemetry/errorReporting.js (report builder, dedupe/cap gate, API-failure policy, rejection describer; node --test), crash reporting moved into telemetryService with window error / unhandledrejection listeners and failure capture on the shared axios timing listener; verified WINDOW_ERROR and UNHANDLED_REJECTION rows in the browser (I17 merged via PR #29).
 - I17 done on feat/client-telemetry-emitter: features/telemetry queue + performancePolicy (node --test), services/telemetryService (batched flush, backoff, page-hide keepalive flush, settings gate), API timing listener on the shared axios installer, route tracking in App.jsx, plan create/simulate/execute usage events; verified PAGE_VIEWED and APP_LOAD rows and the Usage tab in the browser (O7 merged via PR #28). PR #29 opened; merged origin/main (A6 CI gate) into the branch. O6 stays blocked on S8.
 - O7 done on feat/product-insights-page: Feedback (bounded server-filtered PilotFeedback + groupby status KPIs + triage dialog), Crash reports (ClientErrorReports + status change + stack detail), Usage / Performance over queryUsageSummary / queryPerformanceSummary with a window select; verified triage, status change and all tabs in the browser (O3 merged via PR #24).
 - O3 done on feat/audit-log-page: Audit Log page over AdminService AuditEvents (server $filter/$top/$skip/$count, distinct filter values via $apply groupby) with the chain verdict strip + KPI cards and an event detail panel (hashes, correlation, SAP response); verified filters and verdict in the browser (O2 merged via PR #22).
