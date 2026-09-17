@@ -31,6 +31,7 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I19 (2026-09-17) s4-http-client.js still defaults S4_DESTINATION to the hardcoded S4H_2023 (architecture.md forbids environment identifiers in code). Drop the fallback and make callers without a target-system destination fail with a clear error; touches the scheduling workstream's adapters, so land it as a shared change.
 - I20 (2026-09-17) dev.mtaext requests the PostgreSQL plan "development"; confirm the plan is entitled in the ap10 subaccount before the first dev deploy, else switch it to "standard" (plans cannot be changed on an existing instance by the deployer).
 - I21 (2026-09-17) server.js still defaults CORS_ORIGINS to Vite's 5173 while the clients run on 5273/5283/5293/5303/5313; align the local default with the worktree port slots.
+- I17 (2026-09-17) The client emits no usage or performance telemetry yet (CoreService recordTelemetryBatch exists; ChronoPilot has features/telemetry/queue.js + performancePolicy.js as the template), so the Product Insights Usage and Performance tabs (O7) stay empty until a client emitter lands. Pair with I16 (window error reporting) and A13 rate limiting.
 
 ## Parked
 
