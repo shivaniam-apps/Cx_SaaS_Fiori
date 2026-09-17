@@ -32,6 +32,9 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I20 (2026-09-17) dev.mtaext requests the PostgreSQL plan "development"; confirm the plan is entitled in the ap10 subaccount before the first dev deploy, else switch it to "standard" (plans cannot be changed on an existing instance by the deployer).
 - I21 (2026-09-17) server.js still defaults CORS_ORIGINS to Vite's 5173 while the clients run on 5273/5283/5293/5303/5313; align the local default with the worktree port slots.
 
+- I22 (2026-09-17) Users/Roles admin handlers run only under the hybrid/production profiles and read XSUAA through UserManagement; the tenant filter on their db reads is in place but untested locally. Cover them in the two-tenant suite once a hybrid test binding exists (A12).
+- I23 (2026-09-17) PilotFeedback carries a plain TenantId (stamped per tenant since A5) but not the aspect; align it with the other seven when the entity is next touched.
+
 ## Parked
 
 (none)

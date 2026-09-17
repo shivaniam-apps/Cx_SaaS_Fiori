@@ -1,4 +1,5 @@
 const cds = require('@sap/cds');
+const { currentTenant, tenantFilter } = require('./tenant-scope.js');
 const crypto = require('node:crypto');
 const { isDatabaseLess } = require('./tier.js');
 const {
@@ -121,7 +122,7 @@ function registerFeedbackTelemetryHandlers(service, { inMemory }) {
             SubmittedAt: new Date().toISOString(),
             SubmittedBy: req.user?.id || 'anonymous',
             SubmittedByName: submitterDisplayName(req),
-            TenantId: req.user?.tenant || null,
+            TenantId: currentTenant(),
             Category: category.value,
             Title: title,
             Description: description,
@@ -157,7 +158,7 @@ function registerFeedbackTelemetryHandlers(service, { inMemory }) {
             const settings = await readEffectiveTelemetrySettings();
             const sessionId = clampText(req.data.sessionId, 64);
             const appVersion = clampText(req.data.appVersion, 60);
-            const tenantId = req.user?.tenant || null;
+            const tenantId = currentTenant();
             const userId = applyIdentification(req.user?.id, settings.UserIdentificationMode);
             const correlationId = resolveCorrelationId(req, null);
             const receivedAt = new Date().toISOString();
@@ -266,7 +267,7 @@ function registerFeedbackTelemetryHandlers(service, { inMemory }) {
 
             const correlationId = resolveCorrelationId(req, req.data.correlationId);
             const baseRow = {
-                TenantId: req.user?.tenant || null,
+                TenantId: currentTenant(),
                 UserId: applyIdentification(req.user?.id, settings.UserIdentificationMode),
                 SessionId: clampText(req.data.sessionId, 64),
                 ErrorType: errorType.valid ? errorType.value : 'WINDOW_ERROR',
@@ -298,7 +299,7 @@ function registerFeedbackTelemetryHandlers(service, { inMemory }) {
                 return { received: true, fingerprint, occurrenceCount: 1 };
             }
 
-            const existing = await SELECT.one.from('adops.db.ClientErrorReports').where({ Fingerprint: fingerprint });
+            const existing = await SELECT.one.from('adops.db.ClientErrorReports').where({ Fingerprint: fingerprint, ...tenantFilter() });
             if (existing) {
                 const occurrenceCount = (existing.OccurrenceCount || 1) + 1;
                 await UPDATE('adops.db.ClientErrorReports')

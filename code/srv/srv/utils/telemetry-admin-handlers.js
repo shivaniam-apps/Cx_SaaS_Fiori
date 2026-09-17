@@ -7,6 +7,7 @@ const {
 } = require('./telemetry-settings.js');
 const { runTelemetryRetentionCleanup } = require('./telemetry-retention.js');
 const { writeAdminAuditEvent } = require('./admin-audit.js');
+const { tenantFilter } = require('./tenant-scope.js');
 
 const FEEDBACK_STATUSES = new Set(['NEW', 'UNDER_REVIEW', 'PLANNED', 'IMPLEMENTED', 'DECLINED', 'DUPLICATE', 'CLOSED']);
 const ERROR_STATUSES = new Set(['NEW', 'INVESTIGATING', 'RESOLVED', 'IGNORED']);
@@ -108,11 +109,11 @@ function registerTelemetryAdminHandlers(service) {
         const status = String(req.data.status || '').toUpperCase();
         if (!ERROR_STATUSES.has(status)) return req.reject(400, `Unsupported error status: ${status}`);
 
-        const existing = await SELECT.one.from('adops.db.ClientErrorReports').where({ ID: id });
+        const existing = await SELECT.one.from('adops.db.ClientErrorReports').where({ ID: id, ...tenantFilter() });
         if (!existing) return req.reject(404, 'Error report not found.');
 
-        await UPDATE('adops.db.ClientErrorReports').set({ Status: status }).where({ ID: id });
-        return SELECT.one.from('adops.db.ClientErrorReports').where({ ID: id });
+        await UPDATE('adops.db.ClientErrorReports').set({ Status: status }).where({ ID: id, ...tenantFilter() });
+        return SELECT.one.from('adops.db.ClientErrorReports').where({ ID: id, ...tenantFilter() });
     });
 
     // Server-side aggregation for the Usage view: the frontend never
@@ -124,7 +125,7 @@ function registerTelemetryAdminHandlers(service) {
         const windowDays = boundedDays(req.data.days);
         const cutoff = daysAgoIso(windowDays);
         const usage = 'adops.db.UsageEvents';
-        const since = { Timestamp: { '>=': cutoff } };
+        const since = { Timestamp: { '>=': cutoff }, ...tenantFilter() };
 
         const [totals, users, sessions, byEventName, byFeature, byVersion, feedbackByFeature] = await Promise.all([
             SELECT.one.from(usage).columns(count('total')).where(since),
@@ -133,7 +134,7 @@ function registerTelemetryAdminHandlers(service) {
             SELECT.from(usage).columns('EventName', count()).where(since).groupBy('EventName'),
             SELECT.from(usage).columns('Feature', 'Outcome', count()).where(since).groupBy('Feature', 'Outcome'),
             SELECT.from(usage).columns('AppVersion', count()).where(since).groupBy('AppVersion'),
-            SELECT.from('adops.db.PilotFeedback').columns('Feature', count()).where({ SubmittedAt: { '>=': cutoff } }).groupBy('Feature'),
+            SELECT.from('adops.db.PilotFeedback').columns('Feature', count()).where({ SubmittedAt: { '>=': cutoff }, ...tenantFilter() }).groupBy('Feature'),
         ]);
 
         const desc = (rows) => [...rows].sort((a, b) => (b.count || 0) - (a.count || 0));
@@ -156,7 +157,7 @@ function registerTelemetryAdminHandlers(service) {
         const windowDays = boundedDays(req.data.days);
         const cutoff = daysAgoIso(windowDays);
         const perf = 'adops.db.PerformanceEvents';
-        const since = { Timestamp: { '>=': cutoff } };
+        const since = { Timestamp: { '>=': cutoff }, ...tenantFilter() };
 
         const [totals, failed, operations] = await Promise.all([
             SELECT.one.from(perf).columns(count('total')).where(since),
