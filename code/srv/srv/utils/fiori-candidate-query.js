@@ -1,6 +1,7 @@
 const cds = require('@sap/cds');
 
 const { SELECT } = cds.ql;
+const { deriveActivationEffort } = require('./activation-plan.js');
 
 // ---------------------------------------------------------------------------
 // The I/O half of the recommendation pipeline: builds the candidate set for
@@ -133,6 +134,18 @@ async function buildCandidates({ runId, minExecutions = 1, lineOfBusinessIn = []
     }
   }
 
+  // The template yields the same counts for every app today (one Z_ADO role,
+  // one service pair plus the shared foundation/content/role/transport
+  // steps); derive per app anyway so catalog-driven differences flow through.
+  const activationEffortOf = (candidate, catalogRow) => {
+    const effort = deriveActivationEffort({
+      fioriId: candidate.fioriId,
+      bspApplication: catalogRow?.BspApplication,
+      businessRoleId: catalogRow?.BusinessRoleId || candidate.requiredBusinessRole
+    });
+    return { newRolesNeeded: effort.newRolesNeeded, activationStepCount: effort.activationStepCount };
+  };
+
   // Distinct users: UNION across matched tcodes; roles/backend enrichment.
   const candidates = [...byApp.values()].map((candidate) => {
     const union = new Set();
@@ -151,8 +164,9 @@ async function buildCandidates({ runId, minExecutions = 1, lineOfBusinessIn = []
       businessRoleId: catalogRow?.BusinessRoleId || candidate.requiredBusinessRole || '',
       alreadyAdopted: adoptedIds.has(candidate.fioriId),
       prerequisiteCount: candidate.prerequisiteNote ? 1 : 0,
-      newRolesNeeded: 1,
-      activationStepCount: 4
+      // Effort from the activation template (activation-plan.js), never a
+      // constant: the single-app plan for this Fiori ID.
+      ...activationEffortOf(candidate, catalogRow)
     };
   });
 
