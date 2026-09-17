@@ -41,6 +41,8 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 
 - I26 (2026-09-17) The direct-access variables (ADOPTOPS_S4_URL_OVERRIDES, DIRECT_USER/PASSWORD, INSECURE_TLS) are development conveniences; add a boot-time warning (or refusal under the production profile) when any of them is set in a Cloud Foundry instance.
 
+- I27 (2026-09-17) server.js registers the /-/basic/saas-provisioning callbacks only when the tier is basic; a standard-tier instance (same shared PostgreSQL, same registry entry) would answer 404 on subscribe. Register them for every non-enterprise tier as part of T2 (subscription lifecycle).
+
 ## Parked
 
 (none)
