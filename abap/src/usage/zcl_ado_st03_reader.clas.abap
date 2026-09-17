@@ -43,11 +43,15 @@ CLASS zcl_ado_st03_reader DEFINITION
            END OF ty_user_tx,
            ty_user_tx_t TYPE STANDARD TABLE OF ty_user_tx WITH EMPTY KEY.
 
+    " iv_top_users: top-N users per transaction (<= 0 = all).
+    " iv_min_executions: user x tcode rows below this count are dropped
+    " BEFORE the top-N cut, so the N are always the meaningful users.
     CLASS-METHODS get_window
       IMPORTING iv_from           TYPE d
                 iv_to             TYPE d
                 iv_pseudonymise   TYPE abap_bool DEFAULT abap_true
                 iv_top_users      TYPE i DEFAULT 20
+                iv_min_executions TYPE i DEFAULT 1
       EXPORTING et_tx_usage       TYPE ty_tx_usage_t
                 et_user_tx        TYPE ty_user_tx_t.
 
@@ -75,7 +79,7 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
   METHOD get_window.
     CLEAR: et_tx_usage, et_user_tx.
 
-    DATA(lv_cache_key) = |{ iv_from }::{ iv_to }::{ iv_pseudonymise }::{ iv_top_users }|.
+    DATA(lv_cache_key) = |{ iv_from }::{ iv_to }::{ iv_pseudonymise }::{ iv_top_users }::{ iv_min_executions }|.
     READ TABLE gt_cache INTO DATA(ls_hit) WITH KEY cache_key = lv_cache_key.
     IF sy-subrc = 0.
       et_tx_usage = ls_hit-tx_usage.
@@ -215,6 +219,10 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
     ENDLOOP.
     DATA lt_user_all TYPE ty_user_tx_t.
     lt_user_all = lt_user_agg.
+    " Threshold first (S6): occasional users never compete for a top-N slot.
+    IF iv_min_executions > 1.
+      DELETE lt_user_all WHERE execution_count < iv_min_executions.
+    ENDIF.
     SORT lt_user_all BY transaction_code ASCENDING execution_count DESCENDING.
 
     " Volume bound at the source: only the top-N users per transaction leave

@@ -26,6 +26,26 @@ CLASS zcl_ado_q_user_tx IMPLEMENTATION.
     DATA(lv_from) = CONV d( sy-datum - 180 ).
     DATA(lv_to)   = sy-datum.
     DATA lv_tcode TYPE c LENGTH 20.
+
+    " Entity parameters (S6): P_TopUsers / P_MinExecutions forwarded by the
+    " SaaS extraction; absent or empty -> the reader defaults (20 / 1).
+    DATA lv_top_users TYPE i VALUE 20.
+    DATA lv_min_exec  TYPE i VALUE 1.
+    LOOP AT io_request->get_parameters( ) INTO DATA(ls_parameter).
+      CASE to_upper( ls_parameter-parameter_name ).
+        WHEN 'P_TOPUSERS'.
+          IF ls_parameter-value IS NOT INITIAL.
+            lv_top_users = ls_parameter-value.
+          ENDIF.
+        WHEN 'P_MINEXECUTIONS'.
+          IF ls_parameter-value IS NOT INITIAL.
+            lv_min_exec = ls_parameter-value.
+          ENDIF.
+      ENDCASE.
+    ENDLOOP.
+    IF lv_min_exec < 1.
+      lv_min_exec = 1.
+    ENDIF.
     TRY.
         DATA(lt_ranges) = io_request->get_filter( )->get_as_ranges( ).
         READ TABLE lt_ranges WITH KEY name = 'PERIODFROM' INTO DATA(ls_from).
@@ -45,9 +65,11 @@ CLASS zcl_ado_q_user_tx IMPLEMENTATION.
     ENDTRY.
 
     zcl_ado_st03_reader=>get_window(
-      EXPORTING iv_from = lv_from
-                iv_to   = lv_to
-      IMPORTING et_user_tx = DATA(lt_all) ).
+      EXPORTING iv_from           = lv_from
+                iv_to             = lv_to
+                iv_top_users      = lv_top_users
+                iv_min_executions = lv_min_exec
+      IMPORTING et_user_tx        = DATA(lt_all) ).
 
     IF lv_tcode IS NOT INITIAL.
       DELETE lt_all WHERE transaction_code <> lv_tcode.
