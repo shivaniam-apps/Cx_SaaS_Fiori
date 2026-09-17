@@ -45,7 +45,7 @@ module.exports = cds.service.impl(function () {
         let results = {};
         results.user = req.user.id;
         let username = req.req?.authInfo?.getGivenName?.();
-        if (req.user.hasOwnProperty('locale')) {
+        if (Object.hasOwn(req.user, 'locale')) {
             results.locale = req.user.locale;
         }
         if (username) {

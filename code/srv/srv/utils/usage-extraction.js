@@ -335,6 +335,7 @@ const TASK_TYPE_SUFFIX = /\s[A-Z]$/;
 // session) that strict JSON.parse rejects. Strip C0 controls except tab/CR/LF
 // so one garbage row cannot block a whole file import.
 function sanitizeExtractJson(payload) {
+  // eslint-disable-next-line no-control-regex -- stripping raw control bytes is the point
   return String(payload || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 }
 
