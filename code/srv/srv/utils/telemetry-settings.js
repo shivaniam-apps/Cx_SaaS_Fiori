@@ -1,5 +1,6 @@
 const cds = require('@sap/cds');
 const { isDatabaseLess } = require('./tier.js');
+const { currentTenant, tenantFilter, GLOBAL_TENANT } = require('./tenant-scope.js');
 
 const SINGLETON_KEY = 'GLOBAL';
 
@@ -24,10 +25,16 @@ const DEFAULT_TELEMETRY_SETTINGS = Object.freeze({
 const IDENTIFICATION_MODES = new Set(['IDENTIFIED', 'HASHED', 'ANONYMOUS']);
 
 // Ingestion reads settings on every event; a short TTL cache keeps that off
-// the database without letting admin changes lag noticeably.
+// the database without letting admin changes lag noticeably. One entry per
+// tenant (A5): a tenant reads its own singleton row, falls back to the
+// GLOBAL row, then to the defaults.
 const CACHE_TTL_MS = 30000;
-let cached = null;
-let cachedAt = 0;
+const cache = new Map();
+
+function pickSettingsRow(rows, tenant) {
+    if (!rows || !rows.length) return null;
+    return rows.find((row) => row.TenantId === tenant) || rows.find((row) => row.TenantId === GLOBAL_TENANT) || rows[0];
+}
 
 function coerceBoolean(value, fallback) {
     return typeof value === 'boolean' ? value : fallback;
@@ -59,22 +66,25 @@ function normalizeSettings(row = {}) {
 
 async function readEffectiveTelemetrySettings() {
     const now = Date.now();
-    if (cached && now - cachedAt < CACHE_TTL_MS) return cached;
+    const tenant = currentTenant();
+    const hit = cache.get(tenant);
+    if (hit && now - hit.at < CACHE_TTL_MS) return hit.value;
     if (isDatabaseLess()) {
-        cached = { ...DEFAULT_TELEMETRY_SETTINGS };
-        cachedAt = now;
-        return cached;
+        const value = { ...DEFAULT_TELEMETRY_SETTINGS };
+        cache.set(tenant, { value, at: now });
+        return value;
     }
+    let value;
     try {
-        const row = await SELECT.one.from('adops.db.TelemetrySettings').where({ SingletonKey: SINGLETON_KEY });
-        cached = normalizeSettings(row || {});
+        const rows = await SELECT.from('adops.db.TelemetrySettings').where({ SingletonKey: SINGLETON_KEY, ...tenantFilter(tenant) });
+        value = normalizeSettings(pickSettingsRow(rows, tenant) || {});
     } catch {
         // Never let a settings-read failure break ingestion: fall back to
         // defaults but do not cache the failure for the full TTL.
         return { ...DEFAULT_TELEMETRY_SETTINGS };
     }
-    cachedAt = now;
-    return cached;
+    cache.set(tenant, { value, at: now });
+    return value;
 }
 
 // Upsert of the singleton row. Only defined keys in `patch` are applied over
@@ -84,13 +94,17 @@ async function saveTelemetrySettings(patch = {}, userId = 'anonymous') {
     const current = await readEffectiveTelemetrySettings();
     const merged = normalizeSettings({ ...current, ...patch });
 
-    const existing = await SELECT.one.from('adops.db.TelemetrySettings').where({ SingletonKey: SINGLETON_KEY });
+    // Always the tenant's own row: a tenant that inherited the GLOBAL
+    // settings gets its own copy on first save instead of editing GLOBAL.
+    const tenant = currentTenant();
+    const existing = await SELECT.one.from('adops.db.TelemetrySettings').where({ SingletonKey: SINGLETON_KEY, TenantId: tenant });
     if (existing) {
         await UPDATE('adops.db.TelemetrySettings').set({ ...merged, UpdatedBy: userId }).where({ ID: existing.ID });
     } else {
         await INSERT.into('adops.db.TelemetrySettings').entries({
             ID: cds.utils.uuid(),
             SingletonKey: SINGLETON_KEY,
+            TenantId: tenant,
             ...merged,
             UpdatedBy: userId,
         });
@@ -100,8 +114,7 @@ async function saveTelemetrySettings(patch = {}, userId = 'anonymous') {
 }
 
 function invalidateTelemetrySettingsCache() {
-    cached = null;
-    cachedAt = 0;
+    cache.clear();
 }
 
 module.exports = {

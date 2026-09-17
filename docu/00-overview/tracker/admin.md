@@ -9,7 +9,6 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## To-do (milestone order)
 
-- [ ] A5 tenantScoped aspect on AccessRequests, ClientErrorReports, UsageEvents, PerformanceEvents, TelemetrySettings, Roles, Users + two-tenant cds.test
 - [ ] A6 CI gate: GitHub workflow (server mocha, client node --test, Linux client build with rolldown lock check, lint), server lint script, mocha ESM warning, AdopsShell.jsx unused variable
 - [ ] A7 Safety defaults: S4_DIRECT_INSECURE_TLS default off; undefined `body` in s4-activate-adapter.js OData branch
 - [ ] A8 Remove dead provisioning path (provisioning.js, undeclared cfenv / alert-notification-client); confirm basic-subscription.js is the live path
@@ -27,6 +26,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## Accomplished
 
+- [x] A5 Tenant scoping gaps: tenantScoped aspect on the seven remaining entities, tenant-scope helper now recognises service projections (it never matched one before) and filters UPDATE/DELETE too, tenantFilter/stampTenant for direct CQN in access-request, telemetry and settings handlers, per-tenant TelemetrySettings, NULL-tenant backfill on boot, two-tenant cds.test, docu/04 chapter — this PR, 2026-09-17
 - [x] A2 Environment separation: mtaext dev/qa/prod (sizing, plans, CORS origins), mta.yaml free of environment identifiers (S4_DESTINATION removed, CORS_ORIGINS from the approuter URL, saas-registry appName adoptops-${space}), MTA version 0.1.0, router and html5-deployer on Node 22 / html5-app-deployer ^7, docu/05 environments chapter — PR #21, 2026-09-17
 - [x] A1 PostgreSQL schema deployment: adops-basic-db-deployer MTA module (gen/pg, cds-deploy CF task, srv ordered after it), postgres cds build task, code/db/package.json, build-time deployer/runtime CSN check, db:ddl/db:deploy:postgres scripts, docu/05 chapter with the verified additive-only migration strategy — PR #18, 2026-09-17
 - [x] Integration housekeeping after the first parallel round: A4 tracker line carries PR #13, client lint fixed (unused `userInfo` prop in AdopsShell, idea I13) so the lint gate can go red only for real problems — PR #16, 2026-09-17
@@ -40,6 +40,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 ## Daily log
 
 ### 2026-09-17
+- A5 landed. Two findings: (1) registerTenantScope checked `target.name.startsWith('adops.db.')`, but an OData request targets the service projection, so no read had ever been filtered; the helper now follows projections to their source. (2) cds deletes the `tenant` attribute of mocked users while multitenancy is off, while the XSUAA strategy always sets `ctx.tenant` from the zone id; the two-tenant test assigns tenants in a post-auth middleware instead of enabling MTX.
 - A2 landed (stacked on A1; merge A1 first, then rebase). Per-space values live in mtaext files applied with `cf deploy -e`; `mbt mtad-gen -e` validated all three merged descriptors. No destination name appears in any descriptor: TargetSystems rows own their destinations. The CF login token had expired, so the dev space's current instances were not inspected; the saas-registry rename is only safe because nothing had been deployed there yet (confirm before the first deploy).
 - A1 landed. Verified with `cds deploy --dry --delta-from`: schema evolution adds tables, columns and views and widens types, but the compiler refuses dropped elements, dropped tables and length reductions outright ("not supported"), so the deployer cannot lose data and destructive changes need the manual path in docu/05. `mbt build` cannot run in a worktree whose client node_modules is a junction (its `npm ci` would empty the primary checkout's modules); `mbt mtad-gen` and `mbt module-build -m adops-basic-db-deployer` cover the packaging check instead.
 

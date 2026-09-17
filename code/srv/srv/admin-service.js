@@ -4,7 +4,7 @@ const Logger = cds.log('admin-service');
 const { isDatabaseLess, currentTier } = require('./utils/tier.js');
 const { registerTelemetryAdminHandlers } = require('./utils/telemetry-admin-handlers.js');
 const { registerAccessRequestAdminHandlers } = require('./utils/access-request-handlers.js');
-const { registerTenantScope } = require('./utils/tenant-scope.js');
+const { registerTenantScope, tenantFilter } = require('./utils/tenant-scope.js');
 const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
 const { verifyAuditChain } = require('./utils/audit-chain.js');
 const { listDestinations, getBtpAccountInfo, callS4Destination } = require('./utils/s4-http-client.js');
@@ -167,7 +167,7 @@ module.exports = cds.service.impl(async function () {
                     let diff = await req.diff();
 
                     if (diff.ID) {
-                        let users = await cds.run(SELECT.from("adops.db.Users").where({ ID: diff.ID }));
+                        let users = await cds.run(SELECT.from("adops.db.Users").where({ ID: diff.ID, ...tenantFilter() }));
                         await userManagement.removeRoleCollectionFromUser(users[0].role_ID, users[0].shadowId);
                         await userManagement.assignRoleCollectionToUser(req.data.role_ID, users[0].shadowId);
 
@@ -228,7 +228,7 @@ module.exports = cds.service.impl(async function () {
                 const { req: request } = cds.context.http
                 let loggedInUserToken = request.authInfo.getTokenInfo().getTokenValue();
                 let userManagement = new UserManagement(loggedInUserToken);
-                let user = await cds.run(SELECT.from("adops.db.Users").where({ ID: req.data.ID }));
+                let user = await cds.run(SELECT.from("adops.db.Users").where({ ID: req.data.ID, ...tenantFilter() }));
 
                 await userManagement.deleteUser(user[0]);
 

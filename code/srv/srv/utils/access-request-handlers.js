@@ -3,6 +3,7 @@ const { isDatabaseLess } = require('./tier.js');
 const { clampText } = require('./telemetry-sanitize.js');
 const { buildReferenceNumber } = require('./feedback-telemetry-handlers.js');
 const { writeAdminAuditEvent } = require('./admin-audit.js');
+const { currentTenant, tenantFilter } = require('./tenant-scope.js');
 const UserManagement = require('./user-management.js');
 
 const logger = cds.log('access-requests');
@@ -125,6 +126,7 @@ function registerAccessRequestPublicHandlers(service) {
             RequesterId: requesterId,
             RequestedArea: area,
             Status: 'PENDING',
+            ...tenantFilter(),
         });
         if (existing) return toReceipt(existing);
 
@@ -134,7 +136,7 @@ function registerAccessRequestPublicHandlers(service) {
             RequesterId: requesterId,
             RequesterName: requesterName(req),
             RequesterEmail: requesterEmail(req),
-            TenantId: req.user?.tenant || null,
+            TenantId: currentTenant(),
             RequestedArea: area,
             RequestedRole: role,
             Justification: justification,
@@ -170,7 +172,7 @@ function registerAccessRequestPublicHandlers(service) {
         // must still render cleanly on database-less tiers.
         if (isDatabaseLess()) return [];
         const rows = await SELECT.from(ACCESS_REQUESTS)
-            .where({ RequesterId: req.user?.id || 'anonymous' })
+            .where({ RequesterId: req.user?.id || 'anonymous', ...tenantFilter() })
             .orderBy('RequestedAt desc');
         return (rows || []).map(toMyRequestInfo);
     });
@@ -197,7 +199,7 @@ function summarizeAccessRequestStatuses(groupedRows) {
 function registerAccessRequestAdminHandlers(service) {
     service.on('queryAccessRequestSummary', async () => {
         if (isDatabaseLess()) return summarizeAccessRequestStatuses([]);
-        const grouped = await SELECT.from(ACCESS_REQUESTS).columns('Status', 'count(*) as cnt').groupBy('Status');
+        const grouped = await SELECT.from(ACCESS_REQUESTS).columns('Status', 'count(*) as cnt').where(tenantFilter()).groupBy('Status');
         return summarizeAccessRequestStatuses(grouped);
     });
 
@@ -206,7 +208,7 @@ function registerAccessRequestAdminHandlers(service) {
 
         const id = clampText(req.data.ID, 36);
         if (!id) return req.reject(400, 'ID is required.');
-        const existing = await SELECT.one.from(ACCESS_REQUESTS).where({ ID: id });
+        const existing = await SELECT.one.from(ACCESS_REQUESTS).where({ ID: id, ...tenantFilter() });
         if (!existing) return req.reject(404, 'Access request not found.');
         if (existing.Status !== 'PENDING') {
             return req.reject(400, `Access request ${existing.ReferenceNumber || id} has already been decided.`);
@@ -238,7 +240,7 @@ function registerAccessRequestAdminHandlers(service) {
             }
         }
 
-        await UPDATE(ACCESS_REQUESTS).set(patch).where({ ID: id });
+        await UPDATE(ACCESS_REQUESTS).set(patch).where({ ID: id, ...tenantFilter() });
         await writeAdminAuditEvent(req, {
             eventType: decision === 'APPROVE' ? 'ACCESS_REQUEST_APPROVED' : 'ACCESS_REQUEST_DECLINED',
             objectType: 'Access Request',
@@ -250,7 +252,7 @@ function registerAccessRequestAdminHandlers(service) {
             source: 'Access Requests',
         });
 
-        return SELECT.one.from(ACCESS_REQUESTS).where({ ID: id });
+        return SELECT.one.from(ACCESS_REQUESTS).where({ ID: id, ...tenantFilter() });
     });
 }
 

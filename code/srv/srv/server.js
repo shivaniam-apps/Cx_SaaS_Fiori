@@ -94,6 +94,12 @@ cds.on('served', () => {
     const { registerAuditLogGuard } = require('./utils/audit-chain.js');
     registerAuditLogGuard(cds.db);
 
+    // Rows written before tenant scoping covered every entity carry a NULL
+    // TenantId; assign them to GLOBAL so the strict filter keeps them
+    // visible. Idempotent, and a failure never blocks boot.
+    const { backfillTenantIds } = require('./utils/tenant-scope.js');
+    backfillTenantIds().catch((error) => cds.log('tenant-scope').warn(`tenant backfill failed: ${error.message}`));
+
     scheduleTelemetryRetentionCleanup();
 
     // Async S/4 work: register handlers, then start the claim/heartbeat poller.

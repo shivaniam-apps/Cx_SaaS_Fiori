@@ -631,12 +631,11 @@ context adops.db {
       // Authorization access requests: a non-admin user asks for a role from
       // a restricted page; admins triage them in Settings. Identity fields
       // are server-derived (never client-supplied).
-      entity AccessRequests : cuid, managed {
+      entity AccessRequests : cuid, managed, tenantScoped {
             RequestedAt     : Timestamp;
             RequesterId     : String(120);
             RequesterName   : String(160);
             RequesterEmail  : String(160);
-            TenantId        : String(60);
             RequestedArea   : String(60);
             RequestedRole   : String(60);
             Justification   : String(2000);
@@ -650,11 +649,10 @@ context adops.db {
             ReferenceNumber : String(30);
       }
 
-      entity ClientErrorReports : cuid, managed {
+      entity ClientErrorReports : cuid, managed, tenantScoped {
             FirstSeenAt     : Timestamp;
             LastSeenAt      : Timestamp;
             OccurrenceCount : Integer;
-            TenantId        : String(60);
             UserId          : String(120);
             SessionId       : String(64);
             ErrorType       : String(60);
@@ -674,9 +672,8 @@ context adops.db {
             Status          : String(30);
       }
 
-      entity UsageEvents : cuid, managed {
+      entity UsageEvents : cuid, managed, tenantScoped {
             Timestamp     : Timestamp;
-            TenantId      : String(60);
             UserId        : String(120);
             SessionId     : String(64);
             EventName     : String(60);
@@ -692,9 +689,8 @@ context adops.db {
             MetadataJson  : String(2000);
       }
 
-      entity PerformanceEvents : cuid, managed {
+      entity PerformanceEvents : cuid, managed, tenantScoped {
             Timestamp       : Timestamp;
-            TenantId        : String(60);
             SessionId       : String(64);
             Source          : String(20);
             OperationName   : String(120);
@@ -709,7 +705,7 @@ context adops.db {
 
       // Tenant-level telemetry configuration. Single-tenant today, so exactly
       // one row with SingletonKey 'GLOBAL'; handlers upsert by that key.
-      entity TelemetrySettings : cuid, managed {
+      entity TelemetrySettings : cuid, managed, tenantScoped {
             SingletonKey             : String(10);
             FeedbackEnabled          : Boolean;
             UsageEnabled             : Boolean;
@@ -731,12 +727,12 @@ context adops.db {
       // Identity (user-management integration)
       // ------------------------------------------------------------------
 
-      entity Roles : managed {
+      entity Roles : managed, tenantScoped {
             key ID          : String;
                 description : String;
       }
 
-      entity Users : cuid, managed {
+      entity Users : cuid, managed, tenantScoped {
             @Core.Computed: true
             fullName    : String;
             firstName   : String;
