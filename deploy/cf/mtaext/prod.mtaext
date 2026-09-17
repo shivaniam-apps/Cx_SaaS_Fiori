@@ -1,0 +1,34 @@
+_schema-version: '3.2'
+ID: adops-basic.prod
+extends: adops-basic
+version: 0.1.0
+
+# Production space. Deploy with:
+#   cf deploy mta_archives/adops-basic_0.1.0.mtar -e mtaext/prod.mtaext
+# Blue-green and the release checklist arrive with T5; until then a prod
+# deploy is a normal cf deploy with this descriptor.
+# See docu/05-deployment-tiers/environments.md.
+
+modules:
+  - name: adops-basic
+    parameters:
+      memory: 256MB
+
+  - name: adops-basic-srv
+    parameters:
+      # Two instances: the task runner claims work atomically and the audit
+      # chain locks its per-tenant head row, so instances do not conflict.
+      instances: 2
+      memory: 1024MB
+    properties:
+      CORS_ORIGINS: ~{adops-basic-router-api/app-url}
+      ADOPTOPS_TASK_CONCURRENCY: 2
+      ADOPTOPS_TELEMETRY_CLEANUP_INTERVAL_HOURS: 12
+
+resources:
+  - name: adops-basic-postgres
+    parameters:
+      service-plan: standard
+  - name: adops-basic-logging
+    parameters:
+      service-plan: standard

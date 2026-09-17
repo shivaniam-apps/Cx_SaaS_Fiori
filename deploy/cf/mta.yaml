@@ -1,6 +1,13 @@
 _schema-version: '3.2'
 ID: adops-basic
-version: 0.0.1
+version: 0.1.0
+
+# Environment-specific values (space sizing, service plans, CORS origins for
+# local clients) live in mtaext/<space>.mtaext and are applied at deploy time
+# with "cf deploy <mtar> -e mtaext/<space>.mtaext". This file must stay free
+# of environment identifiers: S/4 destinations belong to TargetSystems rows,
+# and every service-instance or app name is derived from ${space}.
+# See docu/05-deployment-tiers/environments.md.
 
 parameters:
   deploy_mode: html5-repo
@@ -130,7 +137,10 @@ modules:
       ADOPTOPS_TIER: basic
       ADOPTOPS_DB_MODE: postgres
       ADOPTOPS_TENANT_AUTOMATION: false
-      S4_DESTINATION: S4H_2023
+      # Browser calls reach srv through the approuter (same origin); the
+      # approuter URL is allowed here, extra local-development origins come
+      # from mtaext/dev.mtaext.
+      CORS_ORIGINS: ~{adops-basic-router-api/app-url}
       ADOPTOPS_S4_SERVICE_ROOT: /sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001
       ADOPTOPS_TASK_CONCURRENCY: 2
       ADOPTOPS_TASK_HEARTBEAT_MS: 5000
@@ -227,8 +237,8 @@ resources:
       service-plan: application
       config:
         xsappname: ~{adops-basic-uaa/xsuaa-app}
-        appName: adoptops-service-adops-shivaniam
-        displayName: AdoptOps Service adops-shivaniam
+        appName: adoptops-${space}
+        displayName: AdoptOps (${space})
         description: AdoptOps by Shivaniam Technology Solutions - SAP Fiori adoption analysis, proposals and activation for S/4HANA
         category: SaaS Multitenant Apps
         appUrls:

@@ -1,0 +1,23 @@
+_schema-version: '3.2'
+ID: adops-basic.qa
+extends: adops-basic
+version: 0.1.0
+
+# QA space. Deploy with:
+#   cf deploy mta_archives/adops-basic_0.1.0.mtar -e mtaext/qa.mtaext
+# See docu/05-deployment-tiers/environments.md.
+
+modules:
+  - name: adops-basic-srv
+    parameters:
+      instances: 1
+    properties:
+      # Browser traffic reaches srv only through the approuter (same origin).
+      CORS_ORIGINS: ~{adops-basic-router-api/app-url}
+      ADOPTOPS_TASK_CONCURRENCY: 2
+      ADOPTOPS_TELEMETRY_CLEANUP_INTERVAL_HOURS: 24
+
+resources:
+  - name: adops-basic-postgres
+    parameters:
+      service-plan: standard

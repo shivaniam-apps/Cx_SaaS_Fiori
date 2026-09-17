@@ -1,0 +1,31 @@
+_schema-version: '3.2'
+ID: adops-basic.dev
+extends: adops-basic
+version: 0.1.0
+
+# Development space. Deploy with:
+#   cf deploy mta_archives/adops-basic_0.1.0.mtar -e mtaext/dev.mtaext
+# Everything environment-specific lives here or in the sibling qa/prod
+# files; mta.yaml itself carries no environment identifiers (roadmap A2).
+# See docu/05-deployment-tiers/environments.md.
+
+modules:
+  - name: adops-basic-srv
+    parameters:
+      instances: 1
+    properties:
+      # Local clients (primary checkout 5273, worktrees 5283/5293/5303/5313)
+      # may call the dev srv directly; the approuter origin is always allowed
+      # by mta.yaml.
+      CORS_ORIGINS: >-
+        ~{adops-basic-router-api/app-url},http://localhost:5273,http://localhost:5283,http://localhost:5293,http://localhost:5303,http://localhost:5313
+      ADOPTOPS_TASK_CONCURRENCY: 1
+      ADOPTOPS_TELEMETRY_CLEANUP_INTERVAL_HOURS: 24
+      # No S4_DESTINATION here: every S/4 call is routed by the destination
+      # name on its TargetSystems row (RD1 DEV/100 for writes, PROD for usage
+      # reads), configured in the subscriber subaccount, never in the MTA.
+
+resources:
+  - name: adops-basic-postgres
+    parameters:
+      service-plan: development

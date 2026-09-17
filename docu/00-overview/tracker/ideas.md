@@ -28,6 +28,10 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I18 (2026-09-17) worktree.mjs doctor (I4) should also flag junctioned client node_modules as "mbt build unsafe here", since mbt's npm ci would wipe the primary checkout's modules.
 - I19 (2026-09-17) The connection check reports USAGE and ACTIVATE endpoints; S9 should add a CATALOG endpoint verdict (ZADO_CATALOG read unit) to the same `Endpoints` list so the Target Systems page needs no new shape. An EXPOSED activation verdict on QA/PROD is only shown today; consider also writing an audit event (A4 chain) since it is a safety finding.
 
+- I19 (2026-09-17) s4-http-client.js still defaults S4_DESTINATION to the hardcoded S4H_2023 (architecture.md forbids environment identifiers in code). Drop the fallback and make callers without a target-system destination fail with a clear error; touches the scheduling workstream's adapters, so land it as a shared change.
+- I20 (2026-09-17) dev.mtaext requests the PostgreSQL plan "development"; confirm the plan is entitled in the ap10 subaccount before the first dev deploy, else switch it to "standard" (plans cannot be changed on an existing instance by the deployer).
+- I21 (2026-09-17) server.js still defaults CORS_ORIGINS to Vite's 5173 while the clients run on 5273/5283/5293/5303/5313; align the local default with the worktree port slots.
+
 ## Parked
 
 (none)
