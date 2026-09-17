@@ -34,6 +34,7 @@ import '@ui5/webcomponents-icons/dist/checklist.js';
 import '@ui5/webcomponents-icons/dist/simulate.js';
 import '@ui5/webcomponents-icons/dist/play.js';
 import '@ui5/webcomponents-icons/dist/download.js';
+import '@ui5/webcomponents-icons/dist/navigation-down-arrow.js';
 import '@ui5/webcomponents-icons/dist/workflow-tasks.js';
 
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
