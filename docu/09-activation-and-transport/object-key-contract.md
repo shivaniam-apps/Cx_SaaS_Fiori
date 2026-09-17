@@ -11,7 +11,7 @@ field for field. This chapter is the reference for both sides.
 | `code/test/fixtures/activation-object-keys.json` | The contract as data: one key per step type for a fixed input, plus the non-planner variants. |
 | `abap/src/activate/zcl_ado_activate.clas.abap` (mirror of `a4h_2023_zado`) | One `ty_*_key` type per dispatchable step type; `/ui2/cl_json` maps camelCase on the wire to the snake_case fields. |
 | `abap/src/activate/zado_activate_smoke.prog.abap` | Feeds the same shapes into `EXECUTE_STEP` on RD1 DEV; the *Custom* scenario takes a planner row verbatim. |
-| `code/test/activation-plan.test.js`, `code/test/activation-key-contract.test.js` | Fail when planner, fixture, ABAP types or smoke literals drift. |
+| `code/test/activation-plan.test.mjs`, `code/test/activation-key-contract.test.mjs` | Fail when planner, fixture, ABAP types or smoke literals drift. |
 
 Wire format: JSON object, camelCase keys, strings unless stated. The transport
 (`s4-activate-adapter.js`) passes the string through untouched, both on the

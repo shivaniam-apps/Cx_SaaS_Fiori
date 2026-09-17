@@ -102,3 +102,62 @@ export async function verifyAuditChain() {
   const response = await http.get('/catalog/AdminService/verifyAuditChain()');
   return response.data;
 }
+
+// --- Product Insights (Admin only) --------------------------------------------
+// Bounded, server-filtered list reads plus the server-side summaries; the
+// page never downloads raw event tables to count them (performance.md).
+
+async function fetchAdminList(entity, { filter = '', orderby, top = 100, skip = 0 } = {}) {
+  const query = odataQuery([
+    ['$orderby', orderby],
+    ['$top', String(top)],
+    ['$skip', skip ? String(skip) : ''],
+    ['$count', 'true'],
+    ['$filter', filter]
+  ]);
+  const response = await http.get(`/catalog/AdminService/${entity}?${query}`);
+  const items = unwrapCollection(response.data);
+  return { items, count: Number(response.data?.['@odata.count'] ?? items.length) };
+}
+
+// Status counts over the FULL entity (server groupby), for the KPI strips.
+async function fetchStatusCounts(entity) {
+  const response = await http.get(`/catalog/AdminService/${entity}?$apply=groupby((Status),aggregate($count as count))`);
+  return unwrapCollection(response.data);
+}
+
+export function fetchPilotFeedback(options) {
+  return fetchAdminList('PilotFeedback', { orderby: 'SubmittedAt desc', ...options });
+}
+
+export function fetchPilotFeedbackStatusCounts() {
+  return fetchStatusCounts('PilotFeedback');
+}
+
+export async function updateFeedbackTriage(payload) {
+  const response = await http.post('/catalog/AdminService/updateFeedbackTriage', payload);
+  return response.data;
+}
+
+export function fetchClientErrorReports(options) {
+  return fetchAdminList('ClientErrorReports', { orderby: 'LastSeenAt desc', ...options });
+}
+
+export function fetchClientErrorStatusCounts() {
+  return fetchStatusCounts('ClientErrorReports');
+}
+
+export async function updateClientErrorStatus(id, status) {
+  const response = await http.post('/catalog/AdminService/updateClientErrorStatus', { ID: id, status });
+  return response.data;
+}
+
+export async function queryUsageSummary(days) {
+  const response = await http.get(`/catalog/AdminService/queryUsageSummary(days=${Number(days) || 30})`);
+  return response.data;
+}
+
+export async function queryPerformanceSummary(days) {
+  const response = await http.get(`/catalog/AdminService/queryPerformanceSummary(days=${Number(days) || 30})`);
+  return response.data;
+}

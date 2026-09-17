@@ -34,6 +34,7 @@ import {
   getServiceErrorMessage
 } from '../services/fioriService.js';
 import useRunPolling from '../hooks/useRunPolling.js';
+import { trackUsage } from '../services/telemetryService.js';
 import Kpi from '../components/Kpi.jsx';
 import {
   PLAN_STATUS_DESIGN,
@@ -216,6 +217,7 @@ export function ActivationPlansPage() {
       const result = await createActivationPlan(creating.waveId, creating.name.trim() || null, creating.targetSystemId);
       setCreating(null);
       setNotice({ design: 'Positive', text: `Plan "${result.Plan?.Name}" created with ${result.Plan?.StepCount ?? 0} steps - simulate it to get the blast-radius verdicts.` });
+      trackUsage('PLAN_CREATED', { eventCategory: 'ACTIVATION', action: 'create', outcome: 'OK', targetSystem: result.TargetSystem?.displayName });
       setReloadToken((t) => t + 1);
       navigate(`/activation/${result.Plan.ID}`);
     } catch (e) {
@@ -233,6 +235,7 @@ export function ActivationPlansPage() {
       const result = await simulateActivationPlan(plan.ID);
       const verdict = simulationLabel(result.Plan);
       setNotice({ design: result.Plan?.FailedCount ? 'Critical' : 'Positive', text: `Simulation of "${result.Plan?.Name}" finished${verdict ? `: ${verdict}` : ''}.` });
+      trackUsage('PLAN_SIMULATED', { eventCategory: 'ACTIVATION', action: 'simulate', outcome: result.Plan?.FailedCount ? 'BLOCKED' : 'OK', targetSystem: result.TargetSystem?.displayName });
       setDetailReload((d) => d + 1);
       setReloadToken((t) => t + 1);
     } catch (e) {
@@ -254,6 +257,7 @@ export function ActivationPlansPage() {
           ? `Resume requested for "${plan.Name}" - completed steps are skipped, the run continues where it stopped.`
           : `Execution of "${plan.Name}" queued (run ${String(handle.taskId).slice(0, 8)}) - steps update here while it runs.`
       });
+      trackUsage(resumed ? 'PLAN_RESUMED' : 'PLAN_EXECUTED', { eventCategory: 'ACTIVATION', action: 'execute', outcome: 'QUEUED', targetSystem: targetSystem?.displayName });
       setDetailReload((d) => d + 1);
       setReloadToken((t) => t + 1);
     } catch (e) {

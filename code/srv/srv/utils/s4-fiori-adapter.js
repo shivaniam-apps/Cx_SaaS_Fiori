@@ -1,4 +1,3 @@
-const cds = require('@sap/cds');
 const {
   DEFAULT_DESTINATION,
   DEFAULT_S4_SERVICE_ROOT,
@@ -13,7 +12,6 @@ const {
 const { probeActivateService, activateRootFor, isODataRoot } = require('./s4-activate-adapter.js');
 const { isActivationTargetEnvironment } = require('./activation-plan.js');
 
-const LOG = cds.log('s4-fiori-adapter');
 
 // ---------------------------------------------------------------------------
 // Domain layer over the ZADO_USAGE_O4 OData V4 service. Owns entity paths,

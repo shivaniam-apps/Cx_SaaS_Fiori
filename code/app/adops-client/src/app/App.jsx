@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AdopsShell from '../layouts/AdopsShell.jsx';
 import MemberGate from '../components/MemberGate.jsx';
 import AppErrorBoundary from '../components/AppErrorBoundary.jsx';
+import { trackPageView, measureRouteRender } from '../services/telemetryService.js';
 import DashboardPage from '../pages/DashboardPage.jsx';
 import PlaceholderPage from '../pages/PlaceholderPage.jsx';
 import TargetSystemsPage from '../pages/TargetSystemsPage.jsx';
@@ -15,6 +17,7 @@ import ActivationRunsPage from '../pages/ActivationRunsPage.jsx';
 import AccessRequestsPage from '../pages/AccessRequestsPage.jsx';
 import SettingsPage from '../pages/SettingsPage.jsx';
 import AuditLogPage from '../pages/AuditLogPage.jsx';
+import ProductInsightsPage from '../pages/ProductInsightsPage.jsx';
 
 // Route table follows the optional-param convention (/usage/:view?) so tab
 // switches and detail columns never remount their page.
@@ -35,7 +38,7 @@ function AppRoutes({ userInfo }) {
       <Route path="/settings/:view?" element={<SettingsPage />} />
       <Route path="/audit-log" element={<AuditLogPage />} />
       <Route path="/access-requests" element={<AccessRequestsPage />} />
-      <Route path="/product-insights/:view?" element={<PlaceholderPage title="Product Insights" phase="Phase 2" />} />
+      <Route path="/product-insights/:view?" element={<ProductInsightsPage />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
@@ -43,6 +46,14 @@ function AppRoutes({ userInfo }) {
 
 function ShellWithBoundary({ userInfo }) {
   const location = useLocation();
+  // Usage telemetry per route change (raw pathname, so detail routes count
+  // too); slow renders are recorded by the capture policy in measureRouteRender.
+  useEffect(() => {
+    const route = `#${location.pathname}`;
+    trackPageView(route);
+    measureRouteRender(route);
+  }, [location.pathname]);
+
   return (
     <AdopsShell userInfo={userInfo}>
       {/* Keyed on pathname: a crash on one page never strands the app. */}
