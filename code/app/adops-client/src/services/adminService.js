@@ -60,3 +60,45 @@ export async function updateTelemetrySettings(payload) {
   const response = await http.post('/catalog/AdminService/updateTelemetrySettings', payload);
   return response.data;
 }
+
+// --- Audit log (Audit Log page, Admin only) -----------------------------------
+
+function unwrapCollection(data) {
+  return Array.isArray(data?.value) ? data.value : [];
+}
+
+function odataQuery(params) {
+  // Manual serialization: %20 for spaces, which CAP accepts inside
+  // $filter/$orderby where axios' '+' is rejected.
+  return params
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+}
+
+// Bounded, server-filtered, server-sorted page of the audit trail. `filter`
+// is a ready $filter expression (features/audit/auditModel.buildAuditFilter).
+export async function fetchAuditEvents({ filter = '', top = 100, skip = 0 } = {}) {
+  const query = odataQuery([
+    ['$orderby', 'Sequence desc,Timestamp desc'],
+    ['$top', String(top)],
+    ['$skip', skip ? String(skip) : ''],
+    ['$count', 'true'],
+    ['$filter', filter]
+  ]);
+  const response = await http.get(`/catalog/AdminService/AuditEvents?${query}`);
+  const items = unwrapCollection(response.data);
+  return { items, count: Number(response.data?.['@odata.count'] ?? items.length) };
+}
+
+// Distinct values of one column (server-side groupby) for the filter
+// selects; never the whole table.
+export async function fetchAuditDistinct(field) {
+  const response = await http.get(`/catalog/AdminService/AuditEvents?$apply=groupby((${field}))`);
+  return unwrapCollection(response.data);
+}
+
+export async function verifyAuditChain() {
+  const response = await http.get('/catalog/AdminService/verifyAuditChain()');
+  return response.data;
+}
