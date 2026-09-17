@@ -275,6 +275,16 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   // read discipline - never shipped with the plan read).
   function readActivationStepMessages(stepId: UUID) returns LargeString;
 
+  // Operator decisions on single steps (sap-backend.md: skip and rollback).
+  // Skip parks a step the operator will not execute (its dependents run on
+  // resume); rollback undoes an executed step through the write unit
+  // (ROLLBACK_<StepType>) and re-opens every step that depended on it.
+  // Irreversible steps (ICF, task list) are recorded, never rolled back.
+  @(requires: 'Activator')
+  action skipActivationStep(stepId: UUID, reason: String) returns LargeString;
+  @(requires: 'Activator')
+  action rollbackActivationStep(stepId: UUID, reason: String) returns LargeString;
+
   // --- Activation runs (monitor) --------------------------------------------
   // A run is one ACTIVATION_EXECUTION background task. The list read carries
   // plan/wave/system labels and a status summary over the full filter scope

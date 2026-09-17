@@ -33,14 +33,14 @@ const LOG = cds.log('activation-execution');
 const DONE_STATES = ['SUCCESS', 'WARNING', 'SKIPPED'];
 const EXECUTABLE_PLAN_STATES = ['SIMULATED', 'READY', 'PARTIAL', 'FAILED'];
 
-// SKIPPED is two different things: a verify-first "already exists" skip
-// SATISFIES dependents; a "dependency not met" skip does NOT (and is
-// re-attempted on resume once its dependency is fixed). ExistsAlready is
-// the discriminator.
+// SKIPPED is three different things: a verify-first "already exists" skip
+// and an operator's skip (skipActivationStep) SATISFY dependents; a
+// "dependency not met" skip does NOT (and is re-attempted on resume once its
+// dependency is fixed). ExistsAlready / OperatorAction discriminate.
 function isSatisfied(step) {
   return step.Status === 'SUCCESS'
     || step.Status === 'WARNING'
-    || (step.Status === 'SKIPPED' && Boolean(step.ExistsAlready));
+    || (step.Status === 'SKIPPED' && (Boolean(step.ExistsAlready) || step.OperatorAction === 'SKIPPED'));
 }
 
 function planRollup(steps) {
@@ -73,6 +73,14 @@ function mockTrkorr(plan, systemId) {
 // Deterministic executor for ADOPTOPS_MOCK_S4: mirrors what the ABAP
 // dispatcher reports per step type (see zcl_ado_activate / zcl_ado_act_*).
 function mockStepExecutor({ step, plan, systemId }) {
+  // Operator rollback (rollbackActivationStep): ROLLBACK_<type> undoes the
+  // step's object; the mock reports it verified absent.
+  if (String(step.StepType || '').startsWith('ROLLBACK_')) {
+    return {
+      status: 'SUCCESS', existsAlready: false,
+      messages: [{ type: 'S', message: `${step.StepType} ${step.ObjectName}: object removed and verified absent (mock).` }]
+    };
+  }
   switch (step.StepType) {
     case 'RUN_TASK_LIST':
       return {
@@ -315,6 +323,8 @@ module.exports = {
   planRollup,
   planFinalStatus,
   isSatisfied,
+  writeStepMessages,
+  writeAudit,
   mockTrkorr,
   EXECUTABLE_PLAN_STATES
 };

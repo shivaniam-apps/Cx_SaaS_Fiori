@@ -211,6 +211,11 @@ CLASS lcl_probe IMPLEMENTATION.
     fm_signature( 'PRGN_MENU_ADD_NODE' ).
     fm_signature( 'PRGN_MENU_ADD_SPACE' ).
     list_functions( 'PRGN_MENU%' ).
+    line( 'Role deletion candidates (ROLLBACK_CREATE_PFCG_ROLE calls the first one present):' ).
+    fm_signature( 'PRGN_RFC_DELETE_AGR' ).
+    fm_signature( 'PRGN_DELETE_AGR' ).
+    fm_signature( 'PRGN_RFC_DELETE_ACTIVITY_GROUP' ).
+    list_functions( 'PRGN%DELETE%' ).
     list_functions( '/UI2/%ROLE%' ).
   ENDMETHOD.
 
