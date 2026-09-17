@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { installCorrelation } from './httpCorrelation.js';
 
 // AdminService (/catalog/AdminService): Admin-only surfaces. Currently the
 // redacted BTP destination catalog + subaccount identity used by Target
 // Systems administration. Thin: HTTP + OData unwrapping + error normalisation.
-const http = axios.create({ timeout: 120000 });
+const http = installCorrelation(axios.create({ timeout: 120000 }));
 
 export function getServiceErrorMessage(error, fallback) {
   const data = error?.response?.data;
@@ -45,4 +46,17 @@ export async function listBtpDestinations() {
 export async function getBtpAccountInfo() {
   const response = await http.get('/catalog/AdminService/getBtpAccountInfo()');
   return parseLargeString(response.data) || {};
+}
+
+// --- Telemetry settings (Settings page, Admin only) --------------------------
+// Typed CDS results (TelemetrySettingsResult), no LargeString unwrapping.
+
+export async function getTelemetrySettings() {
+  const response = await http.get('/catalog/AdminService/getTelemetrySettingsAdmin()');
+  return response.data;
+}
+
+export async function updateTelemetrySettings(payload) {
+  const response = await http.post('/catalog/AdminService/updateTelemetrySettings', payload);
+  return response.data;
 }
