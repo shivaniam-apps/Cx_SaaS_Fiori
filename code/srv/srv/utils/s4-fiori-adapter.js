@@ -316,6 +316,61 @@ function mapUserTransactionUsage(row) {
   };
 }
 
+// --- Inventory readers (S8): USR02 and AGR_* through the ZADO read unit ------
+
+// USR02-UFLAG -> the two-letter lock status the landscape shows.
+function lockStatusOf(flag) {
+  const value = Number(flag) || 0;
+  if (value === 0) return '';
+  if (value === 128) return 'PW';                 // too many failed logons
+  if (value === 32 || value === 64) return 'AD';  // locked by administrator
+  return 'LK';
+}
+
+function mapUserInventory(row) {
+  return {
+    UserKey: row.UserKey ?? row.Bname,
+    UserType: String(row.UserType ?? row.Ustyp ?? '').slice(0, 1),
+    UserGroup: row.UserGroup ?? row.Class ?? '',
+    ValidFrom: row.ValidFrom || null,
+    ValidTo: row.ValidTo || null,
+    LockStatus: row.LockStatus ?? lockStatusOf(row.LockFlag ?? row.Uflag),
+    LastLogonOn: row.LastLogonOn || row.Trdat || null,
+    RoleCount: Number(row.RoleCount ?? 0)
+  };
+}
+
+function mapRoleInventory(row) {
+  return {
+    RoleName: row.RoleName ?? row.AgrName,
+    RoleText: row.RoleText ?? '',
+    RoleType: row.RoleType || 'SINGLE',
+    ParentRole: row.ParentRole ?? row.ParentAgr ?? '',
+    IsSapDelivered: row.IsSapDelivered === true || row.IsSapDelivered === 'X' || /^SAP_/.test(String(row.RoleName ?? row.AgrName ?? '')),
+    MenuTcodeCount: Number(row.MenuTcodeCount ?? 0),
+    AuthTcodeCount: Number(row.AuthTcodeCount ?? 0),
+    UserCount: Number(row.UserCount ?? 0),
+    ChangedOn: row.ChangedOn || row.ChangeDat || null
+  };
+}
+
+function mapRoleUser(row) {
+  return {
+    RoleName: row.RoleName ?? row.AgrName,
+    UserKey: row.UserKey ?? row.Uname,
+    ValidFrom: row.ValidFrom || row.FromDat || null,
+    ValidTo: row.ValidTo || row.ToDat || null
+  };
+}
+
+function mapRoleTransaction(row) {
+  return {
+    RoleName: row.RoleName ?? row.AgrName,
+    TransactionCode: row.TransactionCode ?? row.Tcode ?? row.Low,
+    Source: row.Source || 'MENU'
+  };
+}
+
 async function fetchUsagePeriods({ targetSystem, req }) {
   const { rows } = await fetchPagedEntity({
     targetSystem,
@@ -391,6 +446,37 @@ async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodT
   return { ...result, parametersApplied, rows: result.rows.map(mapUserTransactionUsage) };
 }
 
+// Inventory pages: the ZADO providers page at the database in their own
+// deterministic order (real user id / role name), so no $orderby travels -
+// the exposed UserKey is a hash and sorting by it would not match the
+// provider's window order.
+const INVENTORY_PAGE_SIZE = 2000;
+
+async function fetchInventoryPage({ targetSystem, entitySet, filter, mapRow, top = INVENTORY_PAGE_SIZE, skip = 0, req }) {
+  const page = await fetchPagedEntity({ targetSystem, entitySet, filter, top, skip, req });
+  return { ...page, rows: page.rows.map(mapRow) };
+}
+
+async function fetchUserInventoryPage({ targetSystem, top, skip, req }) {
+  return fetchInventoryPage({ targetSystem, entitySet: 'UserInventory', mapRow: mapUserInventory, top, skip, req });
+}
+
+async function fetchRoleInventoryPage({ targetSystem, top, skip, req }) {
+  return fetchInventoryPage({ targetSystem, entitySet: 'RoleInventory', mapRow: mapRoleInventory, top, skip, req });
+}
+
+async function fetchRoleUsersPage({ targetSystem, top, skip, req }) {
+  return fetchInventoryPage({ targetSystem, entitySet: 'RoleUsers', mapRow: mapRoleUser, top, skip, req });
+}
+
+// One source per read (MENU = AGR_TCODES, AUTH = AGR_1251 S_TCODE): the
+// provider pages one table per request.
+async function fetchRoleTransactionsPage({ targetSystem, source = 'MENU', top, skip, req }) {
+  return fetchInventoryPage({
+    targetSystem, entitySet: 'RoleTransactions', filter: `Source eq '${source}'`, mapRow: mapRoleTransaction, top, skip, req
+  });
+}
+
 module.exports = {
   checkTargetSystemConnection,
   activationEndpointVerdict,
@@ -401,8 +487,18 @@ module.exports = {
   fetchUsagePeriods,
   fetchTransactionUsagePage,
   fetchUserTransactionUsagePage,
+  INVENTORY_PAGE_SIZE,
+  fetchUserInventoryPage,
+  fetchRoleInventoryPage,
+  fetchRoleUsersPage,
+  fetchRoleTransactionsPage,
   // Exported for contract tests: the mappers ARE the ABAP<->CAP contract.
   mapTransactionUsage,
   mapUserTransactionUsage,
-  mapUsagePeriod
+  mapUsagePeriod,
+  mapUserInventory,
+  mapRoleInventory,
+  mapRoleUser,
+  mapRoleTransaction,
+  lockStatusOf
 };

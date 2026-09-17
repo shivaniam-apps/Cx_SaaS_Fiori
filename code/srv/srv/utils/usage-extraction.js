@@ -3,7 +3,12 @@ const { randomUUID, createHash } = require('node:crypto');
 const { shouldMockSap } = require('./s4-http-client.js');
 const {
   fetchTransactionUsagePage,
-  fetchUserTransactionUsagePage
+  fetchUserTransactionUsagePage,
+  fetchUserInventoryPage,
+  fetchRoleInventoryPage,
+  fetchRoleUsersPage,
+  fetchRoleTransactionsPage,
+  INVENTORY_PAGE_SIZE
 } = require('./s4-fiori-adapter.js');
 
 const { SELECT, INSERT, UPDATE } = cds.ql;
@@ -52,7 +57,14 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
     .where({ ID: runId });
 
   const startedAt = Date.now();
-  const rollup = { transactions: 0, users: 0, roles: 0, fiori: 0, truncated: false };
+  const rollup = { transactions: 0, users: 0, roles: 0, fiori: 0, inventoryUsers: 0, roleUsers: 0, roleTcodes: 0, truncated: false };
+  // Server-side pseudonymisation is the ABAP add-on's job in live mode;
+  // hashing again here is defence in depth for mock and misconfigured runs.
+  // Applied identically to usage, inventory and assignment rows so the
+  // pseudonyms still correlate across the four tables.
+  const pseudonymise = run.Pseudonymised !== false && !targetSystem.identifiedUsageAllowed;
+  const userKeyOf = (key) => (pseudonymise ? pseudonymiseUser(key, run.TenantId) : key);
+  let userTcodeSnapshotId = null;
 
   try {
     // --- ST03N: transaction profile -------------------------------------
@@ -106,8 +118,8 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
     if (sources.includes('ST03N') && !(await isCancelRequested())) {
       await reportProgress({ phase: 'Collecting user activity (USERTCODE)', processedItems: 0, totalItems: 0 });
       const snapshotId = await createSnapshot(db, run, targetSystem, 'ST03N', granularity, periodFrom, periodTo, 'USERTCODE');
+      userTcodeSnapshotId = snapshotId;
 
-      const pseudonymise = run.Pseudonymised !== false && !targetSystem.identifiedUsageAllowed;
       await log('INFO', 'USERTCODE', `Source bound: top ${topUsersPerTcode || 'all'} users per transaction, at least ${minExecutions} execution(s) per user row.`);
       let parameterWarningLogged = false;
       const fetchPage = shouldMockSap()
@@ -130,9 +142,7 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
           snapshot_ID: snapshotId,
           targetSystem_ID: targetSystemId,
           TenantId: run.TenantId,
-          // Server-side pseudonymisation is the ABAP add-on's job in live
-          // mode; this is defence in depth for mock and misconfigured runs.
-          UserKey: pseudonymise ? pseudonymiseUser(row.UserKey, run.TenantId) : row.UserKey,
+          UserKey: userKeyOf(row.UserKey),
           TransactionCode: row.TransactionCode,
           PeriodFrom: row.PeriodFrom || periodFrom,
           PeriodTo: row.PeriodTo || periodTo,
@@ -146,6 +156,140 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
         isCancelRequested
       });
       await log('INFO', 'USERTCODE', `${rollup.users} user-tcode rows`);
+    }
+
+    // --- USR02: user inventory (S8) --------------------------------------
+    // Paged at the database by the ZADO provider (real user id order), the
+    // pseudonym is the same hash the ST03N reader emits.
+    if (sources.includes('USR02') && !(await isCancelRequested())) {
+      await reportProgress({ phase: 'Collecting user inventory (USR02)', processedItems: 0, totalItems: 0 });
+      const snapshotId = await createSnapshot(db, run, targetSystem, 'USR02', granularity, periodFrom, periodTo, 'INVENTORY');
+      const fetchPage = shouldMockSap()
+        ? (skip) => mockUserInventoryPage({ periodTo, skip, top: INVENTORY_PAGE_SIZE })
+        : (skip) => fetchUserInventoryPage({ targetSystem, top: INVENTORY_PAGE_SIZE, skip });
+      rollup.inventoryUsers = await pageInto(db, {
+        fetchPage,
+        snapshotId,
+        targetSystemId,
+        mapRow: (row) => ({
+          ID: randomUUID(),
+          extractionRun_ID: run.ID,
+          targetSystem_ID: targetSystemId,
+          TenantId: run.TenantId,
+          UserKey: userKeyOf(row.UserKey),
+          FullName: '',
+          Email: '',
+          UserType: row.UserType || '',
+          UserGroup: row.UserGroup || '',
+          Department: '',
+          CostCenter: '',
+          ValidFrom: row.ValidFrom || null,
+          ValidTo: row.ValidTo || null,
+          LockStatus: row.LockStatus || '',
+          LastLogonOn: row.LastLogonOn || null,
+          // Dialog user, not locked, logged on inside the extraction window.
+          IsActiveDialogUser: row.UserType === 'A' && !row.LockStatus && Boolean(row.LastLogonOn) && String(row.LastLogonOn) >= String(periodFrom),
+          RoleCount: Number(row.RoleCount || 0),
+          DistinctTcodeCount: 0,
+          UsesFioriToday: false
+        }),
+        into: 'adops.db.UserInventory',
+        reportProgress,
+        phase: 'Collecting user inventory (USR02)',
+        isCancelRequested
+      });
+      await log('INFO', 'USR02', `${rollup.inventoryUsers} user inventory rows`);
+    }
+
+    // --- AGR_*: roles, assignments and granted transactions (S8) ----------
+    if (sources.includes('AGR') && !(await isCancelRequested())) {
+      await reportProgress({ phase: 'Collecting roles (AGR_DEFINE)', processedItems: 0, totalItems: 0 });
+      const snapshotId = await createSnapshot(db, run, targetSystem, 'AGR', granularity, periodFrom, periodTo, 'INVENTORY');
+      const inventoryRow = (extra) => ({
+        ID: randomUUID(), extractionRun_ID: run.ID, targetSystem_ID: targetSystemId, TenantId: run.TenantId, ...extra
+      });
+
+      rollup.roles = await pageInto(db, {
+        fetchPage: shouldMockSap()
+          ? (skip) => mockRoleInventoryPage({ periodTo, skip, top: INVENTORY_PAGE_SIZE })
+          : (skip) => fetchRoleInventoryPage({ targetSystem, top: INVENTORY_PAGE_SIZE, skip }),
+        snapshotId,
+        targetSystemId,
+        mapRow: (row) => inventoryRow({
+          RoleName: row.RoleName,
+          RoleText: row.RoleText || '',
+          RoleType: row.RoleType || 'SINGLE',
+          ParentRole: row.ParentRole || '',
+          IsSapDelivered: Boolean(row.IsSapDelivered),
+          MenuTcodeCount: Number(row.MenuTcodeCount || 0),
+          AuthTcodeCount: Number(row.AuthTcodeCount || 0),
+          UserCount: Number(row.UserCount || 0),
+          HasFioriCatalog: false,
+          BusinessCatalogCount: 0,
+          ChangedOn: row.ChangedOn || null
+        }),
+        into: 'adops.db.RoleInventory',
+        reportProgress,
+        phase: 'Collecting roles (AGR_DEFINE)',
+        isCancelRequested
+      });
+      await log('INFO', 'AGR', `${rollup.roles} role rows`);
+
+      if (!(await isCancelRequested())) {
+        const roleUsersSnapshotId = await createSnapshot(db, run, targetSystem, 'AGR_USERS', granularity, periodFrom, periodTo, 'INVENTORY');
+        rollup.roleUsers = await pageInto(db, {
+          fetchPage: shouldMockSap()
+            ? (skip) => mockRoleUsersPage({ periodTo, skip, top: INVENTORY_PAGE_SIZE })
+            : (skip) => fetchRoleUsersPage({ targetSystem, top: INVENTORY_PAGE_SIZE, skip }),
+          snapshotId: roleUsersSnapshotId,
+          targetSystemId,
+          mapRow: (row) => inventoryRow({
+            RoleName: row.RoleName,
+            UserKey: userKeyOf(row.UserKey),
+            ValidFrom: row.ValidFrom || null,
+            ValidTo: row.ValidTo || null
+          }),
+          into: 'adops.db.RoleUsers',
+          reportProgress,
+          phase: 'Collecting role assignments (AGR_USERS)',
+          isCancelRequested
+        });
+        await log('INFO', 'AGR', `${rollup.roleUsers} role-user rows`);
+      }
+
+      for (const source of ['MENU', 'AUTH']) {
+        if (await isCancelRequested()) break;
+        const tcodesSnapshotId = await createSnapshot(db, run, targetSystem, source === 'MENU' ? 'AGR_TCODES' : 'AGR_1251', granularity, periodFrom, periodTo, 'INVENTORY');
+        rollup.roleTcodes += await pageInto(db, {
+          fetchPage: shouldMockSap()
+            ? (skip) => mockRoleTransactionsPage({ source, skip, top: INVENTORY_PAGE_SIZE })
+            : (skip) => fetchRoleTransactionsPage({ targetSystem, source, top: INVENTORY_PAGE_SIZE, skip }),
+          snapshotId: tcodesSnapshotId,
+          targetSystemId,
+          mapRow: (row) => inventoryRow({ RoleName: row.RoleName, TransactionCode: row.TransactionCode, Source: source }),
+          into: 'adops.db.RoleTransactions',
+          reportProgress,
+          phase: `Collecting role transactions (${source === 'MENU' ? 'AGR_TCODES' : 'AGR_1251 S_TCODE'})`,
+          isCancelRequested
+        });
+      }
+      await log('INFO', 'AGR', `${rollup.roleTcodes} role-transaction rows (menu + S_TCODE)`);
+    }
+
+    // --- Rollup: distinct transactions per inventory user -------------------
+    // USERTCODE is bounded at the source (top-N per tcode), so the set of
+    // (user, tcode) pairs is bounded too; one update per user that has any.
+    if (userTcodeSnapshotId && rollup.inventoryUsers > 0 && !(await isCancelRequested())) {
+      await reportProgress({ phase: 'Rolling up user activity', processedItems: 0, totalItems: 0 });
+      const pairs = await SELECT.distinct.from('adops.db.UserTransactionUsage')
+        .columns('UserKey', 'TransactionCode').where({ snapshot_ID: userTcodeSnapshotId });
+      const perUser = new Map();
+      for (const pair of pairs) perUser.set(pair.UserKey, (perUser.get(pair.UserKey) || 0) + 1);
+      for (const [userKey, count] of perUser) {
+        await UPDATE('adops.db.UserInventory').set({ DistinctTcodeCount: count })
+          .where({ extractionRun_ID: run.ID, UserKey: userKey });
+      }
+      await log('INFO', 'USR02', `${perUser.size} inventory users carry usage in the window`);
     }
 
     const cancelled = await isCancelRequested();
@@ -331,6 +475,101 @@ function mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top, topUser
   return { rows: page, totalCount: kept.length, hasMore: skip + page.length < kept.length, parametersApplied: true };
 }
 
+// --- Mock inventory (S8): coherent with the mock usage above ----------------
+// Users are the USERTCODE user keys (department-prefixed) plus a few system
+// users; every department has one Z role granting its transactions, and the
+// three SAP_BR_* business roles carry S_TCODE values only (AGR_1251).
+
+const MOCK_DEPARTMENT_COMPONENTS = {
+  Sales: ['SD'], Procurement: ['MM'], Finance: ['FI', 'CO'], Production: ['PP'],
+  Quality: ['QM'], Maintenance: ['PM'], HR: ['HR', 'PA'], IT: ['BC']
+};
+const MOCK_SAP_ROLES = [
+  ['SAP_BR_INTERNAL_SALES_REP', 'Internal Sales Representative', ['VA01', 'VA02', 'VA03', 'VA05']],
+  ['SAP_BR_PURCHASER', 'Purchaser', ['ME21N', 'ME22N', 'ME23N', 'ME51N']],
+  ['SAP_BR_BILLING_CLERK', 'Billing Clerk', ['VF01', 'VF03']]
+];
+
+const departmentOfUserKey = (userKey) => MOCK_DEPARTMENTS.find((d) => userKey.startsWith(d.toUpperCase().slice(0, 4))) || 'IT';
+const departmentRole = (department) => `Z_${department.toUpperCase()}_CLERK`;
+
+function mockInventoryUsers() {
+  const usage = mockUserTransactionUsagePage({ periodFrom: '2026-01-01', periodTo: '2026-12-31', skip: 0, top: 100000, topUsersPerTcode: 20, minExecutions: 1 });
+  const keys = [...new Set(usage.rows.map((r) => r.UserKey))].sort();
+  const users = keys.map((key, i) => ({
+    UserKey: key, UserType: 'A', UserGroup: departmentOfUserKey(key).toUpperCase().slice(0, 12),
+    LockFlag: i % 9 === 8 ? 64 : 0, Stale: i % 7 === 6
+  }));
+  for (let i = 1; i <= 3; i++) users.push({ UserKey: `SYS_BATCH_${String(i).padStart(3, '0')}`, UserType: 'B', UserGroup: 'SYSTEM', LockFlag: 0, Stale: false });
+  return users;
+}
+
+function mockRoleUsers() {
+  const rows = [];
+  mockInventoryUsers().filter((u) => u.UserType === 'A').forEach((u, i) => {
+    rows.push({ RoleName: departmentRole(departmentOfUserKey(u.UserKey)), UserKey: u.UserKey });
+    if (i % 5 === 0) rows.push({ RoleName: MOCK_SAP_ROLES[i % MOCK_SAP_ROLES.length][0], UserKey: u.UserKey });
+  });
+  return rows.sort((a, b) => a.RoleName.localeCompare(b.RoleName) || a.UserKey.localeCompare(b.UserKey));
+}
+
+function mockRoleTransactions(source) {
+  const rows = [];
+  if (source === 'MENU') {
+    for (const department of MOCK_DEPARTMENTS) {
+      const components = MOCK_DEPARTMENT_COMPONENTS[department] || [];
+      for (const r of mockRows()) {
+        if (components.includes(lineOfBusinessOf(r.component))) rows.push({ RoleName: departmentRole(department), TransactionCode: r.code, Source: 'MENU' });
+      }
+    }
+  } else {
+    for (const [role, , tcodes] of MOCK_SAP_ROLES) for (const tcode of tcodes) rows.push({ RoleName: role, TransactionCode: tcode, Source: 'AUTH' });
+  }
+  return rows.sort((a, b) => a.RoleName.localeCompare(b.RoleName) || a.TransactionCode.localeCompare(b.TransactionCode));
+}
+
+const pageOf = (rows, skip, top) => {
+  const page = rows.slice(skip, skip + top);
+  return { rows: page, totalCount: rows.length, hasMore: skip + page.length < rows.length };
+};
+
+function mockUserInventoryPage({ periodTo, skip, top }) {
+  const assignments = mockRoleUsers();
+  const rows = mockInventoryUsers().map((u) => ({
+    UserKey: u.UserKey, UserType: u.UserType, UserGroup: u.UserGroup,
+    ValidFrom: '2020-01-01', ValidTo: '9999-12-31',
+    LockStatus: u.LockFlag === 64 ? 'AD' : '',
+    LastLogonOn: u.Stale ? '2025-01-15' : periodTo,
+    RoleCount: assignments.filter((a) => a.UserKey === u.UserKey).length
+  }));
+  return pageOf(rows, skip, top);
+}
+
+function mockRoleInventoryPage({ periodTo, skip, top }) {
+  const assignments = mockRoleUsers();
+  const menu = mockRoleTransactions('MENU');
+  const auth = mockRoleTransactions('AUTH');
+  const rows = [
+    ...MOCK_DEPARTMENTS.map((d) => ({ RoleName: departmentRole(d), RoleText: `${d} clerk (mock)`, RoleType: 'SINGLE', ParentRole: '', IsSapDelivered: false })),
+    ...MOCK_SAP_ROLES.map(([role, text]) => ({ RoleName: role, RoleText: text, RoleType: 'SINGLE', ParentRole: '', IsSapDelivered: true }))
+  ].map((role) => ({
+    ...role,
+    MenuTcodeCount: menu.filter((t) => t.RoleName === role.RoleName).length,
+    AuthTcodeCount: auth.filter((t) => t.RoleName === role.RoleName).length,
+    UserCount: assignments.filter((a) => a.RoleName === role.RoleName).length,
+    ChangedOn: periodTo
+  })).sort((a, b) => a.RoleName.localeCompare(b.RoleName));
+  return pageOf(rows, skip, top);
+}
+
+function mockRoleUsersPage({ skip, top }) {
+  return pageOf(mockRoleUsers().map((a) => ({ ...a, ValidFrom: '2020-01-01', ValidTo: '9999-12-31' })), skip, top);
+}
+
+function mockRoleTransactionsPage({ source, skip, top }) {
+  return pageOf(mockRoleTransactions(source), skip, top);
+}
+
 // ---------------------------------------------------------------------------
 // Offline file bridge: ingest a ZADO_EXPORT_USAGE JSON extract (downloaded
 // via SAP GUI in landscapes where the Cloud Connector path is not open yet)
@@ -499,5 +738,9 @@ module.exports = {
   parseSwncEntryId,
   filterDialogRows,
   sanitizeExtractJson,
-  mockUserTransactionUsagePage
+  mockUserTransactionUsagePage,
+  mockUserInventoryPage,
+  mockRoleInventoryPage,
+  mockRoleUsersPage,
+  mockRoleTransactionsPage
 };

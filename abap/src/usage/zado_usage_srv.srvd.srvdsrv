@@ -1,7 +1,11 @@
 @EndUserText.label: 'AdoptOps Usage Extraction Service'
 define service ZADO_USAGE_SRV {
-  expose ZADO_C_USAGE_PERIODS  as UsagePeriods;
-  expose ZADO_C_TX_USAGE       as TransactionUsage;
-  expose ZADO_C_USER_TX_USAGE  as UserTransactionUsage;
-  expose ZADO_C_SYSTEM_INFO    as SystemInfo;
+  expose ZADO_C_USAGE_PERIODS   as UsagePeriods;
+  expose ZADO_C_TX_USAGE        as TransactionUsage;
+  expose ZADO_C_USER_TX_USAGE   as UserTransactionUsage;
+  expose ZADO_C_SYSTEM_INFO     as SystemInfo;
+  expose ZADO_C_USER_INVENTORY  as UserInventory;
+  expose ZADO_C_ROLE_INVENTORY  as RoleInventory;
+  expose ZADO_C_ROLE_USERS      as RoleUsers;
+  expose ZADO_C_ROLE_TCODES     as RoleTransactions;
 }

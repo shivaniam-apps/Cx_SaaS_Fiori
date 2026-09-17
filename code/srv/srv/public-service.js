@@ -58,7 +58,9 @@ module.exports = cds.service.impl(async function () {
         if (!targetSystem) return req.reject(404, 'Target system not found.');
         if (!periodFrom || !periodTo) return req.reject(400, 'periodFrom and periodTo are required.');
 
-        const effectiveSources = (sources && sources.length ? sources : ['ST03N']).map((s) => String(s).toUpperCase());
+        // Default extraction: usage (ST03N) plus the user and role inventory
+        // (USR02, AGR_*) the landscape and the proposal engine correlate on.
+        const effectiveSources = (sources && sources.length ? sources : ['ST03N', 'USR02', 'AGR']).map((s) => String(s).toUpperCase());
         const runId = randomUUID();
         const pseudonymised = !targetSystem.identifiedUsageAllowed;
 

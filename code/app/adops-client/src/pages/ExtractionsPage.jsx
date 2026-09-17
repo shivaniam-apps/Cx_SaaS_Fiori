@@ -98,7 +98,7 @@ export function ExtractionsPage() {
     try {
       const handle = await runUsageExtraction({
         targetSystemId: draft.targetSystemId,
-        sources: ['ST03N'],
+        sources: ['ST03N', 'USR02', 'AGR'],
         periodFrom: draft.periodFrom,
         periodTo: draft.periodTo,
         granularity: draft.granularity,
