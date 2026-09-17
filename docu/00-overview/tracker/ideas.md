@@ -26,6 +26,11 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I16 (2026-09-17) The db deployer (code/db/package.json) has no lockfile; the CF buildpack resolves ^8.9.4 / ^1.10.0 at staging. Pin a lockfile under T5 so deployer and runtime cannot drift.
 - I17 (2026-09-17) First cf deploy against a Postgres instance that was schema-deployed by hand (no cds_model row) fails on existing tables; docu/05 describes the --model-only seeding. Add a worktree script for it if the dev space instance turns out to be in that state.
 - I18 (2026-09-17) worktree.mjs doctor (I4) should also flag junctioned client node_modules as "mbt build unsafe here", since mbt's npm ci would wipe the primary checkout's modules.
+- I19 (2026-09-17) The connection check reports USAGE and ACTIVATE endpoints; S9 should add a CATALOG endpoint verdict (ZADO_CATALOG read unit) to the same `Endpoints` list so the Target Systems page needs no new shape. An EXPOSED activation verdict on QA/PROD is only shown today; consider also writing an audit event (A4 chain) since it is a safety finding.
+
+- I19 (2026-09-17) s4-http-client.js still defaults S4_DESTINATION to the hardcoded S4H_2023 (architecture.md forbids environment identifiers in code). Drop the fallback and make callers without a target-system destination fail with a clear error; touches the scheduling workstream's adapters, so land it as a shared change.
+- I20 (2026-09-17) dev.mtaext requests the PostgreSQL plan "development"; confirm the plan is entitled in the ap10 subaccount before the first dev deploy, else switch it to "standard" (plans cannot be changed on an existing instance by the deployer).
+- I21 (2026-09-17) server.js still defaults CORS_ORIGINS to Vite's 5173 while the clients run on 5273/5283/5293/5303/5313; align the local default with the worktree port slots.
 
 ## Parked
 

@@ -16,7 +16,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## Accomplished
 
-- [x] O2 Settings page on shared AdopsPageTabs (/settings/:view?): per-system identifiedUsageAllowed (confirmed, audited, recent changes shown) and activationRootPath, telemetry settings form — this PR, 2026-09-17
+- [x] O2 Settings page on shared AdopsPageTabs (/settings/:view?): per-system identifiedUsageAllowed (confirmed, audited, recent changes shown) and activationRootPath, telemetry settings form — PR #22, 2026-09-17
 - [x] O5 Client crash reporting: features/telemetry/correlation.js + httpCorrelation interceptors on both axios clients, AppErrorBoundary.componentDidCatch -> recordClientError with a support reference — this PR, 2026-09-17
 - [x] O4 Replace hardcoded newRolesNeeded / activationStepCount with deriveActivationEffort from the activation template — this PR, 2026-09-17
 - [x] O1 Activation Plans page: cross-wave list + detail, create / simulate / execute, open run; queryActivationPlans + readActivationPlan Wave/Transport/Runs — PR #15, 2026-09-17
@@ -26,7 +26,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 ## Daily log
 
 ### 2026-09-17
-- O2 done on feat/settings-page: AdopsPageTabs component, Settings page with Target Systems and Telemetry tabs; verified toggle identified mode -> IDENTIFIED_USAGE_CHANGED audit rows visible on the page, telemetry save persists (O5 merged via PR #19).
+- O2 done on feat/settings-page: AdopsPageTabs component, Settings page with Target Systems and Telemetry tabs; verified toggle identified mode -> IDENTIFIED_USAGE_CHANGED audit rows visible on the page, telemetry save persists (O5 merged via PR #19). PR #22 opened; merged origin/main (S1, A2) into the branch.
 - O5 done on feat/client-crash-reporting: render crashes land in ClientErrorReports (verified: route, feature, correlation/session id, stacks, app version); every request now carries x-correlation-id (O4 merged via PR #17).
 - O4 done on fix/proposal-plan-counts: deriveActivationEffort (activation-plan.js) feeds the candidate query and the engine default; effort now counts the 10-step single-app plan instead of the literal 4 (O1 merged via PR #15).
 
