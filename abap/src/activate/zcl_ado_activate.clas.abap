@@ -51,7 +51,8 @@ CLASS zcl_ado_activate DEFINITION
              role            TYPE string,
              text            TYPE string,
              reference_roles TYPE string_table,
-           END OF ty_role_key.
+             trkorr          TYPE string,     "   injected by the engine
+           END OF ty_role_key.               "   from the plan's request
     TYPES: BEGIN OF ty_profile_key,           " GENERATE_PROFILE
              role TYPE string,
            END OF ty_profile_key.
@@ -64,6 +65,17 @@ CLASS zcl_ado_activate DEFINITION
              trkorr     TYPE string,          "   { trkorr, simulation }
              simulation TYPE abap_bool,       "             -> release
            END OF ty_transport_key.
+    " One E071-shaped object reference: { pgmid, object, objName }.
+    TYPES: BEGIN OF ty_append_object,
+             pgmid    TYPE string,
+             object   TYPE string,
+             obj_name TYPE string,
+           END OF ty_append_object.
+    TYPES ty_append_objects TYPE STANDARD TABLE OF ty_append_object WITH DEFAULT KEY.
+    TYPES: BEGIN OF ty_append_key,            " APPEND_TO_TRANSPORT
+             trkorr  TYPE string,             "   injected by the engine
+             objects TYPE ty_append_objects,
+           END OF ty_append_key.
 
     CLASS-METHODS execute_step
       IMPORTING iv_step_type       TYPE string
@@ -142,10 +154,13 @@ CLASS zcl_ado_activate IMPLEMENTATION.
             ls_role-text = |AdoptOps { ls_role-role }|.
           ENDIF.
           " reference_roles (SAP_BR_* templates) are carried for the menu
-          " derivation of a later step and are not consumed here.
+          " derivation of a later step and are not consumed here. trkorr is
+          " the plan's request (empty when the plan has none yet): PFCG
+          " records the role on it at creation time.
           rs_result = zcl_ado_act_role=>create_role(
-            iv_role = CONV #( ls_role-role )
-            iv_text = ls_role-text ).
+            iv_role   = CONV #( ls_role-role )
+            iv_text   = ls_role-text
+            iv_trkorr = CONV #( ls_role-trkorr ) ).
         ENDIF.
 
       WHEN 'GENERATE_PROFILE'.
@@ -199,6 +214,34 @@ CLASS zcl_ado_activate IMPLEMENTATION.
         ELSE.
           rs_result = zcl_ado_act_cts=>create_request(
             iv_text = CONV #( ls_transport-text ) ).
+        ENDIF.
+
+      WHEN 'APPEND_TO_TRANSPORT'.
+        DATA ls_append TYPE ty_append_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_append ).
+        IF ls_append-trkorr IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'trkorr is empty - the plan has no transport request yet (ADD_TO_TRANSPORT runs first).' ).
+        ELSEIF ls_append-objects IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'objects is empty.' ).
+        ELSE.
+          DATA lt_objects TYPE tr_objects.
+          CLEAR lt_objects.
+          LOOP AT ls_append-objects INTO DATA(ls_object).
+            APPEND VALUE e071(
+                pgmid    = ls_object-pgmid
+                object   = ls_object-object
+                obj_name = ls_object-obj_name ) TO lt_objects.
+          ENDLOOP.
+          rs_result = zcl_ado_act_cts=>append_missing(
+            iv_trkorr  = CONV #( ls_append-trkorr )
+            it_objects = lt_objects ).
         ENDIF.
 
       WHEN 'ACTIVATE_ODATA_SERVICE'.

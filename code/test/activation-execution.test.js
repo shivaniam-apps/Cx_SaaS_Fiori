@@ -166,10 +166,34 @@ describe('activation execution engine', function () {
     const byType = Object.fromEntries(rows.map((r) => [r.StepType, r.Status]));
     expect(byType.CREATE_PFCG_ROLE).to.equal('FAILED');
     // ADD_SPACE_TO_ROLE depends on the failed role; GENERATE_PROFILE depends
-    // on ADD_SPACE_TO_ROLE; the transport depends on the profile.
+    // on ADD_SPACE_TO_ROLE; the append depends on the profile. The request
+    // itself was created before the role and stays.
     expect(byType.ADD_SPACE_TO_ROLE).to.equal('SKIPPED');
     expect(byType.GENERATE_PROFILE).to.equal('SKIPPED');
-    expect(byType.ADD_TO_TRANSPORT).to.equal('SKIPPED');
+    expect(byType.APPEND_TO_TRANSPORT).to.equal('SKIPPED');
+    expect(byType.ADD_TO_TRANSPORT).to.equal('SUCCESS');
+  });
+
+  it('threads the TRKORR created by ADD_TO_TRANSPORT into the role and append keys, persisted rows untouched', async () => {
+    const { plan, steps } = await seedPlan();
+    const seen = {};
+    const recordingExecutor = (args) => {
+      seen[args.step.StepType] = JSON.parse(args.step.ObjectKeyJson || '{}');
+      return mockStepExecutor(args);
+    };
+    await executePlanSteps({
+      plan, steps, executor: recordingExecutor, systemId: 'RD1',
+      executedBy: 'tester', reportProgress: noProgress, isCancelRequested: notCancelled
+    });
+    const trkorr = mockTrkorr(plan, 'RD1');
+    expect(seen.CREATE_PFCG_ROLE.trkorr).to.equal(trkorr);
+    expect(seen.APPEND_TO_TRANSPORT.trkorr).to.equal(trkorr);
+    expect(seen.APPEND_TO_TRANSPORT.objects).to.deep.equal([{ pgmid: 'R3TR', object: 'ACGR', objName: 'Z_ADO_WT' }]);
+    expect(seen.CREATE_SPACE.trkorr).to.equal(undefined);
+
+    const persisted = await SELECT.one.from('adops.db.ActivationSteps')
+      .where({ plan_ID: plan.ID, StepType: 'CREATE_PFCG_ROLE' });
+    expect(JSON.parse(persisted.ObjectKeyJson).trkorr).to.equal('', 'the planned key stays as planned');
   });
 
   it('rollup and final status are pure and consistent', () => {

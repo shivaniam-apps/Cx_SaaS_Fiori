@@ -14,12 +14,19 @@
     "CREATE_SPACE": { "spaceId": "ZADO_W1", "title": "Wave 1" },
     "CREATE_PAGE": { "pageId": "ZADO_W1_P1", "apps": ["F3893", "F0842A"] },
     "ASSIGN_PAGE_TO_SPACE": { "spaceId": "ZADO_W1", "pageId": "ZADO_W1_P1" },
-    "CREATE_PFCG_ROLE": { "role": "Z_ADO_W1", "text": "AdoptOps Wave 1", "referenceRoles": ["SAP_BR_INTERNAL_SALES_REP", "SAP_BR_PURCHASER"] },
+    "CREATE_PFCG_ROLE": { "role": "Z_ADO_W1", "text": "AdoptOps Wave 1", "referenceRoles": ["SAP_BR_INTERNAL_SALES_REP", "SAP_BR_PURCHASER"], "trkorr": "" },
     "ADD_SPACE_TO_ROLE": { "role": "Z_ADO_W1", "spaceId": "ZADO_W1" },
     "GENERATE_PROFILE": { "role": "Z_ADO_W1" },
-    "ADD_TO_TRANSPORT": { "text": "AdoptOps Wave 1" }
+    "ADD_TO_TRANSPORT": { "text": "AdoptOps Wave 1" },
+    "APPEND_TO_TRANSPORT": { "trkorr": "", "objects": [{ "pgmid": "R3TR", "object": "ACGR", "objName": "Z_ADO_W1" }] }
   },
   "other": {
+    "roleOnPlanTransport": {
+      "note": "At dispatch time the engine (withPlanTrkorr) fills trkorr on CREATE_PFCG_ROLE and APPEND_TO_TRANSPORT with the request the plan's ADD_TO_TRANSPORT step created.",
+      "stepType": "CREATE_PFCG_ROLE",
+      "params": { "role": "Z_ADO_W1", "text": "AdoptOps Wave 1", "referenceRoles": [], "trkorr": "RD1K900042" },
+      "key": { "role": "Z_ADO_W1", "text": "AdoptOps Wave 1", "referenceRoles": [], "trkorr": "RD1K900042" }
+    },
     "icfNodeWithoutCatalogRow": {
       "note": "Second app of the input has no BspApplication: the key travels empty and the ABAP dispatcher fails fast before HTTP_ACTIVATE_NODE.",
       "stepType": "ACTIVATE_ICF_NODE",

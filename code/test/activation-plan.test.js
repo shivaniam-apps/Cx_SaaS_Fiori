@@ -5,6 +5,8 @@ const require = createRequire(import.meta.url);
 const {
   waveTechnicalKey,
   objectKey,
+  withPlanTrkorr,
+  TRKORR_STEP_TYPES,
   deriveActivationSteps,
   deriveActivationEffort,
   simulateSteps,
@@ -56,9 +58,10 @@ describe('deriveActivationSteps', () => {
       'FOUNDATION',
       'SERVICE', 'SERVICE', 'SERVICE',           // ACTIVATE_ODATA_SERVICE x3
       'SERVICE', 'SERVICE', 'SERVICE',           // ACTIVATE_ICF_NODE x3
+      'TRANSPORT',                               // ADD_TO_TRANSPORT (create) before the first transportable write
       'CONTENT', 'CONTENT', 'CONTENT',
       'ROLE', 'ROLE', 'ROLE',
-      'TRANSPORT'
+      'TRANSPORT'                                // APPEND_TO_TRANSPORT (verify-first append)
     ]);
     expect(steps.filter((s) => s.StepType === 'ACTIVATE_ODATA_SERVICE').map((s) => s.ObjectName))
       .to.deep.equal(['F3893', 'F0842A', 'F0797']);
@@ -82,12 +85,30 @@ describe('deriveActivationSteps', () => {
     }
   });
 
-  it('wires dependsOn: services on foundation, page on space, transport on profile', () => {
+  it('wires dependsOn: services on foundation, space and role on the request, page on space, append on profile', () => {
     const byType = (t) => steps.filter((s) => s.StepType === t);
     const foundation = byType('RUN_TASK_LIST')[0];
+    const transport = byType('ADD_TO_TRANSPORT')[0];
     for (const s of byType('ACTIVATE_ODATA_SERVICE')) expect(s.dependsOn_ID).to.equal(foundation.ID);
+    expect(transport.dependsOn_ID).to.equal(null);
+    expect(byType('CREATE_SPACE')[0].dependsOn_ID).to.equal(transport.ID);
+    expect(byType('CREATE_PFCG_ROLE')[0].dependsOn_ID).to.equal(transport.ID);
     expect(byType('CREATE_PAGE')[0].dependsOn_ID).to.equal(byType('CREATE_SPACE')[0].ID);
-    expect(byType('ADD_TO_TRANSPORT')[0].dependsOn_ID).to.equal(byType('GENERATE_PROFILE')[0].ID);
+    expect(byType('APPEND_TO_TRANSPORT')[0].dependsOn_ID).to.equal(byType('GENERATE_PROFILE')[0].ID);
+  });
+
+  it('threads the plan TRKORR into the keys that write on the request, and only those', () => {
+    const role = steps.find((s) => s.StepType === 'CREATE_PFCG_ROLE');
+    const append = steps.find((s) => s.StepType === 'APPEND_TO_TRANSPORT');
+    const space = steps.find((s) => s.StepType === 'CREATE_SPACE');
+    expect(JSON.parse(role.ObjectKeyJson).trkorr).to.equal('');
+    expect(JSON.parse(withPlanTrkorr(role, ' RD1K900042 ').ObjectKeyJson).trkorr).to.equal('RD1K900042');
+    expect(JSON.parse(withPlanTrkorr(append, 'RD1K900042').ObjectKeyJson)).to.deep.equal({
+      trkorr: 'RD1K900042', objects: [{ pgmid: 'R3TR', object: 'ACGR', objName: 'Z_ADO_W1' }]
+    });
+    expect(withPlanTrkorr(space, 'RD1K900042')).to.equal(space);
+    expect(withPlanTrkorr(role, '')).to.equal(role);
+    expect(TRKORR_STEP_TYPES).to.deep.equal(['CREATE_PFCG_ROLE', 'APPEND_TO_TRANSPORT']);
   });
 
   it('deduplicates reference roles and carries proposal links on app steps', () => {
@@ -117,7 +138,7 @@ describe('deriveActivationEffort', () => {
 
   it('is the same for every app today and needs no inputs', () => {
     expect(deriveActivationEffort()).to.deep.equal(deriveActivationEffort({ fioriId: 'F0842A' }));
-    expect(deriveActivationEffort()).to.include({ activationStepCount: 10, appStepCount: 2, sharedStepCount: 8, newRolesNeeded: 1, irreversibleStepCount: 2 });
+    expect(deriveActivationEffort()).to.include({ activationStepCount: 11, appStepCount: 2, sharedStepCount: 9, newRolesNeeded: 1, irreversibleStepCount: 2 });
   });
 });
 

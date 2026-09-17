@@ -52,11 +52,17 @@ function abapDispatch(source) {
   return map;
 }
 
-// lv_step_type = 'STEP_TYPE'. lv_json = |{ "a": ..., "b": ... }|.
+// lv_step_type = 'STEP_TYPE'. lv_json = |\{ "a": "{ p_x }", ... \}|.
+// The ABAP string template becomes JSON by replacing embedded expressions
+// with a placeholder and unescaping the braces; top-level keys are compared.
 function smokeScenarios(source) {
   const map = {};
   for (const m of source.matchAll(/lv_step_type = '([A-Z_]+)'\.\s*\n\s*lv_json\s*=\s*\|(.*)\|\./g)) {
-    map[m[1]] = [...m[2].matchAll(/"([A-Za-z0-9_]+)":/g)].map((k) => k[1]).sort();
+    const json = m[2]
+      .replace(/(?<!\\)\{[^{}]*\}/g, 'X')   // { p_rname } -> X (inside quotes)
+      .replace(/\\\{/g, '{')
+      .replace(/\\\}/g, '}');
+    map[m[1]] = Object.keys(JSON.parse(json)).sort();
   }
   return map;
 }
@@ -82,7 +88,7 @@ describe('ObjectKeyJson contract: ABAP dispatcher mirrors the fixture', () => {
   it('dispatches the step types the roadmap marks executable today', () => {
     // The remaining planner step types return not_implemented until S3 lands.
     expect(Object.keys(dispatch).sort()).to.deep.equal([
-      'ACTIVATE_ICF_NODE', 'ADD_TO_TRANSPORT', 'ASSIGN_ROLE_TO_USERS',
+      'ACTIVATE_ICF_NODE', 'ADD_TO_TRANSPORT', 'APPEND_TO_TRANSPORT', 'ASSIGN_ROLE_TO_USERS',
       'CREATE_PFCG_ROLE', 'GENERATE_PROFILE', 'RUN_TASK_LIST'
     ]);
   });
@@ -91,10 +97,13 @@ describe('ObjectKeyJson contract: ABAP dispatcher mirrors the fixture', () => {
 describe('ObjectKeyJson contract: zado_activate_smoke feeds planner-shaped keys', () => {
   const scenarios = smokeScenarios(smokeSource);
 
-  it('covers transport, role, profile and ICF with the planned key names', () => {
-    expect(Object.keys(scenarios).sort()).to.deep.equal(['ACTIVATE_ICF_NODE', 'ADD_TO_TRANSPORT', 'CREATE_PFCG_ROLE', 'GENERATE_PROFILE']);
+  it('covers transport create/append, role, profile and ICF with the planned key names', () => {
+    expect(Object.keys(scenarios).sort()).to.deep.equal(['ACTIVATE_ICF_NODE', 'ADD_TO_TRANSPORT', 'APPEND_TO_TRANSPORT', 'CREATE_PFCG_ROLE', 'GENERATE_PROFILE']);
     for (const [stepType, keys] of Object.entries(scenarios)) {
-      expect(keys, stepType).to.deep.equal(Object.keys(fixture.planned[stepType]).sort());
+      // The smoke role literal predates the engine-injected trkorr; every
+      // other key must match the planned shape exactly.
+      const planned = Object.keys(fixture.planned[stepType]).filter((k) => !(stepType === 'CREATE_PFCG_ROLE' && k === 'trkorr')).sort();
+      expect(keys, stepType).to.deep.equal(planned);
     }
   });
 

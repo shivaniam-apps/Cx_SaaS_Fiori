@@ -73,7 +73,18 @@ const OBJECT_KEY_BUILDERS = {
   CREATE_SPACE: ({ spaceId, title }) => ({ spaceId, title }),
   CREATE_PAGE: ({ pageId, apps }) => ({ pageId, apps: [...(apps || [])] }),
   ASSIGN_PAGE_TO_SPACE: ({ spaceId, pageId }) => ({ spaceId, pageId }),
-  CREATE_PFCG_ROLE: ({ role, text, referenceRoles }) => ({ role, text: sapText(text, 80), referenceRoles: [...(referenceRoles || [])] }),
+  // trkorr is the plan's transport request; the planner leaves it empty and
+  // the execution engine injects it (withPlanTrkorr) once ADD_TO_TRANSPORT
+  // has created the request, so PFCG records the role on it at creation.
+  CREATE_PFCG_ROLE: ({ role, text, referenceRoles, trkorr }) => ({
+    role, text: sapText(text, 80), referenceRoles: [...(referenceRoles || [])], trkorr: String(trkorr || '').trim()
+  }),
+  // E071-shaped references of the wave's transportable objects; verify-first
+  // on the ABAP side (already-recorded objects are not appended again).
+  APPEND_TO_TRANSPORT: ({ trkorr, objects }) => ({
+    trkorr: String(trkorr || '').trim(),
+    objects: (objects || []).map((o) => ({ pgmid: o.pgmid, object: o.object, objName: o.objName }))
+  }),
   ADD_SPACE_TO_ROLE: ({ role, spaceId }) => ({ role, spaceId }),
   GENERATE_PROFILE: ({ role }) => ({ role }),
   ASSIGN_ROLE_TO_USERS: ({ role, users }) => ({ role, users: [...(users || [])] }),
@@ -92,6 +103,23 @@ function objectKey(stepType, params = {}) {
 
 function objectKeyJson(stepType, params) {
   return JSON.stringify(objectKey(stepType, params));
+}
+
+// Step types whose key carries the plan's transport request. The TRKORR
+// only exists once the plan's ADD_TO_TRANSPORT step ran, so the engine
+// merges it into the persisted key at dispatch time (the row keeps its
+// planned key; only the executor sees the completed one).
+const TRKORR_STEP_TYPES = ['CREATE_PFCG_ROLE', 'APPEND_TO_TRANSPORT'];
+
+function withPlanTrkorr(step, trkorr) {
+  if (!trkorr || !TRKORR_STEP_TYPES.includes(step.StepType)) return step;
+  let key = {};
+  try {
+    key = step.ObjectKeyJson ? JSON.parse(step.ObjectKeyJson) : {};
+  } catch {
+    key = {};
+  }
+  return { ...step, ObjectKeyJson: JSON.stringify({ ...key, trkorr: String(trkorr).trim() }) };
 }
 
 // proposals: approved AppProposals rows, optionally enriched with the
@@ -146,10 +174,23 @@ function deriveActivationSteps({ proposals, waveName }) {
     });
   }
 
+  // The transport request is created BEFORE the first transportable write:
+  // PFCG and the launchpad repositories record objects on a request at
+  // write time, so the plan's TRKORR must exist first (engine threads it
+  // into the later keys via withPlanTrkorr). Release stays an operator
+  // action (releaseTransport).
+  const transport = step({
+    StepGroup: 'TRANSPORT', StepType: 'ADD_TO_TRANSPORT',
+    ObjectType: 'TRANSPORT', ObjectName: `${key}_TR`,
+    Transportable: true, LocalReplay: false, Reversible: true,
+    ObjectKeyJson: objectKeyJson('ADD_TO_TRANSPORT', { text: title })
+  });
+
   const space = step({
     StepGroup: 'CONTENT', StepType: 'CREATE_SPACE',
     ObjectType: 'FLP_SPACE', ObjectName: spaceId,
     Transportable: true, LocalReplay: false, Reversible: true,
+    dependsOn_ID: transport.ID,
     ObjectKeyJson: objectKeyJson('CREATE_SPACE', { spaceId, title: waveName })
   });
   const page = step({
@@ -172,6 +213,7 @@ function deriveActivationSteps({ proposals, waveName }) {
     StepGroup: 'ROLE', StepType: 'CREATE_PFCG_ROLE',
     ObjectType: 'PFCG_ROLE', ObjectName: roleName,
     Transportable: true, LocalReplay: false, Reversible: true,
+    dependsOn_ID: transport.ID,
     ObjectKeyJson: objectKeyJson('CREATE_PFCG_ROLE', { role: roleName, text: title, referenceRoles })
   });
   const spaceToRole = step({
@@ -189,12 +231,17 @@ function deriveActivationSteps({ proposals, waveName }) {
     ObjectKeyJson: objectKeyJson('GENERATE_PROFILE', { role: roleName })
   });
 
+  // Safety net after the writes: whatever PFCG/the repositories did not
+  // record on the request themselves is appended here (verify-first on
+  // E071). Spaces and pages join this list with their S3 executors.
   step({
-    StepGroup: 'TRANSPORT', StepType: 'ADD_TO_TRANSPORT',
+    StepGroup: 'TRANSPORT', StepType: 'APPEND_TO_TRANSPORT',
     ObjectType: 'TRANSPORT', ObjectName: `${key}_TR`,
     Transportable: true, LocalReplay: false, Reversible: true,
     dependsOn_ID: profile.ID,
-    ObjectKeyJson: objectKeyJson('ADD_TO_TRANSPORT', { text: title })
+    ObjectKeyJson: objectKeyJson('APPEND_TO_TRANSPORT', {
+      objects: [{ pgmid: 'R3TR', object: 'ACGR', objName: roleName }]
+    })
   });
 
   return { steps, spaceId, pageId, roleName };
@@ -271,6 +318,8 @@ module.exports = {
   icfNodeFor,
   objectKey,
   objectKeyJson,
+  withPlanTrkorr,
+  TRKORR_STEP_TYPES,
   deriveActivationSteps,
   deriveActivationEffort,
   simulateSteps,

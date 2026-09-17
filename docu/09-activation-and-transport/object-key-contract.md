@@ -27,13 +27,30 @@ ICF handler (`objectKeyJson`) and the RAP action (`ObjectKeyJson`).
 | `CREATE_SPACE` | `{ spaceId, title }` | `ZADO_<wave key>`, wave name | — | S3 |
 | `CREATE_PAGE` | `{ pageId, apps[] }` | `ZADO_<wave key>_P1`, approved Fiori IDs | — | S3 |
 | `ASSIGN_PAGE_TO_SPACE` | `{ spaceId, pageId }` | as above | — | S3 |
-| `CREATE_PFCG_ROLE` | `{ role, text, referenceRoles[] }` | `Z_ADO_<wave key>`, `AdoptOps <wave>` (≤ 80), distinct `BusinessRoleId`s | `zcl_ado_act_role=>create_role` (`PRGN_RFC_CREATE_ACTIVITY_GROUP`); `referenceRoles` reserved for menu derivation | executable |
+| `CREATE_PFCG_ROLE` | `{ role, text, referenceRoles[], trkorr }` | `Z_ADO_<wave key>`, `AdoptOps <wave>` (≤ 80), distinct `BusinessRoleId`s; `trkorr` empty in the row, injected at dispatch | `zcl_ado_act_role=>create_role` (`PRGN_RFC_CREATE_ACTIVITY_GROUP` with `REQUEST`); `referenceRoles` reserved for menu derivation | executable |
 | `ADD_SPACE_TO_ROLE` | `{ role, spaceId }` | as above | — | S3 |
 | `GENERATE_PROFILE` | `{ role }` | as above | `zcl_ado_act_role=>generate_profile` | executable |
 | `ASSIGN_ROLE_TO_USERS` | `{ role, users[] }` | plan with `AssignUsers` (not emitted by the planner yet) | `zcl_ado_act_role=>assign_users` | executable |
 | `ADD_TO_TRANSPORT` | `{ text }` — create<br>`{ trkorr, simulation }` — release | `AdoptOps <wave>` (≤ 60);<br>`releaseTransport` action | `zcl_ado_act_cts=>create_request` / `release_request` (`TRINT_RELEASE_REQUEST IV_SIMULATION`) | executable; a set `trkorr` selects release |
+| `APPEND_TO_TRANSPORT` | `{ trkorr, objects[{ pgmid, object, objName }] }` | the wave's transportable objects (today `R3TR ACGR <role>`; spaces/pages join with their executors); `trkorr` injected at dispatch | `zcl_ado_act_cts=>append_missing` (`TR_APPEND_TO_COMM_OBJS_KEYS`, verify-first and verify-after on `E071` of the request and its tasks) | executable; all objects present → `SKIPPED` |
 
 `<wave key>` is `waveTechnicalKey(waveName)` (`Wave 1` → `W1`).
+
+## Sequence and the plan's transport request
+
+The planner orders a wave as FOUNDATION → SERVICE (OData, ICF per app) →
+**`ADD_TO_TRANSPORT` (create)** → CONTENT (space, page, assignment) → ROLE
+(create, add space, profile) → **`APPEND_TO_TRANSPORT`**. The request is
+created before the first transportable write because PFCG and the launchpad
+repositories record objects on a request at write time; the space and role
+steps depend on it.
+
+The TRKORR does not exist when the plan is derived, so the rows keep
+`trkorr: ""`. At dispatch the execution engine merges the plan's request into
+the keys listed in `TRKORR_STEP_TYPES` (`withPlanTrkorr` in
+`activation-plan.js`): the persisted row stays as planned, only the executor
+sees the completed key. A resumed plan reads the request back from
+`TransportRequests`. Release remains the operator's `releaseTransport` action.
 
 ## Rules
 
