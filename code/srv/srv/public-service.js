@@ -711,26 +711,32 @@ module.exports = cds.service.impl(async function () {
         if (!['DRAFT', 'SIMULATED'].includes(plan.Status)) {
             return req.reject(400, `Plan is ${plan.Status}; simulation runs on DRAFT or SIMULATED plans.`);
         }
-        // Live backend-state probing arrives with the ZADO read-side checks;
-        // until then simulation runs offline in live mode too - structural
-        // verdicts (irreversibility, dependency shape) still hold, and each
-        // message says so instead of blocking execution behind a 501.
+        // Live mode probes the DEV system's real state through the write
+        // unit's read-only probe (ZCL_ADO_ACT_PROBE): existing objects are
+        // reported as existsAlready, steps without an executor as BLOCKED.
+        // Without a routable target system the simulation stays structural
+        // and every message says so - nothing may claim to exist unprobed.
         const { simulateSteps, mockSimulationProbe } = require('./utils/activation-plan.js');
-        const offline = !shouldMockSap();
-        const probe = offline
-            ? (step) => {
-                const verdict = mockSimulationProbe(step);
-                return {
-                    ...verdict,
-                    // Without a backend probe nothing may claim to exist.
-                    existsAlready: false,
-                    message: `${verdict.message} [offline simulation - backend state not probed]`
+        let probe = mockSimulationProbe;
+        if (!shouldMockSap()) {
+            const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID });
+            if (targetSystem?.destinationName) {
+                const { liveSimulationProbeFor } = require('./utils/s4-activate-adapter.js');
+                probe = liveSimulationProbeFor(targetSystem);
+            } else {
+                probe = (step) => {
+                    const verdict = mockSimulationProbe(step);
+                    return {
+                        ...verdict,
+                        existsAlready: false,
+                        message: `${verdict.message} [offline simulation - the target system has no BTP destination, backend state not probed]`
+                    };
                 };
             }
-            : mockSimulationProbe;
+        }
         const steps = await SELECT.from('adops.db.ActivationSteps')
             .where({ plan_ID: planId }).orderBy('SequenceNo asc');
-        const { steps: verdicts, rollup } = simulateSteps(steps, probe);
+        const { steps: verdicts, rollup } = await simulateSteps(steps, probe);
         for (const v of verdicts) {
             await UPDATE('adops.db.ActivationSteps')
                 .set({ Status: v.Status, ExistsAlready: v.ExistsAlready, SimulationMessage: v.SimulationMessage })

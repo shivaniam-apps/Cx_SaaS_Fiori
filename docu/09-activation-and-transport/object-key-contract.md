@@ -52,6 +52,27 @@ the keys listed in `TRKORR_STEP_TYPES` (`withPlanTrkorr` in
 sees the completed key. A resumed plan reads the request back from
 `TransportRequests`. Release remains the operator's `releaseTransport` action.
 
+## Simulation: the read-side state probe
+
+`simulateActivationPlan` in live mode sends every step to the write unit with
+the same `StepType` + `ObjectKeyJson` and `probe: true` (ICF body field, or
+`Probe` on the RAP action parameter). `ZCL_ADO_ACT_PROBE` reads the DEV
+system's state and answers `{ verdict, existsAlready, message }` without a
+LUW:
+
+| Verdict | Meaning | Examples |
+|---|---|---|
+| `SIMULATED_OK` | executable; `existsAlready` says the executor will skip it | role exists, ICF node already active, request already released |
+| `SIMULATED_WARN` | executable with a caveat | inactive ICF node (activation irreversible) |
+| `SIMULATED_BLOCKED` | cannot run | incomplete key (ICF app without BSP application), no executor on this release (S3 pending), unknown request |
+
+A transport failure or a foreign payload is mapped to `SIMULATED_BLOCKED` by
+the adapter, so a plan never claims a state it could not read. Mock mode keeps
+the deterministic `mockSimulationProbe`; a live target system without a
+destination gets the structural simulation with an explicit "not probed"
+suffix. `ZADO_ACTIVATE_SMOKE` has a "Probe only" checkbox that runs a
+scenario through the probe instead of the executor.
+
 ## Rules
 
 - **Only what the executor needs.** Keys carry no documentation fields (API

@@ -14,7 +14,9 @@ CLASS zcl_ado_act_http DEFINITION
     " Contract with the AdoptOps SaaS (s4-activate-adapter.js):
     "   GET  <node>  -> 200 info/ping JSON (existence + identity probe)
     "   POST <node>  -> body { "stepType": "...",
-    "                          "objectKeyJson": "<json string>" }
+    "                          "objectKeyJson": "<json string>",
+    "                          "probe": false }   (true = read-only
+    "                   state probe -> { verdict, existsAlready, message })
     "                -> 200 with the ZIF_ADO_ACT_STEP result serialized
     "                   camelCase: { status, existsAlready, trkorr,
     "                   messages: [ { type, message, ... } ] }
@@ -33,6 +35,7 @@ CLASS zcl_ado_act_http DEFINITION
     TYPES: BEGIN OF ty_request,
              step_type       TYPE string,
              object_key_json TYPE string,
+             probe           TYPE abap_bool,  " true = read-only state probe
            END OF ty_request.
 
     METHODS send_json
@@ -89,6 +92,30 @@ CLASS zcl_ado_act_http IMPLEMENTATION.
         iv_status   = 400
         iv_reason   = 'Bad Request'
         iv_json     = |\{ "error": "Body must provide stepType and objectKeyJson." \}| ).
+      RETURN.
+    ENDIF.
+
+    " Read-only state probe (simulateActivationPlan): same contract, no
+    " LUW, answers { verdict, existsAlready, message }.
+    IF ls_request-probe = abap_true.
+      TRY.
+          DATA(ls_probe) = zcl_ado_act_probe=>probe_step(
+            iv_step_type       = ls_request-step_type
+            iv_object_key_json = ls_request-object_key_json ).
+          send_json(
+            io_response = server->response
+            iv_status   = 200
+            iv_reason   = 'OK'
+            iv_json     = /ui2/cl_json=>serialize(
+                            data        = ls_probe
+                            pretty_name = /ui2/cl_json=>pretty_mode-camel_case ) ).
+        CATCH cx_root INTO DATA(lx_probe_error).
+          send_json(
+            io_response = server->response
+            iv_status   = 500
+            iv_reason   = 'Internal Server Error'
+            iv_json     = |\{ "error": "{ json_escape( lx_probe_error->get_text( ) ) }" \}| ).
+      ENDTRY.
       RETURN.
     ENDIF.
 

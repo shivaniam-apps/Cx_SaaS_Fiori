@@ -31,4 +31,20 @@ INTERFACE zif_ado_act_step
            messages       TYPE ty_messages,
          END OF ty_result.
 
+  " Read-side state probe (simulation, ZCL_ADO_ACT_PROBE): the verdicts
+  " are the CAP simulation statuses of ActivationSteps. exists_already
+  " means the executor will SKIP the step; BLOCKED means it cannot run.
+  CONSTANTS:
+    BEGIN OF c_verdict,
+      ok      TYPE string VALUE 'SIMULATED_OK',
+      warning TYPE string VALUE 'SIMULATED_WARN',
+      blocked TYPE string VALUE 'SIMULATED_BLOCKED',
+    END OF c_verdict.
+
+  TYPES: BEGIN OF ty_probe,
+           verdict        TYPE string,
+           exists_already TYPE abap_bool,
+           message        TYPE string,
+         END OF ty_probe.
+
 ENDINTERFACE.

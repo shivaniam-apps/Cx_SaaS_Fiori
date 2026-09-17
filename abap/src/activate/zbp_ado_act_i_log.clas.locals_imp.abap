@@ -24,6 +24,19 @@ CLASS lhc_log IMPLEMENTATION.
       DATA lv_sysmsg      TYPE string.
       CLEAR: lv_result_json, lv_sysmsg.
 
+      " Read-only state probe (simulation): no LUW, so no RFC hop needed.
+      IF ls_key-%param-probe = abap_true.
+        DATA(ls_probe) = zcl_ado_act_probe=>probe_step(
+          iv_step_type       = ls_key-%param-steptype
+          iv_object_key_json = ls_key-%param-objectkeyjson ).
+        lv_result_json = /ui2/cl_json=>serialize(
+                           data        = ls_probe
+                           pretty_name = /ui2/cl_json=>pretty_mode-camel_case ).
+        APPEND VALUE #( %cid              = ls_key-%cid
+                        %param-resultjson = lv_result_json ) TO result.
+        CONTINUE.
+      ENDIF.
+
       CALL FUNCTION 'Z_ADO_ACT_EXEC_STEP' DESTINATION 'NONE'
         EXPORTING
           iv_step_type          = ls_key-%param-steptype

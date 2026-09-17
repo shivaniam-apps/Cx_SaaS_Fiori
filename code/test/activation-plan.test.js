@@ -144,7 +144,11 @@ describe('deriveActivationEffort', () => {
 
 describe('simulateSteps with the mock probe', () => {
   const { steps } = deriveActivationSteps({ proposals: PROPOSALS, waveName: 'Wave 1' });
-  const { steps: verdicts, rollup } = simulateSteps(steps, mockSimulationProbe);
+  let verdicts;
+  let rollup;
+  before(async () => {
+    ({ steps: verdicts, rollup } = await simulateSteps(steps, mockSimulationProbe));
+  });
 
   it('is verify-first: the foundation task list is found already executed', () => {
     const foundation = verdicts[0];
@@ -164,10 +168,25 @@ describe('simulateSteps with the mock probe', () => {
     expect(rollup.SkippedCount).to.equal(1);
   });
 
-  it('is deterministic', () => {
-    const again = simulateSteps(steps, mockSimulationProbe);
+  it('is deterministic', async () => {
+    const again = await simulateSteps(steps, mockSimulationProbe);
     expect(again.steps).to.deep.equal(verdicts);
     expect(again.rollup).to.deep.equal(rollup);
+  });
+
+  it('awaits an async (live) probe one step at a time and counts BLOCKED as failed', async () => {
+    const order = [];
+    const liveLike = async (step) => {
+      order.push(step.SequenceNo);
+      if (step.StepType === 'CREATE_SPACE') return { verdict: 'SIMULATED_BLOCKED', existsAlready: false, message: 'no executor' };
+      if (step.StepType === 'CREATE_PFCG_ROLE') return { verdict: 'SIMULATED_OK', existsAlready: true, message: 'role exists' };
+      return { verdict: 'SIMULATED_OK', existsAlready: false, message: 'ok' };
+    };
+    const result = await simulateSteps(steps, liveLike);
+    expect(order).to.deep.equal(steps.map((s) => s.SequenceNo));
+    expect(result.rollup.FailedCount).to.equal(1);
+    expect(result.rollup.SkippedCount).to.equal(1);
+    expect(result.steps.find((v) => v.Status === 'SIMULATED_BLOCKED').SimulationMessage).to.equal('no executor');
   });
 });
 
