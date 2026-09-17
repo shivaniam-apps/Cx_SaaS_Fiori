@@ -1,0 +1,27 @@
+{
+  "name": "adops-basic-db-deployer",
+  "version": "0.0.1",
+  "description": "PostgreSQL schema deployer for AdoptOps Basic (runs `cds-deploy` as a Cloud Foundry task; see docu/05-deployment-tiers/postgres-schema-deployment.md)",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "start": "cds-deploy"
+  },
+  "dependencies": {
+    "@sap/cds": "^8.9.4",
+    "@cap-js/postgres": "^1.10.0"
+  },
+  "cds": {
+    "requires": {
+      "db": {
+        "kind": "postgres",
+        "vcap": {
+          "label": "postgresql-db"
+        },
+        "schema_evolution": "auto"
+      }
+    }
+  }
+}

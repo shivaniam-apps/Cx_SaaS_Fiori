@@ -78,6 +78,36 @@ modules:
         - npm run build
       supported-platforms: []
 
+  # PostgreSQL schema deployment. cds build (task "postgres") emits gen/pg
+  # with the compiled CSN and a package.json whose start script is
+  # cds-deploy; the CF task runs it once per deployment with automatic
+  # schema evolution (delta against the cds_model table). no-start keeps the
+  # app from lingering; srv requires this module so it starts only after the
+  # schema exists. See docu/05-deployment-tiers/postgres-schema-deployment.md.
+  - name: adops-basic-db-deployer
+    type: nodejs
+    path: ../../code/gen/pg
+    build-parameters:
+      builder: npm
+      ignore: [ '.DS_Store', 'node_modules/', 'default-*.json', 'manifest*.yml' ]
+    parameters:
+      app-name: adops-basic-db-deployer-${space}
+      buildpack: nodejs_buildpack
+      no-route: true
+      no-start: true
+      memory: 256MB
+      disk-quota: 1024MB
+      tasks:
+        - name: deploy-to-postgresql
+          command: npm start
+          memory: 256MB
+          disk-quota: 1024MB
+    properties:
+      NODE_ENV: production
+      CDS_ENV: production
+    requires:
+      - name: adops-basic-postgres
+
   - name: adops-basic-srv
     type: nodejs
     path: ../../code/gen/srv
@@ -113,6 +143,7 @@ modules:
       - name: adops-basic-uaa
       - name: adops-basic-logging
       - name: adops-basic-postgres
+      - name: adops-basic-db-deployer
       - name: adops-basic-registry
       - name: adops-basic-destination
       - name: adops-basic-connectivity

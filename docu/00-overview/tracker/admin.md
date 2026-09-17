@@ -9,7 +9,6 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## To-do (milestone order)
 
-- [ ] A1 PostgreSQL schema deployment: db-deployer module, cds deploy --to postgres, migration strategy — deploy/cf/mta.yaml, code/package.json
 - [ ] A2 Environment separation: mtaext dev/qa/prod, remove hardcoded S4H_2023, CORS_ORIGINS, space-suffixed saas-registry name, version bump, html5-deployer ^7 / Node 22 alignment
 - [ ] A5 tenantScoped aspect on AccessRequests, ClientErrorReports, UsageEvents, PerformanceEvents, TelemetrySettings, Roles, Users + two-tenant cds.test
 - [ ] A6 CI gate: GitHub workflow (server mocha, client node --test, Linux client build with rolldown lock check, lint), server lint script, mocha ESM warning, AdopsShell.jsx unused variable
@@ -29,6 +28,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## Accomplished
 
+- [x] A1 PostgreSQL schema deployment: adops-basic-db-deployer MTA module (gen/pg, cds-deploy CF task, srv ordered after it), postgres cds build task, code/db/package.json, build-time deployer/runtime CSN check, db:ddl/db:deploy:postgres scripts, docu/05 chapter with the verified additive-only migration strategy — this PR, 2026-09-17
 - [x] Integration housekeeping after the first parallel round: A4 tracker line carries PR #13, client lint fixed (unused `userInfo` prop in AdopsShell, idea I13) so the lint gate can go red only for real problems — PR #16, 2026-09-17
 - [x] A4 Hash-chained append-only audit log: AuditEvents Sequence/PrevHash/Hash, per-tenant AuditChainHeads lock, one writer (audit-chain.js) for every audit row, @readonly projections + database-level UPDATE/DELETE guard, AdminService verifyAuditChain, IDENTIFIED_USAGE_CHANGED event, docu/10 chapter — PR #13, 2026-09-16
 - [x] A3 Read-only PublicService projections, writes via role-gated actions, Admin-only target-system edits, cds.test auth suite — PR #9, 2026-09-16
@@ -38,6 +38,9 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 - [x] Worktree session brief: generated CLAUDE.local.md per worktree (add/next/sync), CLAUDE.md worktree section — PR #12, 2026-09-16
 
 ## Daily log
+
+### 2026-09-17
+- A1 landed. Verified with `cds deploy --dry --delta-from`: schema evolution adds tables, columns and views and widens types, but the compiler refuses dropped elements, dropped tables and length reductions outright ("not supported"), so the deployer cannot lose data and destructive changes need the manual path in docu/05. `mbt build` cannot run in a worktree whose client node_modules is a junction (its `npm ci` would empty the primary checkout's modules); `mbt mtad-gen` and `mbt module-build -m adops-basic-db-deployer` cover the packaging check instead.
 
 ### 2026-09-16
 - Roadmap approved (single-tenant RD1 pilot first). Surveys found: no Postgres schema deployment, two security blockers (writable projections, no audit chain), live activation stops at ABAP step 2.
