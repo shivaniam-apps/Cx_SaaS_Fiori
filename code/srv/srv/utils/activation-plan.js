@@ -200,6 +200,30 @@ function deriveActivationSteps({ proposals, waveName }) {
   return { steps, spaceId, pageId, roleName };
 }
 
+// Effort figures for ONE app, derived from the same template that plans a
+// wave, so the proposal scoring (effortScoreOf) can never drift from what an
+// activation actually does. The single-app plan is the honest per-app cost:
+// its shared steps (foundation, space/page, role, transport) are paid once
+// per wave, but a proposal is scored before it belongs to any wave.
+// newRolesNeeded counts CREATE_PFCG_ROLE steps - the template always
+// creates the wave's own Z_ADO role; an existing-role check arrives with the
+// role inventory (S8).
+function deriveActivationEffort({ fioriId, bspApplication, businessRoleId } = {}) {
+  const { steps } = deriveActivationSteps({
+    proposals: [{ ID: 'effort-probe', FioriId: fioriId || 'FXXXX', BspApplication: bspApplication, BusinessRoleId: businessRoleId }],
+    waveName: 'effort probe'
+  });
+  return {
+    activationStepCount: steps.length,
+    appStepCount: steps.filter((s) => s.proposal_ID).length,
+    sharedStepCount: steps.filter((s) => !s.proposal_ID).length,
+    newRolesNeeded: steps.filter((s) => s.StepType === 'CREATE_PFCG_ROLE').length,
+    localReplayStepCount: steps.filter((s) => s.LocalReplay).length,
+    transportableStepCount: steps.filter((s) => s.Transportable).length,
+    irreversibleStepCount: steps.filter((s) => s.Reversible === false).length
+  };
+}
+
 // Deterministic mock probe: same inputs, same verdicts, so demo runs are
 // stable. Foundation is reported as already executed (verify-first showcase);
 // ICF steps warn because their irreversibility is a real property of the
@@ -248,6 +272,7 @@ module.exports = {
   objectKey,
   objectKeyJson,
   deriveActivationSteps,
+  deriveActivationEffort,
   simulateSteps,
   mockSimulationProbe,
   isActivationTargetEnvironment

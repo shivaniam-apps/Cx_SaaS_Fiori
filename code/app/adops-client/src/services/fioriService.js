@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { installCorrelation } from './httpCorrelation.js';
 
 // PublicService (/fiori) API layer. Thin: HTTP + OData unwrapping + error
 // normalisation only; derivation belongs in features modules, aggregation
 // belongs in CAP (architecture.md).
-const http = axios.create({ timeout: 120000 });
+const http = installCorrelation(axios.create({ timeout: 120000 }));
 
 export function getServiceErrorMessage(error, fallback) {
   const data = error?.response?.data;

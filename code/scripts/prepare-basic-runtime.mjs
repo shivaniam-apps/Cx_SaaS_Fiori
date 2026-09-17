@@ -88,4 +88,47 @@ for (const app of generatedApps) {
   writeRuntimeConfig(app);
 }
 
+// The PostgreSQL schema deployer (gen/pg, cds build task "postgres") ships the
+// same CSN the srv runtime serves. A build that silently lost the task would
+// deploy an app against an empty database, so its output is mandatory and its
+// persisted entities must match the runtime CSN exactly.
+function prepareDbDeployer() {
+  const deployerDir = join(projectRoot, 'gen', 'pg');
+  const csnPath = join(deployerDir, 'db', 'csn.json');
+  const packagePath = join(deployerDir, 'package.json');
+  if (!existsSync(csnPath) || !existsSync(packagePath)) {
+    throw new Error(
+      'gen/pg is incomplete: the "postgres" cds build task did not run. Check cds.build.tasks in package.json and that @cap-js/postgres is installed.'
+    );
+  }
+
+  const csn = readJson(csnPath);
+  const defs = csn.definitions || {};
+  for (const name of Object.keys(defs)) {
+    if (name.startsWith('cds.xt.')) delete defs[name];
+  }
+  writeJson(csnPath, csn);
+
+  const runtimeCsnPath = join(projectRoot, 'gen', 'srv', 'srv', 'csn.json');
+  if (existsSync(runtimeCsnPath)) {
+    const runtimeDefs = readJson(runtimeCsnPath).definitions || {};
+    const persisted = (d) => Object.entries(d)
+      .filter(([, def]) => def.kind === 'entity' && !def.query && !def.projection && !def['@cds.persistence.skip'])
+      .map(([name]) => name)
+      .sort();
+    const deployerTables = persisted(defs);
+    const runtimeTables = persisted(runtimeDefs);
+    const missing = runtimeTables.filter((name) => !deployerTables.includes(name));
+    const extra = deployerTables.filter((name) => !runtimeTables.includes(name));
+    if (missing.length || extra.length) {
+      throw new Error(
+        `gen/pg and gen/srv disagree on persisted entities. Missing in deployer: [${missing.join(', ')}]; only in deployer: [${extra.join(', ')}]`
+      );
+    }
+    console.log(`Verified the PostgreSQL deployer covers all ${deployerTables.length} persisted entities of the srv runtime.`);
+  }
+}
+
+prepareDbDeployer();
+
 console.log('Prepared Basic runtime artifacts for PostgreSQL, XSUAA, and Destination-based integration.');

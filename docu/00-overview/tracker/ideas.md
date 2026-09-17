@@ -21,7 +21,12 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I13 (2026-09-17) `npm run lint` fails on `main` (unused `userInfo` prop in `AdopsShell.jsx:56`); fix in a tiny chore PR so the client lint gate (A6) starts green. -> done in PR #16 (integration housekeeping)
 - I14 (2026-09-17) Icons are registered one by one in `ui5Assets.js`; `restart`/`stop` (Activation Runs) are still missing and log "No loader registered" errors. Audit every `icon=` prop against the list, or add an eslint check.
 - I15 (2026-09-17) Fresh worktree databases are empty, so a browser check of the Activate journey needs a manual seed chain (target system -> mock extraction -> proposals -> wave -> approvals). Add `scripts/seed-dev.mjs` (mock mode only) that performs it against a CAP port.
-- I16 (2026-09-17) The connection check reports USAGE and ACTIVATE endpoints; S9 should add a CATALOG endpoint verdict (ZADO_CATALOG read unit) to the same `Endpoints` list so the Target Systems page needs no new shape. An EXPOSED activation verdict on QA/PROD is only shown today; consider also writing an audit event (A4 chain) since it is a safety finding.
+- I16 (2026-09-17) Crash reporting covers React render errors only (O5). recordClientError also accepts WINDOW_ERROR / UNHANDLED_REJECTION / API_FAILURE: add window error + unhandledrejection listeners and an axios response-error hook (rate-limited, A13) so non-render failures are reported too.
+
+- I16 (2026-09-17) The db deployer (code/db/package.json) has no lockfile; the CF buildpack resolves ^8.9.4 / ^1.10.0 at staging. Pin a lockfile under T5 so deployer and runtime cannot drift.
+- I17 (2026-09-17) First cf deploy against a Postgres instance that was schema-deployed by hand (no cds_model row) fails on existing tables; docu/05 describes the --model-only seeding. Add a worktree script for it if the dev space instance turns out to be in that state.
+- I18 (2026-09-17) worktree.mjs doctor (I4) should also flag junctioned client node_modules as "mbt build unsafe here", since mbt's npm ci would wipe the primary checkout's modules.
+- I19 (2026-09-17) The connection check reports USAGE and ACTIVATE endpoints; S9 should add a CATALOG endpoint verdict (ZADO_CATALOG read unit) to the same `Endpoints` list so the Target Systems page needs no new shape. An EXPOSED activation verdict on QA/PROD is only shown today; consider also writing an audit event (A4 chain) since it is a safety finding.
 
 ## Parked
 
