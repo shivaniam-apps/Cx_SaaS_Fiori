@@ -31,8 +31,12 @@ CLASS zcl_ado_q_user_tx IMPLEMENTATION.
     " SaaS extraction; absent or empty -> the reader defaults (20 / 1).
     DATA lv_top_users TYPE i VALUE 20.
     DATA lv_min_exec  TYPE i VALUE 1.
+    " P_TenantId (A9): scopes the pseudonym salt to the calling tenant.
+    DATA lv_tenant    TYPE string.
     LOOP AT io_request->get_parameters( ) INTO DATA(ls_parameter).
       CASE to_upper( ls_parameter-parameter_name ).
+        WHEN 'P_TENANTID'.
+          lv_tenant = ls_parameter-value.
         WHEN 'P_TOPUSERS'.
           IF ls_parameter-value IS NOT INITIAL.
             lv_top_users = ls_parameter-value.
@@ -69,6 +73,7 @@ CLASS zcl_ado_q_user_tx IMPLEMENTATION.
                 iv_to             = lv_to
                 iv_top_users      = lv_top_users
                 iv_min_executions = lv_min_exec
+                iv_tenant         = lv_tenant
       IMPORTING et_user_tx        = DATA(lt_all) ).
 
     IF lv_tcode IS NOT INITIAL.

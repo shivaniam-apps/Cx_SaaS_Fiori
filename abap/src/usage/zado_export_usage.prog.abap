@@ -37,6 +37,14 @@ SELECTION-SCREEN COMMENT 1(31) c_min FOR FIELD p_min.
 PARAMETERS p_min TYPE i DEFAULT 1.
 SELECTION-SCREEN END OF LINE.
 
+" Optional: the AdoptOps tenant the file is meant for. Mixed into the
+" pseudonym salt exactly like the connected read (A9); leave empty for a
+" single-tenant installation.
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_tenant FOR FIELD p_tenant.
+PARAMETERS p_tenant TYPE c LENGTH 60 LOWER CASE.
+SELECTION-SCREEN END OF LINE.
+
 SELECTION-SCREEN BEGIN OF LINE.
 SELECTION-SCREEN COMMENT 1(31) c_ident FOR FIELD p_ident.
 PARAMETERS p_ident AS CHECKBOX DEFAULT ''.
@@ -48,6 +56,7 @@ INITIALIZATION.
   c_top   = 'Top users/transaction (0 = all)'.
   c_min   = 'Min. executions per user row'.
   c_ident = 'Identified export (opt-in)'.
+  c_tenant = 'AdoptOps tenant (optional)'.
 
 CLASS lcl_export DEFINITION FINAL.
   PUBLIC SECTION.
@@ -80,6 +89,7 @@ CLASS lcl_export IMPLEMENTATION.
                 iv_pseudonymise   = xsdbool( p_ident IS INITIAL )
                 iv_top_users      = p_top
                 iv_min_executions = p_min
+                iv_tenant         = CONV string( p_tenant )
       IMPORTING et_tx_usage       = DATA(lt_tx)
                 et_user_tx        = DATA(lt_user) ).
 
@@ -94,6 +104,7 @@ CLASS lcl_export IMPLEMENTATION.
     APPEND |  "formatVersion": 1,| TO lt_lines.
     APPEND |  "system": "{ sy-sysid }",| TO lt_lines.
     APPEND |  "client": "{ sy-mandt }",| TO lt_lines.
+    APPEND |  "tenantId": "{ jesc( CONV string( p_tenant ) ) }",| TO lt_lines.
     APPEND |  "exportedAt": "{ iso( sy-datum ) }",| TO lt_lines.
     APPEND |  "pseudonymised": { COND string( WHEN p_ident IS INITIAL THEN `true` ELSE `false` ) },| TO lt_lines.
     APPEND |  "periodFrom": "{ iso( p_from ) }",| TO lt_lines.
