@@ -46,12 +46,15 @@ CLASS zcl_ado_st03_reader DEFINITION
     " iv_top_users: top-N users per transaction (<= 0 = all).
     " iv_min_executions: user x tcode rows below this count are dropped
     " BEFORE the top-N cut, so the N are always the meaningful users.
+    " iv_tenant: AdoptOps tenant id, mixed into the pseudonym salt so two
+    " tenants reading this system never share a pseudonym (A9).
     CLASS-METHODS get_window
       IMPORTING iv_from           TYPE d
                 iv_to             TYPE d
                 iv_pseudonymise   TYPE abap_bool DEFAULT abap_true
                 iv_top_users      TYPE i DEFAULT 20
                 iv_min_executions TYPE i DEFAULT 1
+                iv_tenant         TYPE string OPTIONAL
       EXPORTING et_tx_usage       TYPE ty_tx_usage_t
                 et_user_tx        TYPE ty_user_tx_t.
 
@@ -79,7 +82,7 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
   METHOD get_window.
     CLEAR: et_tx_usage, et_user_tx.
 
-    DATA(lv_cache_key) = |{ iv_from }::{ iv_to }::{ iv_pseudonymise }::{ iv_top_users }::{ iv_min_executions }|.
+    DATA(lv_cache_key) = |{ iv_from }::{ iv_to }::{ iv_pseudonymise }::{ iv_top_users }::{ iv_min_executions }::{ iv_tenant }|.
     READ TABLE gt_cache INTO DATA(ls_hit) WITH KEY cache_key = lv_cache_key.
     IF sy-subrc = 0.
       et_tx_usage = ls_hit-tx_usage.
@@ -202,7 +205,7 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
     LOOP AT lt_raw ASSIGNING <ls_raw>.
       lv_user_key = COND string(
         WHEN iv_pseudonymise = abap_true
-        THEN zcl_ado_pseudonym=>hash( CONV string( <ls_raw>-account ) )
+        THEN zcl_ado_pseudonym=>hash( iv_value = CONV string( <ls_raw>-account ) iv_tenant = iv_tenant )
         ELSE <ls_raw>-account ).
       lv_tcode20 = <ls_raw>-entry_id.
       READ TABLE lt_user_agg ASSIGNING FIELD-SYMBOL(<ls_uagg>)

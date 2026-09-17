@@ -22,6 +22,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## Accomplished
 
+- [x] ABAP mirror re-synced wholesale to a4h_2023_zado main df3db96: usage package now carries the S6 extraction parameters, the A9 ZADO_CFG per-tenant secret (table, class, init report) and the S8 inventory reader changes that landed there after the CAP-side PRs — PR #37, 2026-09-17
 - [x] A9 Per-tenant pseudonymisation salt: ABAP ZADO_CFG + ZCL_ADO_CFG + ZADO_CFG_INIT (secret per client, never transported), ZCL_ADO_PSEUDONYM hashes secret + tenant + user, P_TenantId on ZADO_C_USER_TX_USAGE threaded through reader and export; CAP TenantSecrets random salt replaces the tenant-id salt, usage read passes P_TopUsers/P_MinExecutions/P_TenantId when $metadata declares them; docu/11 GDPR / works-council note for PO sign-off — this PR (ABAP: a4h_2023_zado feat/tenant-salt, mirror after the RD1 smoke test), 2026-09-17
 - [x] A8 Dead provisioning path removed: provisioning.js, utils/alert-notification.js, utils/cloud-foundry.js (undeclared cfenv / alert-notification-client, missing tenant-automator.js), orphaned isTenantAutomationEnabled and ADOPTOPS_TENANT_AUTOMATION dropped, basic-subscription.js confirmed as the only subscription path, module-load test requires every srv module and checks declared packages — this PR, 2026-09-17
 - [x] A7 Safety defaults: direct S/4 HTTPS calls verify certificates by default (S4_DIRECT_INSECURE_TLS is an explicit, logged opt-in), directTlsOptions unit tests, OData-branch tests proving a payload without ResultJson yields FAILED / SIMULATED_BLOCKED instead of a thrown error, docu/06 direct-access chapter — this PR, 2026-09-17
@@ -57,3 +58,4 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ### 2026-09-17
 - First parallel round merged: #13 A4 (admin), #14 S2 (scheduling), #15 O1 (overview); all suites green on main (111 server, 49 client); ABAP mirror has zero drift against a4h_2023_zado after its PR #18. Worktrees re-pointed to A1 / S1 / O4.
+- Second parallel round merged: #16-#36 (21 PRs, ~9.6k lines) with all suites green on main (202 server, 93 client, lint clean). Server lint needs the new eslint dev dependencies: run `npm install` in code/ after pulling. Mirror drift found in abap/src/usage (a4h PRs #22-#24) and re-synced; worktrees re-pointed to A10 / S3 part 2 / O6.
