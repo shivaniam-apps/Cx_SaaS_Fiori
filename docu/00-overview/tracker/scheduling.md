@@ -7,7 +7,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## In progress
 
-(none)
+- [~] S3 Implement ABAP step types returning not_implemented (ACTIVATE_ODATA_SERVICE, CREATE_SPACE, CREATE_PAGE, ASSIGN_PAGE_TO_SPACE, ADD_SPACE_TO_ROLE, ASSIGN_BUSINESS_CATALOG, ADD_CATALOG_TO_ROLE) + transport-append step; verify-first / verify-after / one commit per step — XL, needs RD1 DEV/100 — branch feat/abap-activation-steps, started 2026-09-17 (part 1: transport-first sequencing, APPEND_TO_TRANSPORT step, plan TRKORR threaded into keys, RD1 probe report for the three open checks; part 2 after the probe run)
 
 ## To-do (critical path first)
 
@@ -30,6 +30,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 ## Daily log
 
 ### 2026-09-17
+- S3 part 1 on branch feat/abap-activation-steps: the plan now creates its transport request before the first transportable write and ends with APPEND_TO_TRANSPORT (verify-first on E071, `zcl_ado_act_cts=>append_missing`); the engine threads the plan's TRKORR into the role and append keys at dispatch (rows keep the planned key), so PFCG records the role on the request. New read-only report ZADO_PROBE_ACTIVATION (src/core) answers the three S3 open checks on RD1: task-list parameter FMs for SAP_GATEWAY_ACTIVATE_ODATA_SERV, /UI2/ FDM space/page API surface + transport object types, AGR_HIER node shape for catalogs and spaces. Part 2 (the seven executors) is written from that output. ABAP not compiled here - RD1 syntax check + smoke Transport -> Role -> Append (second Append run must be SKIPPED) is the acceptance run for part 1.
 - S1 done on branch feat/connection-check-activation. New CDS type TargetEndpointCheck, `Endpoints` on TargetConnectionCheck, optional `targetSystemId` on the action (old two-argument calls keep working, usage-only), additive column lastCheckEndpointsJson. Browser check on 5293 in mock mode: DEV row shows Connected / Usage ok / Activation ok, PRD row Connected / Usage ok / Activation unpublished, both persisted across reload. Not exercised against RD1 (no session access); the live path reuses probeActivateService, which the S1 acceptance run on RD1 DEV and PROD will prove.
 
 ### 2026-09-16

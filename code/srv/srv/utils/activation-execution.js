@@ -1,6 +1,7 @@
 const cds = require('@sap/cds');
 const { randomUUID } = require('node:crypto');
 const { shouldMockSap } = require('./s4-http-client.js');
+const { withPlanTrkorr } = require('./activation-plan.js');
 const { appendAuditEvent } = require('./audit-chain.js');
 
 const { SELECT, INSERT, UPDATE } = cds.ql;
@@ -95,7 +96,16 @@ function mockStepExecutor({ step, plan, systemId }) {
       const trkorr = mockTrkorr(plan, systemId);
       return {
         status: 'SUCCESS', existsAlready: false, trkorr,
-        messages: [{ type: 'S', message: `Transport request ${trkorr} created; transportable objects appended (mock).` }]
+        messages: [{ type: 'S', message: `Transport request ${trkorr} created (mock).` }]
+      };
+    }
+    case 'APPEND_TO_TRANSPORT': {
+      let key = {};
+      try { key = JSON.parse(step.ObjectKeyJson || '{}'); } catch { key = {}; }
+      const count = Array.isArray(key.objects) ? key.objects.length : 0;
+      return {
+        status: 'SUCCESS', existsAlready: false, trkorr: key.trkorr || '',
+        messages: [{ type: 'S', message: `${count} object(s) appended and verified on ${key.trkorr || '(no request)'} (mock).` }]
       };
     }
     default:
@@ -156,12 +166,23 @@ async function ensureTransportRow({ plan, trkorr, executedBy, tenantId }) {
   return id;
 }
 
+// The plan's TRKORR, when a previous run already created the request.
+async function planTrkorrOf(plan) {
+  if (!plan?.transportRequest_ID) return '';
+  const row = await SELECT.one.from('adops.db.TransportRequests').columns('TransportRequestId')
+    .where({ ID: plan.transportRequest_ID });
+  return row?.TransportRequestId || '';
+}
+
 // The engine, executor-injected for testability. Returns the run summary.
 async function executePlanSteps({ plan, steps, executor, systemId, executedBy, reportProgress, isCancelRequested }) {
   const tenantId = plan.TenantId;
   const satisfiedById = new Map(steps.map((s) => [s.ID, isSatisfied(s)]));
   let executed = 0;
   let cancelled = false;
+  // Plan-level TRKORR: created by the ADD_TO_TRANSPORT step (or carried over
+  // by a resumed plan) and threaded into every key that writes on it.
+  let planTrkorr = await planTrkorrOf(plan);
 
   const total = steps.length;
   for (let index = 0; index < steps.length; index++) {
@@ -202,7 +223,7 @@ async function executePlanSteps({ plan, steps, executor, systemId, executedBy, r
 
     let result;
     try {
-      result = await executor({ step, plan, systemId });
+      result = await executor({ step: withPlanTrkorr(step, planTrkorr), plan, systemId });
     } catch (error) {
       result = { status: 'FAILED', messages: [{ type: 'E', message: `Executor error: ${error.message}` }] };
     }
@@ -226,6 +247,7 @@ async function executePlanSteps({ plan, steps, executor, systemId, executedBy, r
     if (result.trkorr) {
       const transportId = await ensureTransportRow({ plan, trkorr: result.trkorr, executedBy, tenantId });
       plan.transportRequest_ID = transportId;
+      planTrkorr = planTrkorr || String(result.trkorr).trim();
     }
 
     if (status === 'FAILED' && plan.StopOnError !== false) {

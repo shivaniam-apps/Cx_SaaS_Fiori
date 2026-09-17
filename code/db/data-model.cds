@@ -457,7 +457,7 @@ context adops.db {
             // ACTIVATE_ODATA_SERVICE | ACTIVATE_ICF_NODE | ASSIGN_BUSINESS_CATALOG |
             // CREATE_SPACE | CREATE_PAGE | ASSIGN_PAGE_TO_SPACE | CREATE_PFCG_ROLE |
             // ADD_CATALOG_TO_ROLE | ADD_SPACE_TO_ROLE | GENERATE_PROFILE |
-            // ASSIGN_ROLE_TO_USERS | RUN_TASK_LIST | ADD_TO_TRANSPORT
+            // ASSIGN_ROLE_TO_USERS | RUN_TASK_LIST | ADD_TO_TRANSPORT | APPEND_TO_TRANSPORT
             ObjectType        : String(40);
             ObjectName        : String(120);
             ObjectKeyJson     : LargeString;  // full typed key for the ABAP action

@@ -30,6 +30,10 @@ REPORT zado_activate_smoke.
 "              (SKIPPED + exists_already) without writing. Point it at
 "              an inactive app node (SICF) to see the FM run; ICF
 "              activation is IRREVERSIBLE on this release.
+" - Append:    records the smoke role (R3TR ACGR) on the given workbench
+"              request via APPEND_TO_TRANSPORT. Create the request with
+"              the Transport scenario first; the second run must come
+"              back SKIPPED (verify-first on E071).
 " - Custom:    StepType + ObjectKeyJson exactly as the planner wrote
 "              them (copy from ActivationSteps).
 "
@@ -55,6 +59,11 @@ SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN BEGIN OF LINE.
 SELECTION-SCREEN COMMENT 1(31) c_icf FOR FIELD p_icf.
 PARAMETERS p_icf RADIOBUTTON GROUP g1.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_app FOR FIELD p_app.
+PARAMETERS p_app RADIOBUTTON GROUP g1.
 SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN BEGIN OF LINE.
@@ -86,6 +95,11 @@ PARAMETERS p_icfn TYPE icfname LOWER CASE DEFAULT 'ushell'.
 SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_trk FOR FIELD p_trk.
+PARAMETERS p_trk TYPE trkorr.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
 SELECTION-SCREEN COMMENT 1(31) c_step FOR FIELD p_step.
 PARAMETERS p_step TYPE c LENGTH 40 DEFAULT 'CREATE_PFCG_ROLE'.
 SELECTION-SCREEN END OF LINE.
@@ -100,7 +114,9 @@ INITIALIZATION.
   c_role  = 'Create smoke role'.
   c_prof  = 'Generate profile (smoke role)'.
   c_icf   = 'Activate ICF node'.
+  c_app   = 'Append smoke role to transport'.
   c_cust  = 'Custom (planner StepType+JSON)'.
+  c_trk   = 'Transport for Append (SE10)'.
   c_rname = 'Smoke role name'.
   c_ttext = 'Transport description'.
   c_url   = 'ICF node URL'.
@@ -139,6 +155,9 @@ CLASS lcl_smoke IMPLEMENTATION.
     ELSEIF p_icf = abap_true.
       lv_step_type = 'ACTIVATE_ICF_NODE'.
       lv_json      = |\{ "fioriId": "SMOKE", "url": "{ p_url }", "icfName": "{ p_icfn }" \}|.
+    ELSEIF p_app = abap_true.
+      lv_step_type = 'APPEND_TO_TRANSPORT'.
+      lv_json      = |\{ "trkorr": "{ p_trk }", "objects": [ \{ "pgmid": "R3TR", "object": "ACGR", "objName": "{ p_rname }" \} ] \}|.
     ELSE.
       lv_step_type = p_step.
       lv_json      = p_json.

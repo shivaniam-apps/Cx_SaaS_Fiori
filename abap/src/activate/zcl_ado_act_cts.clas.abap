@@ -26,6 +26,20 @@ CLASS zcl_ado_act_cts DEFINITION
                 it_e071k         TYPE tr_keys
       RETURNING VALUE(rs_result) TYPE zif_ado_act_step=>ty_result.
 
+    " Verify-first append (the APPEND_TO_TRANSPORT step): objects already
+    " recorded on the request or one of its tasks are not appended again;
+    " nothing left to add -> SKIPPED + exists_already. Verify-after reads
+    " the request back and fails when an object is still missing.
+    CLASS-METHODS append_missing
+      IMPORTING iv_trkorr        TYPE trkorr
+                it_objects       TYPE tr_objects
+      RETURNING VALUE(rs_result) TYPE zif_ado_act_step=>ty_result.
+
+    " E071 rows of the request and of its tasks (E070-STRKORR).
+    CLASS-METHODS read_objects
+      IMPORTING iv_trkorr         TYPE trkorr
+      RETURNING VALUE(rt_objects) TYPE tr_objects.
+
     " iv_simulation = abap_true runs the release checks without
     " releasing (TRINT IV_SIMULATION, confirmed present).
     CLASS-METHODS release_request
@@ -175,6 +189,79 @@ CLASS zcl_ado_act_cts IMPLEMENTATION.
     SELECT SINGLE trstatus FROM e070
       WHERE trkorr = @iv_trkorr
       INTO @rv_status.
+  ENDMETHOD.
+
+  METHOD read_objects.
+    SELECT trkorr FROM e070
+      WHERE strkorr = @iv_trkorr
+      INTO TABLE @DATA(lt_tasks).
+    APPEND VALUE #( trkorr = iv_trkorr ) TO lt_tasks.
+    SELECT * FROM e071
+      FOR ALL ENTRIES IN @lt_tasks
+      WHERE trkorr = @lt_tasks-trkorr
+      INTO TABLE @rt_objects.
+  ENDMETHOD.
+
+  METHOD append_missing.
+    IF read_status( iv_trkorr ) IS INITIAL.
+      rs_result-status = zif_ado_act_step=>c_status-failed.
+      APPEND VALUE bapiret2(
+          type    = 'E'
+          message = |Transport request { iv_trkorr } does not exist (E070).| )
+        TO rs_result-messages.
+      RETURN.
+    ENDIF.
+
+    " Verify-first: only what the request does not carry yet.
+    DATA(lt_existing) = read_objects( iv_trkorr ).
+    DATA lt_missing TYPE tr_objects.
+    LOOP AT it_objects INTO DATA(ls_object).
+      IF NOT line_exists( lt_existing[ pgmid    = ls_object-pgmid
+                                       object   = ls_object-object
+                                       obj_name = ls_object-obj_name ] ).
+        APPEND ls_object TO lt_missing.
+      ENDIF.
+    ENDLOOP.
+
+    IF lt_missing IS INITIAL.
+      rs_result-status         = zif_ado_act_step=>c_status-skipped.
+      rs_result-exists_already = abap_true.
+      rs_result-trkorr         = iv_trkorr.
+      APPEND VALUE bapiret2(
+          type    = 'S'
+          message = |All { lines( it_objects ) } object(s) already recorded on { iv_trkorr } - step skipped (idempotent).| )
+        TO rs_result-messages.
+      RETURN.
+    ENDIF.
+
+    DATA lt_keys TYPE tr_keys.
+    rs_result = append_objects(
+      iv_trkorr = iv_trkorr
+      it_e071   = lt_missing
+      it_e071k  = lt_keys ).
+    IF rs_result-status <> zif_ado_act_step=>c_status-success.
+      RETURN.
+    ENDIF.
+
+    " Verify-after: every appended object must now be on the request.
+    DATA(lt_after) = read_objects( iv_trkorr ).
+    LOOP AT lt_missing INTO ls_object.
+      IF NOT line_exists( lt_after[ pgmid    = ls_object-pgmid
+                                    object   = ls_object-object
+                                    obj_name = ls_object-obj_name ] ).
+        rs_result-status = zif_ado_act_step=>c_status-failed.
+        APPEND VALUE bapiret2(
+            type    = 'E'
+            message = |{ ls_object-pgmid } { ls_object-object } { ls_object-obj_name } is not on { iv_trkorr } after TR_APPEND_TO_COMM_OBJS_KEYS.| )
+          TO rs_result-messages.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+
+    APPEND VALUE bapiret2(
+        type    = 'S'
+        message = |{ lines( lt_missing ) } object(s) appended and verified on { iv_trkorr }; { lines( it_objects ) - lines( lt_missing ) } already present.| )
+      TO rs_result-messages.
   ENDMETHOD.
 
 ENDCLASS.

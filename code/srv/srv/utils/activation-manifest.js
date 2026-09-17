@@ -23,7 +23,8 @@ const VERIFICATION_HINTS = {
   ADD_SPACE_TO_ROLE: 'Transported - PFCG: role menu contains the space node.',
   GENERATE_PROFILE: 'PFCG/SUPC: regenerate the authorization profile after import (profiles are not reliably transported).',
   ASSIGN_ROLE_TO_USERS: 'SU01/PFCG: assign the role to this system\'s users (assignments are client-local and never transported).',
-  ADD_TO_TRANSPORT: 'SE10/STMS: request released and imported into this system.'
+  ADD_TO_TRANSPORT: 'SE10/STMS: request released and imported into this system.',
+  APPEND_TO_TRANSPORT: 'SE10: the request lists every wave object (role, space, page) before release.'
 };
 
 // Local-replay step types that must be REPEATED per system even though they
