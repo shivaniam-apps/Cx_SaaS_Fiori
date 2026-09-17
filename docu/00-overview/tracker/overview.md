@@ -10,7 +10,6 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## To-do (milestone order)
 
-- [ ] O5 Client crash reporting: features/telemetry/correlation.js, componentDidCatch -> recordClientError
 - [ ] O2 Settings page on shared AdopsPageTabs (/settings/:view?): per-system identifiedUsageAllowed and activationRootPath, telemetry settings — after A4 (audit event on toggle)
 - [ ] O3 Audit Log page: bounded, server-filtered AuditEvents read with chain-verification status — after A4
 - [ ] O7 Product Insights page on AdopsPageTabs (backend complete)
@@ -18,6 +17,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## Accomplished
 
+- [x] O5 Client crash reporting: features/telemetry/correlation.js + httpCorrelation interceptors on both axios clients, AppErrorBoundary.componentDidCatch -> recordClientError with a support reference — this PR, 2026-09-17
 - [x] O4 Replace hardcoded newRolesNeeded / activationStepCount with deriveActivationEffort from the activation template — this PR, 2026-09-17
 - [x] O1 Activation Plans page: cross-wave list + detail, create / simulate / execute, open run; queryActivationPlans + readActivationPlan Wave/Transport/Runs — PR #15, 2026-09-17
 - [x] Access Requests triage page + Request Access flow on the Member gate, AdminService summary function — PR #7, 2026-09-15
@@ -26,6 +26,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 ## Daily log
 
 ### 2026-09-17
+- O5 done on feat/client-crash-reporting: render crashes land in ClientErrorReports (verified: route, feature, correlation/session id, stacks, app version); every request now carries x-correlation-id (O4 merged via PR #17).
 - O4 done on fix/proposal-plan-counts: deriveActivationEffort (activation-plan.js) feeds the candidate query and the engine default; effort now counts the 10-step single-app plan instead of the literal 4 (O1 merged via PR #15).
 
 ### 2026-09-16
