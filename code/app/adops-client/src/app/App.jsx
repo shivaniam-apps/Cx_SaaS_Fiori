@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AdopsShell from '../layouts/AdopsShell.jsx';
 import MemberGate from '../components/MemberGate.jsx';
 import AppErrorBoundary from '../components/AppErrorBoundary.jsx';
+import { trackPageView, measureRouteRender } from '../services/telemetryService.js';
 import DashboardPage from '../pages/DashboardPage.jsx';
 import PlaceholderPage from '../pages/PlaceholderPage.jsx';
 import TargetSystemsPage from '../pages/TargetSystemsPage.jsx';
@@ -44,6 +46,14 @@ function AppRoutes({ userInfo }) {
 
 function ShellWithBoundary({ userInfo }) {
   const location = useLocation();
+  // Usage telemetry per route change (raw pathname, so detail routes count
+  // too); slow renders are recorded by the capture policy in measureRouteRender.
+  useEffect(() => {
+    const route = `#${location.pathname}`;
+    trackPageView(route);
+    measureRouteRender(route);
+  }, [location.pathname]);
+
   return (
     <AdopsShell userInfo={userInfo}>
       {/* Keyed on pathname: a crash on one page never strands the app. */}
