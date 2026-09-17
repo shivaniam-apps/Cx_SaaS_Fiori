@@ -10,6 +10,7 @@ const {
   mapRemoteStepResult,
   mapRemoteProbeResult,
   executeStepRemote,
+  probeStepRemote,
   liveStepExecutorFor,
   liveSimulationProbeFor
 } = require('../srv/srv/utils/s4-activate-adapter.js');
@@ -130,5 +131,33 @@ describe('simulation state probe (the CAP side of ZCL_ADO_ACT_PROBE)', () => {
     } finally {
       delete process.env.ADOPTOPS_MOCK_S4;
     }
+  });
+});
+
+// Roadmap A7: the OData branch once referenced an undefined body when the
+// action answered without a ResultJson, turning a bad payload into a thrown
+// ReferenceError. With mock-S4 on, callS4Destination answers ok:true with a
+// payload that has no ResultJson - exactly that path, for step and probe.
+describe('OData branch without ResultJson (A7 safety default)', () => {
+  const odataSystem = { destinationName: 'S4H_2023', activationRootPath: '/sap/opu/odata4/sap/zado_activate_o4/srvd/sap/zado_activate_srv/0001' };
+  const step = { StepType: 'CREATE_PFCG_ROLE', ObjectKeyJson: '{"role":"Z_X"}' };
+
+  beforeEach(() => { process.env.ADOPTOPS_MOCK_S4 = 'true'; });
+  afterEach(() => { delete process.env.ADOPTOPS_MOCK_S4; });
+
+  it('returns FAILED with the payload in the message, never an exception', async () => {
+    const result = await executeStepRemote({ targetSystem: odataSystem, step });
+    expect(result.status).to.equal('FAILED');
+    expect(result.existsAlready).to.equal(false);
+    expect(result.messages[0].type).to.equal('E');
+    expect(result.messages[0].message).to.match(/no ResultJson/i);
+    expect(result.messages[0].message).to.match(/mocked/);
+  });
+
+  it('blocks the simulation probe on the same payload', async () => {
+    const verdict = await probeStepRemote({ targetSystem: odataSystem, step });
+    expect(verdict.verdict).to.equal('SIMULATED_BLOCKED');
+    expect(verdict.existsAlready).to.equal(false);
+    expect(verdict.message).to.match(/no ResultJson/i);
   });
 });

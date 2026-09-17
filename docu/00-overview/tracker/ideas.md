@@ -39,6 +39,8 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I24 (2026-09-17) The pre-push hook only blocks pushes to main; consider a fast `npm run lint` (server + client) in pre-push now that both exist, leaving the slow suites to CI.
 - I25 (2026-09-17) worktree.mjs add --link-modules junctions node_modules; the first `npm install` in a worktree silently replaces the junction with a real directory. Document or detect it in the planned doctor command (I4, I18).
 
+- I26 (2026-09-17) The direct-access variables (ADOPTOPS_S4_URL_OVERRIDES, DIRECT_USER/PASSWORD, INSECURE_TLS) are development conveniences; add a boot-time warning (or refusal under the production profile) when any of them is set in a Cloud Foundry instance.
+
 ## Parked
 
 (none)
