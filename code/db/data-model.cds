@@ -602,6 +602,15 @@ context adops.db {
             UpdatedAt    : Timestamp;
       }
 
+      // Per-tenant secrets (A9): the salt behind the CAP-side user
+      // pseudonymisation (mock runs, file imports). Created on first use by
+      // srv/utils/tenant-secrets.js; not exposed by any service.
+      entity TenantSecrets {
+            key TenantId  : String(60);
+            PseudonymSalt : String(64);
+            CreatedAt     : Timestamp;
+      }
+
       // ------------------------------------------------------------------
       // Product telemetry (pilot feedback + client crash reports).
       // Deliberately separate from AuditEvents: audit rows are business/
