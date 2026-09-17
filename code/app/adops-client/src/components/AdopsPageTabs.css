@@ -1,0 +1,56 @@
+.adops-page-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  overflow-x: auto;
+  /* overflow-x drops the automatic flex minimum to 0, so inside a
+     fixed-height flex column a tall tab view squeezes the strip to its 1px
+     border. The strip keeps its intrinsic height and never shrinks. */
+  flex-shrink: 0;
+  /* Pin the strip while long tab content scrolls beneath it. */
+  position: sticky;
+  top: 0;
+  z-index: var(--adops-z-sticky-content, 70);
+  background: var(--sapBackgroundColor, #f7f7f7);
+}
+
+.adops-page-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--sapContent_LabelColor);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adops-page-tabs button:hover {
+  color: var(--sapTextColor);
+}
+
+.adops-page-tabs button:focus-visible {
+  outline: 2px solid var(--sapContent_FocusColor, #0032a5);
+  outline-offset: -2px;
+}
+
+.adops-page-tabs button.active {
+  color: var(--sapSelectedColor);
+  border-bottom-color: var(--sapSelectedColor);
+  font-weight: 600;
+}
+
+.adops-page-tabs-badge {
+  min-width: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 0.75rem;
+  background: var(--sapContent_BadgeBackground, #d04343);
+  color: var(--sapContent_BadgeTextColor, #fff);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+}

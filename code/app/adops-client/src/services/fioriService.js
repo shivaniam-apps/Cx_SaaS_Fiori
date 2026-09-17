@@ -63,6 +63,16 @@ export async function checkConnection(destinationName, path, targetSystemId) {
   return postAction('checkTargetSystemConnection', { destinationName, path: path || null, targetSystemId: targetSystemId || null });
 }
 
+// Bounded, server-filtered read of the identified-usage audit trail for the
+// Settings page (AuditEvents is read-only on PublicService).
+export async function listIdentifiedUsageAuditEvents(top = 20) {
+  return getEntity('AuditEvents', {
+    $filter: "EventType eq 'IDENTIFIED_USAGE_CHANGED'",
+    $orderby: 'Sequence desc',
+    $top: top
+  });
+}
+
 // --- Extractions -------------------------------------------------------------
 
 export async function listExtractionRuns() {
