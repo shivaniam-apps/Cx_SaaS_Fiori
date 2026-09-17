@@ -121,6 +121,22 @@ const DIRECT_RETRY_PARK_MS = 5 * 60 * 1000;
 const directOverrideParkedUntil = new Map();
 const directAgents = new Map();
 
+// Certificate verification on direct (non-Cloud-Connector) HTTPS calls is
+// ON by default (roadmap A7). A lab system with a self-signed certificate
+// opts out explicitly with S4_DIRECT_INSECURE_TLS=on (ADOPTOPS_ prefix
+// honoured); the opt-out is logged once per process so it never goes
+// unnoticed in a deployed instance. Plain http has nothing to verify.
+let insecureTlsWarned = false;
+function directTlsOptions(baseUrl) {
+  if (!/^https:/i.test(String(baseUrl || ''))) return {};
+  if (!envFlag('S4_DIRECT_INSECURE_TLS', false)) return {};
+  if (!insecureTlsWarned) {
+    insecureTlsWarned = true;
+    LOG.warn('S4_DIRECT_INSECURE_TLS is on: TLS certificates of direct S/4 calls are NOT verified. Never enable this outside a local lab.');
+  }
+  return { rejectUnauthorized: false };
+}
+
 function directUrlOverrideFor(destinationName) {
   const overrideUrl = DIRECT_URL_OVERRIDES.get(destinationName);
   if (!overrideUrl) return '';
@@ -144,9 +160,7 @@ function directAgentFor(baseUrl) {
       maxSockets: 8,
       maxFreeSockets: 2,
       timeout: 30000,
-      ...(isHttps && String(envValue('S4_DIRECT_INSECURE_TLS', 'on')).toLowerCase() === 'on'
-        ? { rejectUnauthorized: false }
-        : {})
+      ...directTlsOptions(baseUrl)
     });
     directAgents.set(baseUrl, agent);
   }
@@ -1254,6 +1268,8 @@ module.exports = {
   connectivityProxyTroubleshootingHint,
   connectivityService,
   destinationRoutingIdentity,
+  directAgentFor,
+  directTlsOptions,
   effectiveConnectivityProxyDetails,
   escapeODataString,
   fetchCsrfToken,
