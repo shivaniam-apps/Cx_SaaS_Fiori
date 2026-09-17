@@ -24,14 +24,8 @@ function isDatabaseLess() {
   return dbMode() === 'none';
 }
 
-function isTenantAutomationEnabled() {
-  if (String(process.env.ADOPTOPS_TENANT_AUTOMATION || '').toLowerCase() === 'false') return false;
-  return currentTier() === 'enterprise';
-}
-
 module.exports = {
   currentTier,
   dbMode,
-  isDatabaseLess,
-  isTenantAutomationEnabled
+  isDatabaseLess
 };

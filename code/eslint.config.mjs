@@ -20,10 +20,7 @@ const cdsGlobals = {
 export default [
   {
     ignores: [
-      'gen/**', 'node_modules/**', 'app/**', 'router/**', 'db/sqlite/**', '**/*.sqlite', 'srv/gen/**',
-      // Dead provisioning path (missing tenant-automator.js, undeclared
-      // packages); roadmap A8 removes or declares it. Not worth fixing twice.
-      'srv/srv/provisioning.js', 'srv/srv/utils/cloud-foundry.js', 'srv/srv/utils/alert-notification.js'
+      'gen/**', 'node_modules/**', 'app/**', 'router/**', 'db/sqlite/**', '**/*.sqlite', 'srv/gen/**'
     ]
   },
   js.configs.recommended,

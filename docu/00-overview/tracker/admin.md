@@ -9,7 +9,6 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## To-do (milestone order)
 
-- [ ] A8 Remove dead provisioning path (provisioning.js, undeclared cfenv / alert-notification-client); confirm basic-subscription.js is the live path
 - [ ] A9 Per-tenant pseudonymisation salt (ZADO_CFG + CAP) and docu/11 GDPR / works-council note
 - [ ] A10 Pilot documentation: docu/05 deploy runbook, docu/13 operations, docu/15 target-system onboarding
 - [ ] A11 /readyz with DB check; startup console.log -> cds.log
@@ -24,6 +23,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## Accomplished
 
+- [x] A8 Dead provisioning path removed: provisioning.js, utils/alert-notification.js, utils/cloud-foundry.js (undeclared cfenv / alert-notification-client, missing tenant-automator.js), orphaned isTenantAutomationEnabled and ADOPTOPS_TENANT_AUTOMATION dropped, basic-subscription.js confirmed as the only subscription path, module-load test requires every srv module and checks declared packages — this PR, 2026-09-17
 - [x] A7 Safety defaults: direct S/4 HTTPS calls verify certificates by default (S4_DIRECT_INSECURE_TLS is an explicit, logged opt-in), directTlsOptions unit tests, OData-branch tests proving a payload without ResultJson yields FAILED / SIMULATED_BLOCKED instead of a thrown error, docu/06 direct-access chapter — this PR, 2026-09-17
 - [x] A6 CI gate: .github/workflows/ci.yml (server lint + mocha + production build, client rolldown lock check + lint + node --test + Linux build, tracker check), server eslint config and lint script, server suites renamed to .mjs (module-type warning gone), lock:check script, docu/14 ci-gate chapter — this PR, 2026-09-17
 - [x] A5 Tenant scoping gaps: tenantScoped aspect on the seven remaining entities, tenant-scope helper now recognises service projections (it never matched one before) and filters UPDATE/DELETE too, tenantFilter/stampTenant for direct CQN in access-request, telemetry and settings handlers, per-tenant TelemetrySettings, NULL-tenant backfill on boot, two-tenant cds.test, docu/04 chapter — this PR, 2026-09-17
@@ -40,6 +40,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 ## Daily log
 
 ### 2026-09-17
+- A8 landed. Nothing referenced the three modules; the new module-load suite would have flagged them (three of 38 modules failed to require). Noticed while confirming the live path: server.js registers the SaaS subscription callbacks only for the basic tier, so a standard-tier instance answers 404 to the registry (idea I27, belongs to T2).
 - A7 landed. The undefined `body` half of the item had already been removed by S4 (#26); A7 adds the tests that pin that path (OData root, mocked transport, step and probe) and flips the TLS default. Local scripts use a plain-http override for the A4H lab box, so nothing local needed the opt-in.
 - A6 landed. Branch protection stays unavailable, so "a red check blocks the PR" is a reviewer rule, not a GitHub setting. Server lint surfaced 17 findings: one was the A7 `body` reference in s4-activate-adapter.js, which S4 (#26) replaced on main before this PR merged (A7 still owns the test and the TLS default), six sit in the dead provisioning path (excluded until A8 removes it), the rest were dead assignments. `npm install` for the new dev dependencies replaced this worktree's node_modules junction with a real directory; the primary checkout was untouched. First CI run caught a peer-dependency clash a local `npm install` tolerates but a clean `npm ci` refuses: @sap/cds 8.9 pins @eslint/js ^9, so the server lint stays on eslint 9.
 - A5 landed. Two findings: (1) registerTenantScope checked `target.name.startsWith('adops.db.')`, but an OData request targets the service projection, so no read had ever been filtered; the helper now follows projections to their source. (2) cds deletes the `tenant` attribute of mocked users while multitenancy is off, while the XSUAA strategy always sets `ctx.tenant` from the zone id; the two-tenant test assigns tenants in a post-auth middleware instead of enabling MTX.

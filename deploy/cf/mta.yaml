@@ -136,7 +136,6 @@ modules:
       CDS_ENV: production
       ADOPTOPS_TIER: basic
       ADOPTOPS_DB_MODE: postgres
-      ADOPTOPS_TENANT_AUTOMATION: false
       # Browser calls reach srv through the approuter (same origin); the
       # approuter URL is allowed here, extra local-development origins come
       # from mtaext/dev.mtaext.
