@@ -10,24 +10,32 @@ import {
   buildUsageEvent,
   buildPerformanceEvent
 } from '../features/telemetry/performancePolicy.js';
+import {
+  buildClientErrorReport,
+  createReportGate,
+  shouldCaptureApiFailure,
+  describeRejection
+} from '../features/telemetry/errorReporting.js';
 
-// Usage + performance telemetry emitter (idea I17). Everything here is
+// Client telemetry: crash reports (recordClientError, I16) and batched usage
+// + performance events (recordTelemetryBatch, I17). Everything here is
 // fire-and-forget: a telemetry failure must never surface into the user
-// workflow, so every path swallows errors after the gate. Events are
-// batched through features/telemetry/queue.js and posted to
-// CoreService.recordTelemetryBatch; the server applies identity, tenant,
-// sampling and the authoritative enable/disable gate again.
+// workflow, so every path swallows errors after the gate. The server applies
+// identity, tenant, sampling and the authoritative enable/disable gate again.
 
 const http = installCorrelation(axios.create({ timeout: 30000 }));
 const queue = createTelemetryQueue();
+const reportGate = createReportGate();
 const FLUSH_DELAY_MS = 10000;
 const BATCH_URL = '/core/recordTelemetryBatch';
+const ERROR_URL = '/core/recordClientError';
 
 // Tenant collection settings, fetched once per page load. Collection stays
 // ON until the fetch resolves; the server gate is the authoritative one.
 let settings = {
   usageEnabled: true,
   performanceEnabled: true,
+  crashReportingEnabled: true,
   slowRouteThresholdMs: undefined,
   slowApiThresholdMs: undefined,
   severeApiThresholdMs: undefined
@@ -44,6 +52,42 @@ function loadSettings() {
 
 const appVersion = () => (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '');
 const currentRoute = () => (typeof window !== 'undefined' ? window.location.hash || window.location.pathname || '' : '');
+const browserInfo = () => (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+
+// --- Crash reports -----------------------------------------------------------
+
+// input: { errorType, severity, error, message, componentStack, endpointPath,
+// httpMethod, httpStatus, correlationId }. Resolves to the receipt
+// ({ received, fingerprint, occurrenceCount }) plus the correlation id the
+// report carried, or null when the gate or the settings suppressed it.
+export async function reportClientError(input) {
+  let correlationId = '';
+  try {
+    if (!settings.crashReportingEnabled) return null;
+    correlationId = input?.correlationId || correlation.lastCorrelationId;
+    const report = buildClientErrorReport({
+      ...input,
+      route: input?.route ?? currentRoute(),
+      sessionId: correlation.sessionId,
+      correlationId,
+      appVersion: appVersion(),
+      browserInfo: browserInfo()
+    });
+    if (!reportGate.shouldReport(report)) return null;
+    const response = await http.post(ERROR_URL, report);
+    return { ...(response.data || {}), correlationId: correlation.lastCorrelationId || correlationId };
+  } catch (reportError) {
+    console.warn('Crash report could not be sent:', reportError?.message || reportError);
+    return { received: false, fingerprint: null, occurrenceCount: 0, correlationId };
+  }
+}
+
+// React render crash (AppErrorBoundary.componentDidCatch).
+export function reportRenderError({ error, componentStack }) {
+  return reportClientError({ errorType: 'RENDER_ERROR', severity: 'FATAL', error, componentStack });
+}
+
+// --- Usage + performance (batched) ------------------------------------------
 
 function batchPayload(batch) {
   return {
@@ -183,6 +227,8 @@ function recordInitialAppLoad() {
   else window.addEventListener('load', () => setTimeout(record, 0), { once: true });
 }
 
+// --- Registration ------------------------------------------------------------
+
 let registered = false;
 
 // Registered once from main.jsx. The module flag guards StrictMode re-renders
@@ -191,11 +237,31 @@ export function registerTelemetry() {
   if (registered || typeof window === 'undefined') return;
   registered = true;
 
-  // Slow-API capture: every timed CAP request lands here; the policy stores
-  // only threshold-crossing operations, and never the telemetry endpoints
-  // themselves (the pipeline must not measure itself).
-  setApiTimingListener(({ url, method, durationMs, failed }) => {
+  // Uncaught errors and unhandled rejections outside React's render path
+  // (event handlers, timers, async work) - the boundary never sees these.
+  window.addEventListener('error', (event) => {
+    reportClientError({
+      errorType: 'WINDOW_ERROR', severity: 'ERROR',
+      error: event?.error, message: event?.message
+    });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const { error, message } = describeRejection(event?.reason);
+    reportClientError({ errorType: 'UNHANDLED_REJECTION', severity: 'ERROR', error, message });
+  });
+
+  // Every timed CAP request lands here. Slow-API capture stores only
+  // threshold-crossing operations; failure capture keeps to infrastructure
+  // failures (network / 5xx). Neither ever observes the telemetry endpoints.
+  setApiTimingListener(({ url, method, status, durationMs, failed, message, correlationId }) => {
     if (isTelemetryEndpoint(url)) return;
+    if (failed && shouldCaptureApiFailure({ status, url })) {
+      reportClientError({
+        errorType: 'API_FAILURE', severity: status ? 'ERROR' : 'WARNING',
+        message: message || `${method} ${url} failed`,
+        endpointPath: url, httpMethod: method, httpStatus: status ?? null, correlationId
+      });
+    }
     const classification = classifyApiTiming({ durationMs, failed }, settings);
     if (!classification) return;
     trackPerformance({
