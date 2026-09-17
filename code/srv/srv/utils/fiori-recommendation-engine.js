@@ -14,6 +14,11 @@
 // ---------------------------------------------------------------------------
 
 const ENGINE_VERSION = '1.0.0';
+const { deriveActivationEffort } = require('./activation-plan.js');
+
+// Effort defaults for candidates that arrive without the query's figures:
+// the activation template, not a literal (O4).
+const DEFAULT_EFFORT = deriveActivationEffort();
 
 const MAPPING_TYPE_WEIGHT = {
   REPLACES: 1.0,
@@ -126,8 +131,8 @@ function coverageScoreOf(candidate) {
 }
 
 function effortScoreOf(candidate) {
-  const newRoles = Number(candidate.newRolesNeeded || 1);
-  const steps = Number(candidate.activationStepCount || 4);
+  const newRoles = Number(candidate.newRolesNeeded ?? DEFAULT_EFFORT.newRolesNeeded);
+  const steps = Number(candidate.activationStepCount ?? DEFAULT_EFFORT.activationStepCount);
   const assignUsers = candidate.assignUsers ? 1 : 0;
   const prerequisites = Number(candidate.prerequisiteCount || 0);
   return Math.max(0, 100 - Math.min(100, 6 * newRoles + 2 * steps + 8 * assignUsers + 10 * prerequisites));

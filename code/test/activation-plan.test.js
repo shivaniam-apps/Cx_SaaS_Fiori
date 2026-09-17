@@ -6,6 +6,7 @@ const {
   waveTechnicalKey,
   objectKey,
   deriveActivationSteps,
+  deriveActivationEffort,
   simulateSteps,
   mockSimulationProbe,
   isActivationTargetEnvironment
@@ -101,6 +102,22 @@ describe('deriveActivationSteps', () => {
   it('numbers steps sequentially from 1 and starts them all PENDING', () => {
     expect(steps.map((s) => s.SequenceNo)).to.deep.equal(steps.map((_, i) => i + 1));
     expect(new Set(steps.map((s) => s.Status))).to.deep.equal(new Set(['PENDING']));
+  });
+});
+
+describe('deriveActivationEffort', () => {
+  it('matches the single-app plan the template would build (O4 acceptance)', () => {
+    const effort = deriveActivationEffort({ fioriId: 'F3893', bspApplication: 'nw_aps_lim_app', businessRoleId: 'SAP_BR_AP_ACCOUNTANT' });
+    const { steps } = deriveActivationSteps({ proposals: [PROPOSALS[0]], waveName: 'anything' });
+    expect(effort.activationStepCount).to.equal(steps.length);
+    expect(effort.newRolesNeeded).to.equal(steps.filter((s) => s.StepType === 'CREATE_PFCG_ROLE').length);
+    expect(effort.appStepCount + effort.sharedStepCount).to.equal(effort.activationStepCount);
+    expect(effort.localReplayStepCount + effort.transportableStepCount).to.equal(effort.activationStepCount);
+  });
+
+  it('is the same for every app today and needs no inputs', () => {
+    expect(deriveActivationEffort()).to.deep.equal(deriveActivationEffort({ fioriId: 'F0842A' }));
+    expect(deriveActivationEffort()).to.include({ activationStepCount: 10, appStepCount: 2, sharedStepCount: 8, newRolesNeeded: 1, irreversibleStepCount: 2 });
   });
 });
 
