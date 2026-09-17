@@ -12,6 +12,10 @@ const {
 const { probeActivateService, activateRootFor, isODataRoot } = require('./s4-activate-adapter.js');
 const { isActivationTargetEnvironment } = require('./activation-plan.js');
 
+// S6's 404 fallback and A9's metadata read log through it; A6 had removed
+// an unused logger from this file, so main referenced LOG without defining it.
+const LOG = require('@sap/cds').log('s4-fiori-adapter');
+
 
 // ---------------------------------------------------------------------------
 // Domain layer over the ZADO_USAGE_O4 OData V4 service. Owns entity paths,
@@ -358,12 +362,73 @@ function extractionParameters({ topUsersPerTcode, minExecutions } = {}) {
   return { topUsersPerTcode: top, minExecutions: min };
 }
 
-function userTransactionUsageEntity(params) {
-  const { topUsersPerTcode, minExecutions } = extractionParameters(params);
-  return `UserTransactionUsage(P_TopUsers=${topUsersPerTcode},P_MinExecutions=${minExecutions})/Set`;
+// A9: the tenant travels as a third parameter, P_TenantId, when the add-on
+// declares it. Its presence is read from $metadata (parseEntityParameterNames)
+// because a parameterized entity must be addressed with exactly the
+// parameters it declares: a two-parameter path 404s on a three-parameter
+// entity and vice versa.
+function formatParameterValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value));
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return `'${String(value ?? '').replace(/'/g, "''")}'`;
 }
 
-async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, top = 1000, skip = 0, req }) {
+function buildParameterisedEntityPath(basePath, parameters) {
+  const entries = Object.entries(parameters || {}).filter(([, value]) => value !== undefined);
+  if (!entries.length) return basePath;
+  return `${basePath}(${entries.map(([name, value]) => `${name}=${formatParameterValue(value)}`).join(',')})/Set`;
+}
+
+function userTransactionUsageEntity(params, { tenantId } = {}) {
+  const { topUsersPerTcode, minExecutions } = extractionParameters(params);
+  return buildParameterisedEntityPath('UserTransactionUsage', {
+    P_TopUsers: topUsersPerTcode,
+    P_MinExecutions: minExecutions,
+    ...(tenantId !== undefined ? { P_TenantId: String(tenantId || 'GLOBAL') } : {})
+  });
+}
+
+// Parameter names of a parameterized entity from the service $metadata: the
+// "<EntitySet>Parameters" entity type lists them. Read once per destination
+// and service root; never in mock mode; empty when unreadable, in which case
+// the S6 two-parameter path and its 404 fallback decide.
+const USAGE_PARAMETER_TTL_MS = 10 * 60 * 1000;
+const usageParameterCache = new Map();
+
+function parseEntityParameterNames(metadataText, entitySet) {
+  const text = typeof metadataText === 'string' ? metadataText : '';
+  const block = text.match(new RegExp(`<EntityType\\b[^>]*\\bName="${entitySet}Parameters"[^>]*>([\\s\\S]*?)</EntityType>`, 'i'));
+  const names = new Set();
+  if (!block) return names;
+  for (const match of block[1].matchAll(/<Property\b[^>]*\bName="([^"]+)"/gi)) names.add(match[1]);
+  return names;
+}
+
+async function usageEntityParameters({ targetSystem, entitySet, req }) {
+  if (shouldMockSap()) return new Set();
+  const cacheKey = `${destinationNameOf(targetSystem)}::${serviceRoot(targetSystem)}::${entitySet}`;
+  const hit = usageParameterCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < USAGE_PARAMETER_TTL_MS) return hit.names;
+
+  let names = new Set();
+  try {
+    const metadata = await callS4Destination({
+      destinationName: destinationNameOf(targetSystem),
+      path: `${serviceRoot(targetSystem)}/$metadata`,
+      headers: { Accept: 'application/xml, text/xml' },
+      req,
+      timeoutMs: 30000
+    });
+    if (metadata.ok) names = parseEntityParameterNames(metadata.data, entitySet);
+  } catch (error) {
+    LOG.warn(`Could not read $metadata for ${entitySet}; assuming the S6 parameter set. ${error.message}`);
+    return names;
+  }
+  usageParameterCache.set(cacheKey, { at: Date.now(), names });
+  return names;
+}
+
+async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, tenantId, top = 1000, skip = 0, req }) {
   const filters = [];
   if (periodFrom) filters.push(`PeriodFrom ge ${periodFrom}`);
   if (periodTo) filters.push(`PeriodTo le ${periodTo}`);
@@ -375,10 +440,14 @@ async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodT
     req
   };
 
+  // A9: pass the tenant only to an add-on whose metadata declares P_TenantId.
+  const supported = await usageEntityParameters({ targetSystem, entitySet: 'UserTransactionUsage', req });
+  const tenantScope = supported.has('P_TenantId') ? { tenantId } : {};
+
   let result;
   let parametersApplied = true;
   try {
-    result = await fetchPagedEntity({ targetSystem, entitySet: userTransactionUsageEntity({ topUsersPerTcode, minExecutions }), ...page });
+    result = await fetchPagedEntity({ targetSystem, entitySet: userTransactionUsageEntity({ topUsersPerTcode, minExecutions }, tenantScope), ...page });
   } catch (error) {
     // An add-on without the parameterized entity (older than S6) answers
     // 404 on the parameter path: fall back to the plain set, where the
@@ -398,6 +467,9 @@ module.exports = {
   fetchPagedEntity,
   extractionParameters,
   userTransactionUsageEntity,
+  usageEntityParameters,
+  parseEntityParameterNames,
+  buildParameterisedEntityPath,
   fetchUsagePeriods,
   fetchTransactionUsagePage,
   fetchUserTransactionUsagePage,
