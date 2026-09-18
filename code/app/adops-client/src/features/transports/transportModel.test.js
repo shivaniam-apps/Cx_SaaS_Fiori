@@ -6,6 +6,8 @@ import {
   importSummaryLine,
   followOnSystemsFor,
   defaultFollowOnSystem,
+  transportRoute,
+  routeLabel,
   canVerifyImport,
   canRecordImport,
   verificationSummary,
@@ -59,6 +61,26 @@ test('the default follow-on system is the first one not yet checked', () => {
   const allChecked = { ...released, Imports: [{ targetSystem_ID: 'qas' }, { targetSystem_ID: 'prd' }] };
   assert.equal(defaultFollowOnSystem(allChecked, [DEV, QAS, PRD]).ID, 'qas');
   assert.equal(defaultFollowOnSystem(released, [DEV]), null);
+});
+
+test('a configured transport route wins over the environment order and is cycle-safe', () => {
+  // Route DEV -> SANDBOX -> PRD (QAS deliberately outside the route).
+  const dev = { ...DEV, followOnSystem_ID: 'sbx' };
+  const sbx = { ...SANDBOX, followOnSystem_ID: 'prd' };
+  const prd = { ...PRD, followOnSystem_ID: 'dev' }; // cycle back to the source
+  const systems = [prd, QAS, dev, sbx];
+  assert.deepEqual(transportRoute('dev', systems).map((s) => s.ID), ['sbx', 'prd']);
+  assert.deepEqual(transportRoute('qas', systems), [], 'no route configured from QAS');
+  assert.deepEqual(transportRoute('nope', systems), []);
+  assert.equal(routeLabel(released, systems), 'RD1 Development (DEV) -> Sandbox (SANDBOX) -> RD1 Production (PRD)');
+  assert.equal(routeLabel(released, [DEV, QAS]), '');
+  assert.equal(defaultFollowOnSystem(released, systems).ID, 'sbx', 'first hop of the route');
+  const sbxChecked = { ...released, Imports: [{ targetSystem_ID: 'sbx' }] };
+  assert.equal(defaultFollowOnSystem(sbxChecked, systems).ID, 'prd', 'next unchecked hop');
+  const allChecked = { ...released, Imports: [{ targetSystem_ID: 'sbx' }, { targetSystem_ID: 'prd' }] };
+  assert.equal(defaultFollowOnSystem(allChecked, systems).ID, 'sbx', 'route exhausted: first hop again');
+  // A dangling followOnSystem_ID (system removed) ends the route quietly.
+  assert.deepEqual(transportRoute('dev', [{ ...DEV, followOnSystem_ID: 'gone' }]), []);
 });
 
 test('verification is offered for released requests with a follow-on system; recording needs an Activator', () => {

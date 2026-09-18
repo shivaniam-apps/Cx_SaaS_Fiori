@@ -43,7 +43,8 @@ import {
   canRecordImport,
   verificationSummary,
   verificationRows,
-  verificationDesign
+  verificationDesign,
+  routeLabel
 } from '../features/transports/transportModel.js';
 
 // Status buckets shared with the cockpit (dashboard-summary.js on the server
@@ -267,7 +268,17 @@ export function TransportsPage() {
                 <TableCell><span style={{ fontWeight: 600 }}>{row.TransportRequestId}</span></TableCell>
                 <TableCell><span>{row.Description}</span></TableCell>
                 <TableCell><span>{[row.WaveName, row.PlanName].filter(Boolean).join(' / ') || '—'}</span></TableCell>
-                <TableCell><span>{row.TargetSystemName || '—'}</span></TableCell>
+                <TableCell>
+                  <span>{row.TargetSystemName || '—'}</span>
+                  {routeLabel(row, followOnSystems) ? (
+                    <>
+                      <br />
+                      <span style={{ color: 'var(--sapNeutralTextColor, #6a6d70)', fontSize: '0.8rem' }} title="Transport route (Target Systems > Next system in transport route)">
+                        {routeLabel(row, followOnSystems)}
+                      </span>
+                    </>
+                  ) : null}
+                </TableCell>
                 <TableCell><Tag design={RELEASE_STATUS_DESIGN[row.Status] || 'Neutral'}>{row.Status}</Tag></TableCell>
                 <TableCell>
                   <span>{row.ReleasedAt ? `${formatStamp(row.ReleasedAt)}${row.ReleasedBy ? ` by ${row.ReleasedBy}` : ''}` : '—'}</span>
