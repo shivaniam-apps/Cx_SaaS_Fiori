@@ -232,6 +232,54 @@ CLASS lcl_probe IMPLEMENTATION.
     " Run in CLIENT 100: spaces, pages and service assignments are
     " client-dependent and were empty in 400.
     section( '3b. ROUND 2 - SIGNATURES BEHIND THE ROUND-1 FINDINGS' ).
+    " Row structures of the task-list parameter tables (ET_PARAM_DEF / IT_PARAMETER):
+    " the ACTIVATE_ODATA_SERVICE executor fills IT_PARAMETER by component name.
+    line( 'Task-list parameter table types and their row structures (DD40L -> DD03L):' ).
+    dump_rows( iv_table = 'DD40L' iv_where = |TYPENAME IN ('STCTM_TX_VALUE','STCTM_TX_PARAMETER','STCTM_T_TASK') AND AS4LOCAL = 'A'| iv_max = 5 ).
+    field_list( 'STCTM_S_VALUE' ).
+    field_list( 'STCTM_S_PARAMETER' ).
+    field_list( 'STCTM_SX_PARAMETER' ).
+    field_list( 'STCTM_S_TASK' ).
+    field_list( 'STC_EXT_CALLER_INFO' ).
+    field_list( 'STCTM_S_EXEC_SETTINGS' ).
+    line( 'Scenario parameter definitions as the FM returns them (SAP_GATEWAY_ACTIVATE_ODATA_SERV):' ).
+    DATA lt_param_def TYPE stctm_tx_parameter.
+    DATA lt_param_val TYPE stctm_tx_value.
+    DATA lt_return    TYPE bapirettab.
+    DATA ls_caller    TYPE stc_ext_caller_info.
+    ls_caller-caller_name = 'ZADO_PROBE_ACTIVATION'.
+    CALL FUNCTION 'STC_TM_SCENARIO_GET_PARAMETERS'
+      EXPORTING
+        i_scenario_id  = p_scen
+        i_language     = 'E'
+        is_caller_info = ls_caller
+      IMPORTING
+        et_param_def   = lt_param_def
+        et_parameter   = lt_param_val
+      TABLES
+        et_return      = lt_return
+      EXCEPTIONS
+        OTHERS         = 1.
+    IF sy-subrc <> 0.
+      line( |  STC_TM_SCENARIO_GET_PARAMETERS failed, sy-subrc { sy-subrc }| ).
+    ELSE.
+      line( |  { lines( lt_param_def ) } parameter definition(s), { lines( lt_param_val ) } value row(s), { lines( lt_return ) } message(s)| ).
+      LOOP AT lt_param_def ASSIGNING FIELD-SYMBOL(<ls_def>).
+        DATA(lo_def) = CAST cl_abap_structdescr( cl_abap_typedescr=>describe_by_data( <ls_def> ) ).
+        DATA lv_def_text TYPE string.
+        CLEAR lv_def_text.
+        LOOP AT lo_def->components INTO DATA(ls_def_comp).
+          ASSIGN COMPONENT ls_def_comp-name OF STRUCTURE <ls_def> TO FIELD-SYMBOL(<lv_def_val>).
+          IF sy-subrc = 0 AND <lv_def_val> IS NOT INITIAL.
+            lv_def_text = |{ lv_def_text } { ls_def_comp-name }=[{ <lv_def_val> }]|.
+          ENDIF.
+        ENDLOOP.
+        line( |     DEF{ lv_def_text }| ).
+      ENDLOOP.
+      LOOP AT lt_return INTO DATA(ls_ret).
+        line( |     MSG { ls_ret-type } { ls_ret-id } { ls_ret-number } { ls_ret-message }| ).
+      ENDLOOP.
+    ENDIF.
     line( 'Direct gateway activation (replaces the task list when usable):' ).
     fm_signature( '/IWFND/FM_ACTIVATE_SERVICE' ).
     class_methods( '/IWFND/CL_MGW_ACTIVATION_API' ).
