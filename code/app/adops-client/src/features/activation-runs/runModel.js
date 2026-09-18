@@ -144,6 +144,17 @@ export function summaryCards(summary) {
   return cards;
 }
 
+// KPI card as an in-content scope gesture (fiori-ux.md, Filters): clicking a
+// bucket card applies that status filter (and the page writes the draft);
+// clicking the applied card again, or the total card (key ''), clears it.
+// The bucket key is the `status` parameter of queryActivationRuns, so card
+// and list slice are the same server expression (performance.md).
+export function nextStatusFilter(appliedStatus, cardKey) {
+  const key = String(cardKey || '').trim().toUpperCase();
+  if (!key || key === 'OTHER') return '';
+  return key === String(appliedStatus || '').trim().toUpperCase() ? '' : key;
+}
+
 // Monitor read discipline: per-step messages are fetched when a row is
 // expanded and re-fetched only while that step is RUNNING - plus exactly once
 // more when it leaves RUNNING, so the final verdict messages arrive.

@@ -11,6 +11,8 @@ import { TableCell } from '@ui5/webcomponents-react/TableCell';
 import { Tag } from '@ui5/webcomponents-react/Tag';
 import { BusyIndicator } from '@ui5/webcomponents-react/BusyIndicator';
 import { MessageStrip } from '@ui5/webcomponents-react/MessageStrip';
+import AdopsToast from '../components/AdopsToast.jsx';
+import { useFeedback } from '../hooks/useFeedback.js';
 import { Panel } from '@ui5/webcomponents-react/Panel';
 import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { Switch } from '@ui5/webcomponents-react/Switch';
@@ -331,7 +333,7 @@ export function SettingsPage() {
   const { view } = useParams();
   const navigate = useNavigate();
   const [userInfo, setUserInfo] = useState(null);
-  const [notice, setNotice] = useState(null);
+  const { notice, toast, notify: setNotice, clearNotice, clearToast } = useFeedback();
   const [loadError, setLoadError] = useState('');
   const activeTabId = resolveSettingsView(view);
 
@@ -367,8 +369,9 @@ export function SettingsPage() {
       {loadError ? (
         <MessageStrip design="Negative" style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setLoadError('')}>{loadError}</MessageStrip>
       ) : null}
+      <AdopsToast message={toast} onClose={clearToast} />
       {notice ? (
-        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setNotice(null)}>{notice.text}</MessageStrip>
+        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={clearNotice}>{notice.text}</MessageStrip>
       ) : null}
       <div style={{ marginTop: 'var(--adops-space-md)' }}>
         <AdopsPageTabs

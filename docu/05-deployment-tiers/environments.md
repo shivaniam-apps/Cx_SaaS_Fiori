@@ -70,7 +70,12 @@ Node `22.x` like the CAP server, with `@sap/approuter ^20.5` and
   `adoptops-${space}`. A space that was registered under the old name keeps
   that registration until the instance is recreated; no space had been
   deployed when A2 landed.
-- The server code still falls back to the destination `S4H_2023` when a
-  call carries no destination name and `S4_DESTINATION` is unset. In CF
-  that fallback cannot resolve, which is the intended failure; removing it
-  from the code is tracked in the ideas list.
+- There is no default destination in the code (S11). A call without a
+  destination name uses `ADOPTOPS_S4_DESTINATION` when the operator set
+  one (single-system lab) and otherwise fails before any lookup with a
+  message naming the target system; the connection check answers a
+  DESTINATION verdict instead.
+- A Cloud Foundry instance refuses to start when any development
+  convenience is set (`ADOPTOPS_S4_URL_OVERRIDES`, `ADOPTOPS_S4_DIRECT_USER`
+  / `_PASSWORD`, `ADOPTOPS_S4_DIRECT_INSECURE_TLS`, `ADOPTOPS_MOCK_S4`);
+  outside CF they are logged as warnings at startup.

@@ -39,3 +39,17 @@ lab box and are not affected by the change.
 The override and the credentials are development conveniences. A deployed
 instance routes through destinations in the subscriber subaccount
 (`.claude/rules/sap-backend.md`) and must not carry any of these variables.
+Since S11 this is enforced: with `VCAP_APPLICATION` present the server
+refuses to start when `ADOPTOPS_S4_URL_OVERRIDES`, `ADOPTOPS_S4_DIRECT_USER`,
+`ADOPTOPS_S4_DIRECT_PASSWORD`, `ADOPTOPS_S4_DIRECT_INSECURE_TLS` or
+`ADOPTOPS_MOCK_S4` is set (any prefix). Outside CF each set variable is
+logged as a startup warning, also under the production profile the local
+hybrid scripts use.
+
+## No default destination
+
+Every S/4 call names its destination, normally the target system's
+`destinationName`. There is no hardcoded fallback (S11): a single-system lab
+may set `ADOPTOPS_S4_DESTINATION` as the default for calls without one;
+otherwise such a call fails before any lookup with a message naming the
+target system, and the connection check reports a DESTINATION verdict.

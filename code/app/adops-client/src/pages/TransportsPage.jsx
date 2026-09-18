@@ -19,6 +19,9 @@ import { MessageStrip } from '@ui5/webcomponents-react/MessageStrip';
 import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { fetchUserInfo } from '../services/coreService.js';
 import { hasActivatorAccess } from '../features/auth/memberAccess.js';
+import { releaseFeedbackText, isReleaseSuccess } from '../features/ui/feedback.js';
+import AdopsToast from '../components/AdopsToast.jsx';
+import { useFeedback } from '../hooks/useFeedback.js';
 import {
   listTargetSystems,
   queryTransportRequests,
@@ -61,7 +64,8 @@ export function TransportsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(null); // transport row
-  const [lastResult, setLastResult] = useState(null);         // { transportId, ...payload }
+  const [lastResult, setLastResult] = useState(null);         // { transportId, trkorr, text } - failed releases only
+  const { notice, toast, notify: setNotice, clearNotice, clearToast } = useFeedback();
   const [verifying, setVerifying] = useState(null);           // { transport, systemId, result, loading }
   const [recording, setRecording] = useState(null);           // { transport, systemId, status, note }
   const [reloadToken, setReloadToken] = useState(0);
@@ -104,7 +108,11 @@ export function TransportsPage() {
     try {
       setBusy(true);
       const result = await releaseTransport(transport.ID, simulate);
-      setLastResult({ transportId: transport.ID, trkorr: transport.TransportRequestId, ...result });
+      // Success is a toast (survives the list reload); a failed release stays
+      // as a strip next to the list until dismissed.
+      const text = releaseFeedbackText(transport.TransportRequestId, result);
+      if (isReleaseSuccess(result)) { setLastResult(null); setNotice({ design: 'Positive', text }); }
+      else setLastResult({ transportId: transport.ID, trkorr: transport.TransportRequestId, text });
       setConfirmRelease(null);
       if (!simulate) setReloadToken((t) => t + 1);
     } catch (e) {
@@ -196,14 +204,13 @@ export function TransportsPage() {
         <MessageStrip design="Negative" style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setError('')}>{error}</MessageStrip>
       ) : null}
 
+      <AdopsToast message={toast} onClose={clearToast} />
+      {notice ? (
+        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={clearNotice}>{notice.text}</MessageStrip>
+      ) : null}
       {lastResult ? (
-        <MessageStrip
-          design={['RELEASED'].includes(lastResult.Status) || lastResult.Simulated ? 'Positive' : 'Negative'}
-          style={{ marginTop: 'var(--adops-space-sm)' }}
-          onClose={() => setLastResult(null)}
-        >
-          {lastResult.Simulated ? 'Release simulation' : 'Release'} for {lastResult.trkorr}:{' '}
-          {(lastResult.Messages || []).map((m) => m.message).join(' ') || lastResult.Status}
+        <MessageStrip design="Negative" style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setLastResult(null)}>
+          {lastResult.text}
         </MessageStrip>
       ) : null}
 

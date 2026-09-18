@@ -24,8 +24,8 @@ export function resolveLandscapeView(param) {
 // Tab switches keep the run scope in the query string so the page never
 // falls back to a broad default (fiori-ux.md, Navigation). Cross-links
 // (a role from a user's detail, a user from a role's detail) travel as
-// `role` / `user` params: the app shell remounts the page on every path
-// change, so nothing survives a tab switch except the URL.
+// `role` / `user` params so the target slice is shareable and survives a
+// reload, not only the in-memory state of this page.
 export function getLandscapeViewPath(id, params) {
   const view = VIEW_BY_ID.get(id);
   const base = view?.routeSuffix ? `/landscape/${view.routeSuffix}` : '/landscape';

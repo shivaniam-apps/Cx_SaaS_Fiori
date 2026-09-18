@@ -12,6 +12,8 @@ import { Tag } from '@ui5/webcomponents-react/Tag';
 import { BusyIndicator } from '@ui5/webcomponents-react/BusyIndicator';
 import { IllustratedMessage } from '@ui5/webcomponents-react/IllustratedMessage';
 import { MessageStrip } from '@ui5/webcomponents-react/MessageStrip';
+import AdopsToast from '../components/AdopsToast.jsx';
+import { useFeedback } from '../hooks/useFeedback.js';
 import { Panel } from '@ui5/webcomponents-react/Panel';
 import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { Select } from '@ui5/webcomponents-react/Select';
@@ -50,7 +52,8 @@ import {
   summaryCards,
   shouldRefetchStepMessages,
   stepOperatorActions,
-  operatorLabel
+  operatorLabel,
+  nextStatusFilter
 } from '../features/activation-runs/runModel.js';
 
 const POLL_KEY_SEPARATOR = '|';
@@ -72,7 +75,7 @@ export function ActivationRunsPage() {
   const [systems, setSystems] = useState([]);
   const [list, setList] = useState(null);           // { Items, Summary }
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState(null);       // { design, text }
+  const { notice, toast, notify: setNotice, clearNotice, clearToast } = useFeedback();
   const [stepAction, setStepAction] = useState(null); // { kind: 'skip' | 'rollback', step, auditOnly }
   const [stepReason, setStepReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -92,6 +95,9 @@ export function ActivationRunsPage() {
   const [appliedSystemId, setAppliedSystemId] = useState(systemFromUrl);
   const [draftStatus, setDraftStatus] = useState(statusFromUrl);
   const [appliedStatus, setAppliedStatus] = useState(statusFromUrl);
+  // In-content scope gesture (KPI card click): applies immediately AND
+  // writes the draft so the bar never disagrees with the list.
+  const applyStatus = (status) => { setDraftStatus(status); setAppliedStatus(status); };
 
   useEffect(() => {
     let cancelled = false;
@@ -237,8 +243,9 @@ export function ActivationRunsPage() {
       {error ? (
         <MessageStrip design="Negative" style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setError('')}>{error}</MessageStrip>
       ) : null}
+      <AdopsToast message={toast} onClose={clearToast} />
       {notice ? (
-        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setNotice(null)}>{notice.text}</MessageStrip>
+        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={clearNotice}>{notice.text}</MessageStrip>
       ) : null}
 
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
@@ -268,8 +275,24 @@ export function ActivationRunsPage() {
 
       {list ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
-          <Kpi label="Runs" value={Number(list.Summary?.Total || 0).toLocaleString()} />
-          {cards.map((card) => <Kpi key={card.key} label={card.label} value={Number(card.value).toLocaleString()} />)}
+          {/* In-content scope gesture: a card applies its bucket AND writes the
+              draft, so the bar never disagrees with the list; the total clears. */}
+          <Kpi
+            label={appliedStatus ? 'Runs (all statuses)' : 'Runs'}
+            value={Number(list.Summary?.Total || 0).toLocaleString()}
+            title={appliedStatus ? 'Show all statuses' : undefined}
+            onClick={appliedStatus ? () => applyStatus('') : undefined}
+          />
+          {cards.map((card) => (
+            <Kpi
+              key={card.key}
+              label={appliedStatus === card.key ? `${card.label} (filtered)` : card.label}
+              value={Number(card.value).toLocaleString()}
+              design={appliedStatus === card.key ? card.design : undefined}
+              title={appliedStatus === card.key ? 'Clear the status filter' : `Show only ${card.label.toLowerCase()} runs`}
+              onClick={card.key === 'OTHER' ? undefined : () => applyStatus(nextStatusFilter(appliedStatus, card.key))}
+            />
+          ))}
         </div>
       ) : null}
 

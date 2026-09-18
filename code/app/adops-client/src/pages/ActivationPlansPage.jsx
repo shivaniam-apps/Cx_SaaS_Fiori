@@ -12,6 +12,8 @@ import { Tag } from '@ui5/webcomponents-react/Tag';
 import { BusyIndicator } from '@ui5/webcomponents-react/BusyIndicator';
 import { IllustratedMessage } from '@ui5/webcomponents-react/IllustratedMessage';
 import { MessageStrip } from '@ui5/webcomponents-react/MessageStrip';
+import AdopsToast from '../components/AdopsToast.jsx';
+import { useFeedback } from '../hooks/useFeedback.js';
 import { Panel } from '@ui5/webcomponents-react/Panel';
 import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { Select } from '@ui5/webcomponents-react/Select';
@@ -91,7 +93,7 @@ export function ActivationPlansPage() {
   const [systems, setSystems] = useState([]);
   const [list, setList] = useState(null);           // { Items, Summary }
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState(null);       // { design, text }
+  const { notice, toast, notify: setNotice, clearNotice, clearToast } = useFeedback();
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [detailReload, setDetailReload] = useState(0);
@@ -309,8 +311,9 @@ export function ActivationPlansPage() {
       {error ? (
         <MessageStrip design="Negative" style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setError('')}>{error}</MessageStrip>
       ) : null}
+      <AdopsToast message={toast} onClose={clearToast} />
       {notice ? (
-        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setNotice(null)}>{notice.text}</MessageStrip>
+        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={clearNotice}>{notice.text}</MessageStrip>
       ) : null}
 
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>

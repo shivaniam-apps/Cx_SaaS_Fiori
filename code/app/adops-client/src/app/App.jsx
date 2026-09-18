@@ -56,8 +56,12 @@ function ShellWithBoundary({ userInfo }) {
 
   return (
     <AdopsShell userInfo={userInfo}>
-      {/* Keyed on pathname: a crash on one page never strands the app. */}
-      <AppErrorBoundary key={location.pathname}>
+      {/* Keyed on the PAGE (first path segment), not the full pathname: a
+          crash on one page never strands the app, while /page/:view tab
+          switches and detail routes keep the page mounted with its state
+          (fiori-ux.md, Page-Level Tabs). "Try again" resets the boundary
+          within a page. */}
+      <AppErrorBoundary key={location.pathname.split('/')[1] || 'root'}>
         <AppRoutes userInfo={userInfo} />
       </AppErrorBoundary>
     </AdopsShell>

@@ -12,6 +12,8 @@ import { Tag } from '@ui5/webcomponents-react/Tag';
 import { BusyIndicator } from '@ui5/webcomponents-react/BusyIndicator';
 import { IllustratedMessage } from '@ui5/webcomponents-react/IllustratedMessage';
 import { MessageStrip } from '@ui5/webcomponents-react/MessageStrip';
+import AdopsToast from '../components/AdopsToast.jsx';
+import { useFeedback } from '../hooks/useFeedback.js';
 import { Panel } from '@ui5/webcomponents-react/Panel';
 import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { Select } from '@ui5/webcomponents-react/Select';
@@ -499,7 +501,7 @@ export function ProductInsightsPage() {
   const navigate = useNavigate();
   const [userInfo, setUserInfo] = useState(null);
   const [loadError, setLoadError] = useState('');
-  const [notice, setNotice] = useState(null);
+  const { notice, toast, notify: setNotice, clearNotice, clearToast } = useFeedback();
   const [reloadToken, setReloadToken] = useState(0);
   const activeTabId = resolveInsightsView(view);
 
@@ -541,7 +543,8 @@ export function ProductInsightsPage() {
         </span>
       </div>
       {loadError ? <MessageStrip design="Negative" style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setLoadError('')}>{loadError}</MessageStrip> : null}
-      {notice ? <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setNotice(null)}>{notice.text}</MessageStrip> : null}
+      <AdopsToast message={toast} onClose={clearToast} />
+      {notice ? <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={clearNotice}>{notice.text}</MessageStrip> : null}
       <div style={{ marginTop: 'var(--adops-space-md)' }}>
         <AdopsPageTabs tabs={INSIGHTS_VIEWS} activeTabId={activeTabId} ariaLabel="Product Insights views" onSelect={(id) => navigate(getInsightsViewPath(id))} />
       </div>
