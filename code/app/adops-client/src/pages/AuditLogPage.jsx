@@ -173,7 +173,7 @@ export function AuditLogPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '14rem' }}>
           <Label>Event type</Label>
-          <Select onChange={(e) => setDraft({ ...draft, eventType: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Event type" onChange={(e) => setDraft({ ...draft, eventType: e.detail.selectedOption.dataset.value || '' })}>
             <Option data-value="" selected={draft.eventType === ''}>All event types</Option>
             {eventTypes.map((type) => (
               <Option key={type} data-value={type} selected={draft.eventType === type}>{eventTypeLabel(type)}</Option>
@@ -182,7 +182,7 @@ export function AuditLogPage() {
         </div>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '12rem' }}>
           <Label>Object type</Label>
-          <Select onChange={(e) => setDraft({ ...draft, objectType: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Object type" onChange={(e) => setDraft({ ...draft, objectType: e.detail.selectedOption.dataset.value || '' })}>
             <Option data-value="" selected={draft.objectType === ''}>All objects</Option>
             {objectTypes.map((type) => (
               <Option key={type} data-value={type} selected={draft.objectType === type}>{type}</Option>
@@ -191,15 +191,15 @@ export function AuditLogPage() {
         </div>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '12rem' }}>
           <Label>Object</Label>
-          <Input value={draft.objectName} placeholder="contains…" onInput={(e) => setDraft({ ...draft, objectName: e.target.value })} />
+          <Input accessibleName="Object" value={draft.objectName} placeholder="contains…" onInput={(e) => setDraft({ ...draft, objectName: e.target.value })} />
         </div>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '10rem' }}>
           <Label>User</Label>
-          <Input value={draft.userId} placeholder="contains…" onInput={(e) => setDraft({ ...draft, userId: e.target.value })} />
+          <Input accessibleName="User" value={draft.userId} placeholder="contains…" onInput={(e) => setDraft({ ...draft, userId: e.target.value })} />
         </div>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '9rem' }}>
           <Label>Severity</Label>
-          <Select onChange={(e) => setDraft({ ...draft, severity: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Severity" onChange={(e) => setDraft({ ...draft, severity: e.detail.selectedOption.dataset.value || '' })}>
             <Option data-value="" selected={draft.severity === ''}>All</Option>
             {SEVERITIES.map((s) => <Option key={s} data-value={s} selected={draft.severity === s}>{s}</Option>)}
           </Select>
@@ -221,7 +221,7 @@ export function AuditLogPage() {
           <Text style={{ display: 'block', marginBottom: 'var(--adops-space-xs)', color: 'var(--sapNeutralTextColor, #6a6d70)' }}>
             {items.length.toLocaleString()} of {Number(list.count).toLocaleString()} events
           </Text>
-          <Table
+          <Table accessibleName="Audit events"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Seq</span></TableHeaderCell>

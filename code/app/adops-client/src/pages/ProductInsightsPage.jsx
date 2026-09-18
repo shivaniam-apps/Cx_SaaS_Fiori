@@ -83,7 +83,7 @@ function ChoiceSelect({ label, value, options, allLabel, onChange, minWidth = '1
   return (
     <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth }}>
       <Label>{label}</Label>
-      <Select onChange={(e) => onChange(e.detail.selectedOption.dataset.value || '')}>
+      <Select accessibleName={label} onChange={(e) => onChange(e.detail.selectedOption.dataset.value || '')}>
         <Option data-value="" selected={value === ''}>{allLabel}</Option>
         {options.map((o) => <Option key={o} data-value={o} selected={value === o}>{humanize(o)}</Option>)}
       </Select>
@@ -180,7 +180,7 @@ function FeedbackView({ notify, reloadToken, bumpReload }) {
         <ChoiceSelect label="Impact" value={draft.impact} options={FEEDBACK_IMPACTS} allLabel="All impacts" onChange={(v) => setDraft({ ...draft, impact: v })} minWidth="9rem" />
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '14rem' }}>
           <Label>Search</Label>
-          <Input value={draft.search} placeholder="title, reference or feature" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
+          <Input accessibleName="Search" value={draft.search} placeholder="title, reference or feature" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
         </div>
         <Button design="Emphasized" onClick={() => setApplied(draft)}>Go</Button>
         <Button design="Transparent" onClick={() => { setDraft(EMPTY_FEEDBACK_FILTER); setApplied(EMPTY_FEEDBACK_FILTER); }}>Clear</Button>
@@ -195,7 +195,7 @@ function FeedbackView({ notify, reloadToken, bumpReload }) {
           <Text style={{ display: 'block', marginBottom: 'var(--adops-space-xs)', color: 'var(--sapNeutralTextColor, #6a6d70)' }}>
             {items.length.toLocaleString()} of {Number(list.count).toLocaleString()} entries
           </Text>
-          <Table
+          <Table accessibleName="Pilot feedback"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Submitted</span></TableHeaderCell>
@@ -241,15 +241,15 @@ function FeedbackView({ notify, reloadToken, bumpReload }) {
               <Meta label="Correlation" value={triage.row.CorrelationId} />
             </div>
             <Label required>Status</Label>
-            <Select onChange={(e) => setTriage({ ...triage, draft: { ...triage.draft, status: e.detail.selectedOption.dataset.value } })}>
+            <Select accessibleName="Status" onChange={(e) => setTriage({ ...triage, draft: { ...triage.draft, status: e.detail.selectedOption.dataset.value } })}>
               {FEEDBACK_STATUSES.map((s) => <Option key={s} data-value={s} selected={triage.draft.status === s}>{humanize(s)}</Option>)}
             </Select>
             <Label>Assigned to</Label>
-            <Input value={triage.draft.assignedTo} onInput={(e) => setTriage({ ...triage, draft: { ...triage.draft, assignedTo: e.target.value } })} />
+            <Input accessibleName="Assigned to" value={triage.draft.assignedTo} onInput={(e) => setTriage({ ...triage, draft: { ...triage.draft, assignedTo: e.target.value } })} />
             <Label>Admin notes</Label>
-            <TextArea rows={3} value={triage.draft.adminNotes} onInput={(e) => setTriage({ ...triage, draft: { ...triage.draft, adminNotes: e.target.value } })} />
+            <TextArea accessibleName="Admin notes" rows={3} value={triage.draft.adminNotes} onInput={(e) => setTriage({ ...triage, draft: { ...triage.draft, adminNotes: e.target.value } })} />
             <Label>Resolution notes</Label>
-            <TextArea rows={3} value={triage.draft.resolutionNotes} onInput={(e) => setTriage({ ...triage, draft: { ...triage.draft, resolutionNotes: e.target.value } })} />
+            <TextArea accessibleName="Resolution notes" rows={3} value={triage.draft.resolutionNotes} onInput={(e) => setTriage({ ...triage, draft: { ...triage.draft, resolutionNotes: e.target.value } })} />
           </div>
         ) : null}
         <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
@@ -303,7 +303,7 @@ function ErrorsView({ notify, reloadToken, bumpReload }) {
         <ChoiceSelect label="Severity" value={draft.severity} options={ERROR_SEVERITIES} allLabel="All severities" onChange={(v) => setDraft({ ...draft, severity: v })} minWidth="9rem" />
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '14rem' }}>
           <Label>Search</Label>
-          <Input value={draft.search} placeholder="message, route or feature" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
+          <Input accessibleName="Search" value={draft.search} placeholder="message, route or feature" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
         </div>
         <Button design="Emphasized" onClick={() => setApplied(draft)}>Go</Button>
         <Button design="Transparent" onClick={() => { setDraft(EMPTY_ERROR_FILTER); setApplied(EMPTY_ERROR_FILTER); }}>Clear</Button>
@@ -318,7 +318,7 @@ function ErrorsView({ notify, reloadToken, bumpReload }) {
           <Text style={{ display: 'block', marginBottom: 'var(--adops-space-xs)', color: 'var(--sapNeutralTextColor, #6a6d70)' }}>
             {items.length.toLocaleString()} of {Number(list.count).toLocaleString()} reports
           </Text>
-          <Table
+          <Table accessibleName="Crash reports"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Last seen</span></TableHeaderCell>
@@ -355,7 +355,7 @@ function ErrorsView({ notify, reloadToken, bumpReload }) {
             <Text style={{ fontWeight: 600 }}>{selected.ErrorMessage}</Text>
             <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '11rem' }}>
               <Label>Status</Label>
-              <Select disabled={saving} onChange={(e) => setStatus(selected, e.detail.selectedOption.dataset.value)}>
+              <Select accessibleName="Status" disabled={saving} onChange={(e) => setStatus(selected, e.detail.selectedOption.dataset.value)}>
                 {ERROR_STATUSES.map((s) => <Option key={s} data-value={s} selected={selected.Status === s}>{humanize(s)}</Option>)}
               </Select>
             </div>
@@ -393,17 +393,17 @@ function WindowSelect({ days, onChange }) {
   return (
     <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '10rem' }}>
       <Label>Window</Label>
-      <Select onChange={(e) => onChange(Number(e.detail.selectedOption.dataset.value))}>
+      <Select accessibleName="Window" onChange={(e) => onChange(Number(e.detail.selectedOption.dataset.value))}>
         {WINDOW_OPTIONS.map((d) => <Option key={d} data-value={String(d)} selected={days === d}>{windowLabel(d)}</Option>)}
       </Select>
     </div>
   );
 }
 
-function CountTable({ headers, rows, render }) {
+function CountTable({ title, headers, rows, render }) {
   if (!rows.length) return <Text>No data in this window.</Text>;
   return (
-    <Table headerRow={<TableHeaderRow>{headers.map((h) => <TableHeaderCell key={h}><span>{h}</span></TableHeaderCell>)}</TableHeaderRow>}>
+    <Table accessibleName={title || headers.join(', ')} headerRow={<TableHeaderRow>{headers.map((h) => <TableHeaderCell key={h}><span>{h}</span></TableHeaderCell>)}</TableHeaderRow>}>
       {rows.map((row, i) => <TableRow key={i}>{render(row).map((cell, j) => <TableCell key={j}><span>{cell}</span></TableCell>)}</TableRow>)}
     </Table>
   );

@@ -83,7 +83,7 @@ export function DashboardPage({ userInfo }) {
         <span style={{ display: 'inline-flex', gap: 'var(--adops-space-xs)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '16rem' }}>
             <Label>Target system</Label>
-            <Select onChange={(e) => selectSystem(e.detail.selectedOption.dataset.value || '')}>
+            <Select accessibleName="Target system" onChange={(e) => selectSystem(e.detail.selectedOption.dataset.value || '')}>
               <Option data-value="" selected={systemId === ''}>All target systems</Option>
               {systemOptions(systems, systemId).map((o) => (
                 <Option key={o.id} data-value={o.id} selected={systemId === o.id}>{o.label}</Option>

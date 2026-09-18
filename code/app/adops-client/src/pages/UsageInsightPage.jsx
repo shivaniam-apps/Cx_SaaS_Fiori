@@ -127,7 +127,7 @@ export function UsageInsightPage() {
         <div>
           <Text style={{ fontSize: '0.75rem', fontWeight: 600 }}>Extraction run</Text>
           <br />
-          <Select onChange={(e) => {
+          <Select accessibleName="Extraction run" onChange={(e) => {
             const value = e.detail.selectedOption.dataset.value;
             setRunId(value);
             setSearchParams(value ? { run: value } : {});
@@ -141,7 +141,7 @@ export function UsageInsightPage() {
         <div>
           <Text style={{ fontSize: '0.75rem', fontWeight: 600 }}>Transaction</Text>
           <br />
-          <Input
+          <Input accessibleName="Transaction"
             placeholder="e.g. VA01"
             value={draft.search}
             onInput={(e) => setDraft({ ...draft, search: e.target.value })}
@@ -150,7 +150,7 @@ export function UsageInsightPage() {
         <div>
           <Text style={{ fontSize: '0.75rem', fontWeight: 600 }}>Line of business</Text>
           <br />
-          <Select onChange={(e) => setDraft({ ...draft, lineOfBusiness: e.detail.selectedOption.dataset.value })}>
+          <Select accessibleName="Line of business" onChange={(e) => setDraft({ ...draft, lineOfBusiness: e.detail.selectedOption.dataset.value })}>
             {lineOfBusinessOptions.map((lob) => (
               <Option key={lob || 'all'} data-value={lob} selected={draft.lineOfBusiness === lob}>
                 {lob || 'All'}
@@ -189,7 +189,7 @@ export function UsageInsightPage() {
               subtitleText={runs.length ? 'Adjust the filters or pick another run.' : 'Run an extraction first.'}
             />
           ) : (
-            <Table
+            <Table accessibleName="Transaction usage"
               headerRow={
                 <TableHeaderRow sticky>
                   <TableHeaderCell><span>Transaction</span></TableHeaderCell>
@@ -255,7 +255,7 @@ export function UsageInsightPage() {
                   User identifiers are pseudonymised. Identified mode is an audited
                   per-system opt-in in Settings.
                 </MessageStrip>
-                <Table
+                <Table accessibleName="Top users"
                   headerRow={
                     <TableHeaderRow>
                       <TableHeaderCell><span>User</span></TableHeaderCell>

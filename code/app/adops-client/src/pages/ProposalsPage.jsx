@@ -165,7 +165,7 @@ export function ProposalsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--adops-space-sm)' }}>
         <Title level="H2">Proposals</Title>
         <div style={{ display: 'flex', gap: 'var(--adops-space-xs)', alignItems: 'center' }}>
-          <Select onChange={(e) => setAnalysisRunId(e.detail.selectedOption.dataset.value)}>
+          <Select accessibleName="Analysis run" onChange={(e) => setAnalysisRunId(e.detail.selectedOption.dataset.value)}>
             {analysisRuns.map((run) => (
               <Option key={run.ID} data-value={run.ID} selected={analysisRunId === run.ID}>
                 {run.Title} ({run.Status})
@@ -197,7 +197,7 @@ export function ProposalsPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '12rem' }}>
           <Label>Review status</Label>
-          <Select onChange={(e) => setDraftStatus(e.detail.selectedOption.dataset.value || '')}>
+          <Select accessibleName="Review status" onChange={(e) => setDraftStatus(e.detail.selectedOption.dataset.value || '')}>
             {REVIEW_STATUS_OPTIONS.map((o) => (
               <Option key={o.id || 'all'} data-value={o.id} selected={draftStatus === o.id}>{o.label}</Option>
             ))}
@@ -218,7 +218,7 @@ export function ProposalsPage() {
               subtitleText={appliedStatus ? 'Clear the review-status filter to see every proposal of this run.' : 'Generate proposals from a completed extraction run.'}
             />
           ) : (
-            <Table
+            <Table accessibleName="Proposals"
               headerRow={
                 <TableHeaderRow sticky>
                   <TableHeaderCell><span>#</span></TableHeaderCell>
@@ -277,7 +277,7 @@ export function ProposalsPage() {
                     Business role: {detail.proposal.BusinessRoleId}
                   </Text>
                 ) : null}
-                <Table
+                <Table accessibleName="Transaction evidence"
                   headerRow={
                     <TableHeaderRow>
                       <TableHeaderCell><span>Transaction</span></TableHeaderCell>
@@ -319,7 +319,7 @@ export function ProposalsPage() {
             <Label required={decision.kind === 'rejectProposal'}>
               {decision.kind === 'rejectProposal' ? 'Reason (required)' : 'Note (optional)'}
             </Label>
-            <TextArea rows={3} value={decision.notes} onInput={(e) => setDecision({ ...decision, notes: e.target.value })} />
+            <TextArea accessibleName="Decision note" rows={3} value={decision.notes} onInput={(e) => setDecision({ ...decision, notes: e.target.value })} />
           </div>
         ) : null}
         <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>

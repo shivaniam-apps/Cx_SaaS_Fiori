@@ -316,7 +316,7 @@ export function ActivationPlansPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '16rem' }}>
           <Label>Target system</Label>
-          <Select onChange={(e) => setDraftSystemId(e.detail.selectedOption.dataset.value || '')}>
+          <Select accessibleName="Target system" onChange={(e) => setDraftSystemId(e.detail.selectedOption.dataset.value || '')}>
             <Option data-value="" selected={draftSystemId === ''}>All target systems</Option>
             {systems.map((s) => (
               <Option key={s.ID} data-value={s.ID} selected={draftSystemId === s.ID}>
@@ -346,7 +346,7 @@ export function ActivationPlansPage() {
         />
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
-          <Table
+          <Table accessibleName="Activation plans"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Created</span></TableHeaderCell>
@@ -461,7 +461,7 @@ export function ActivationPlansPage() {
                 ) : groupSteps(steps).map(({ group, steps: groupRows }) => (
                   <div key={group} style={{ marginBottom: 'var(--adops-space-sm)' }}>
                     <Label style={{ fontWeight: 700 }}>{group}</Label>
-                    <Table
+                    <Table accessibleName={`${group} steps`}
                       headerRow={
                         <TableHeaderRow>
                           <TableHeaderCell><span>#</span></TableHeaderCell>
@@ -504,7 +504,7 @@ export function ActivationPlansPage() {
                 {runs.length === 0 ? (
                   <Text>No runs yet. Execute the simulated plan to start the first run.</Text>
                 ) : (
-                  <Table
+                  <Table accessibleName="Runs of this plan"
                     headerRow={
                       <TableHeaderRow>
                         <TableHeaderCell><span>Queued</span></TableHeaderCell>
@@ -551,7 +551,7 @@ export function ActivationPlansPage() {
                   selected development system; QA/PROD receive the content via transport.
                 </Text>
                 <Label required>Adoption wave</Label>
-                <Select onChange={(e) => pickWave(e.detail.selectedOption.dataset.value)}>
+                <Select accessibleName="Adoption wave" onChange={(e) => pickWave(e.detail.selectedOption.dataset.value)}>
                   {creating.waves.map((w) => (
                     <Option key={w.ID} data-value={w.ID} selected={creating.waveId === w.ID}>
                       {w.Name} · {w.Rollup.approved} approved
@@ -559,13 +559,13 @@ export function ActivationPlansPage() {
                   ))}
                 </Select>
                 <Label>Plan name</Label>
-                <Input
+                <Input accessibleName="Plan name"
                   value={creating.name}
                   placeholder={defaultPlanName(creatingWave)}
                   onInput={(e) => setCreating({ ...creating, name: e.target.value })}
                 />
                 <Label required>Target system (write)</Label>
-                <Select onChange={(e) => setCreating({ ...creating, targetSystemId: e.detail.selectedOption.dataset.value })}>
+                <Select accessibleName="Target system (write)" onChange={(e) => setCreating({ ...creating, targetSystemId: e.detail.selectedOption.dataset.value })}>
                   {systems.filter(isActivationTargetAllowed).map((s) => (
                     <Option key={s.ID} data-value={s.ID} selected={creating.targetSystemId === s.ID}>
                       {systemOptionLabel(s)}

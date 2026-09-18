@@ -160,6 +160,16 @@ feedback is never auto-deleted. In an incident where telemetry itself is
 the problem, untick the affected stream and save; the server stops
 persisting immediately.
 
+Ingestion is rate limited per user and minute (feedback 5, crash reports
+30, usage and performance batches 20 by default; a tenant ceiling of 20
+times the user limit sits above them). A user over the feedback limit gets
+HTTP 429 with a retry hint; crash reports and batches over the limit are
+dropped without an error, and the server logs one line per window
+(`Feedback rate limit`, `Client error rate limit`, `Telemetry batch rate
+limit`) naming the user and tenant. The counters are per server instance,
+so two instances allow about twice the configured number. The knobs are
+in the deploy runbook.
+
 ## 8. Access requests
 
 A user who lands on "Request Access" (no Member role) or on a restricted
@@ -203,4 +213,3 @@ assigned in the BTP cockpit. Both outcomes are audited.
 | Cloud Logging, Alert Notification, task-failure alerts | T4 |
 | Release process, blue-green | T5 |
 | Secret rotation runbook, security review, `docu/16` troubleshooting | T6 |
-| Server-side telemetry rate limiting | A13 |

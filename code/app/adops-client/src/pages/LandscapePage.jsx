@@ -89,7 +89,7 @@ function Field({ label, minWidth = '11rem', children }) {
 function ChoiceSelect({ label, value, options, onChange, minWidth }) {
   return (
     <Field label={label} minWidth={minWidth}>
-      <Select onChange={(e) => onChange(e.detail.selectedOption.dataset.value || '')}>
+      <Select accessibleName={label} onChange={(e) => onChange(e.detail.selectedOption.dataset.value || '')}>
         {options.map((o) => <Option key={o.id || 'all'} data-value={o.id} selected={value === o.id}>{o.label}</Option>)}
       </Select>
     </Field>
@@ -212,7 +212,7 @@ function UsersTab({ runId, reloadToken, filters, onOpenRole }) {
 
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <Field label="User" minWidth="14rem">
-          <Input value={draft.search} placeholder="user key or name contains…" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
+          <Input accessibleName="User" value={draft.search} placeholder="user key or name contains…" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
         </Field>
         <ChoiceSelect label="User type" value={draft.userType} onChange={(v) => setDraft({ ...draft, userType: v })}
           options={[{ id: '', label: 'All types' }, ...USER_TYPES.map((t) => ({ id: t.id, label: t.label }))]} />
@@ -237,7 +237,7 @@ function UsersTab({ runId, reloadToken, filters, onOpenRole }) {
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
           <CountLine list={list} noun="users" />
-          <Table
+          <Table accessibleName="Users"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>User</span></TableHeaderCell>
@@ -346,7 +346,7 @@ function RolesTab({ runId, reloadToken, filters, onOpenUser }) {
 
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <Field label="Role" minWidth="14rem">
-          <Input value={draft.search} placeholder="name or description contains…" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
+          <Input accessibleName="Role" value={draft.search} placeholder="name or description contains…" onInput={(e) => setDraft({ ...draft, search: e.target.value })} />
         </Field>
         <ChoiceSelect label="Role type" value={draft.roleType} onChange={(v) => setDraft({ ...draft, roleType: v })}
           options={[{ id: '', label: 'All types' }, ...ROLE_TYPES.map((t) => ({ id: t.id, label: t.label }))]} />
@@ -370,7 +370,7 @@ function RolesTab({ runId, reloadToken, filters, onOpenUser }) {
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
           <CountLine list={list} noun="roles" />
-          <Table
+          <Table accessibleName="Roles"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Role</span></TableHeaderCell>
@@ -538,7 +538,7 @@ export function LandscapePage() {
         </span>
         <span style={{ display: 'inline-flex', gap: 'var(--adops-space-xs)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="Extraction run" minWidth="18rem">
-            <Select disabled={!runs || runs.length === 0} onChange={(e) => selectRun(e.detail.selectedOption.dataset.value || '')}>
+            <Select accessibleName="Extraction run" disabled={!runs || runs.length === 0} onChange={(e) => selectRun(e.detail.selectedOption.dataset.value || '')}>
               {(runs || []).map((r) => <Option key={r.ID} data-value={r.ID} selected={runId === r.ID}>{r.Title}</Option>)}
             </Select>
           </Field>

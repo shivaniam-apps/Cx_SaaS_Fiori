@@ -89,7 +89,7 @@ export function RequestAccessDialog({ open, area, userInfo, onClose, onSubmitted
             </div>
 
             <Label required>Business justification</Label>
-            <TextArea
+            <TextArea accessibleName="Business justification"
               value={justification}
               rows={5}
               required
@@ -99,7 +99,7 @@ export function RequestAccessDialog({ open, area, userInfo, onClose, onSubmitted
             />
 
             <Label>Urgency</Label>
-            <Select onChange={(e) => setUrgency(e.detail.selectedOption.dataset.value || 'NORMAL')}>
+            <Select accessibleName="Urgency" onChange={(e) => setUrgency(e.detail.selectedOption.dataset.value || 'NORMAL')}>
               {ACCESS_REQUEST_URGENCIES.map((option) => (
                 <Option key={option.id} data-value={option.id} selected={option.id === urgency}>{option.label}</Option>
               ))}

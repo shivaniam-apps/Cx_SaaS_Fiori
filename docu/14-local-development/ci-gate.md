@@ -56,6 +56,16 @@ was regenerated on Windows with `node_modules` present (the npm bug in
 `.claude/rules/frontend-dependencies.md`) fails with an explicit message
 instead of a module-not-found error deep in the Vite build.
 
+## Accessibility gate
+
+The client suite includes `src/features/a11y/staticAudit.test.js`, which
+scans every page, layout and component for UI5 controls without an
+accessible name: icon-only buttons, fields without a linked Label or
+`accessibleName`, tables, toggles, icons that are not decorative, dialogs
+without a header, native fields without `aria-label`. A new control that
+misses its name fails the client test job. `npm run a11y:audit` in
+`code/app/adops-client` prints the findings with file and line.
+
 ## Running the same checks locally
 
 ```bash

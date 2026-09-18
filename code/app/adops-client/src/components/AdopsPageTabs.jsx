@@ -43,7 +43,7 @@ export default function AdopsPageTabs({ tabs = [], activeTabId, onSelect, ariaLa
             onKeyDown={handleKeyDown}
             onClick={() => { if (!isActive) onSelect?.(tab.id); }}
           >
-            {tab.icon ? <Icon name={tab.icon} /> : null}
+            {tab.icon ? <Icon mode="Decorative" name={tab.icon} /> : null}
             <span>{tab.label}</span>
             {showBadge ? (
               <span className="adops-page-tabs-badge" aria-label={`${tab.badge} pending`}>

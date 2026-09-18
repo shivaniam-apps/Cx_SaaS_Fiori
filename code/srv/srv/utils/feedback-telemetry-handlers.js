@@ -9,6 +9,7 @@ const {
     buildErrorFingerprint,
 } = require('./telemetry-sanitize.js');
 const { readEffectiveTelemetrySettings } = require('./telemetry-settings.js');
+const { checkTelemetryRateLimit, retryAfterSeconds } = require('./telemetry-rate-limit.js');
 
 const logger = cds.log('telemetry');
 
@@ -105,6 +106,14 @@ function registerFeedbackTelemetryHandlers(service, { inMemory }) {
             return req.reject(400, 'Feedback collection is currently disabled by your administrator.');
         }
 
+        // Feedback is an explicit user action, so a refused submission is told
+        // why (429) instead of being dropped like passive telemetry.
+        const gate = checkTelemetryRateLimit({ stream: 'feedback', tenant: currentTenant(), user: req.user?.id });
+        if (!gate.allowed) {
+            if (gate.firstExceeded) logger.warn(`Feedback rate limit (${gate.scope}, ${gate.limit}/min) reached for ${req.user?.id || 'anonymous'} in tenant ${currentTenant()}.`);
+            return req.reject(429, `Too many feedback submissions - try again in ${retryAfterSeconds(gate)} seconds.`);
+        }
+
         const title = clampText(req.data.title, 160);
         if (!title) return req.reject(400, 'A short title is required to submit feedback.');
 
@@ -156,6 +165,12 @@ function registerFeedbackTelemetryHandlers(service, { inMemory }) {
     service.on('recordTelemetryBatch', async (req) => {
         try {
             const settings = await readEffectiveTelemetrySettings();
+            const gate = checkTelemetryRateLimit({ stream: 'batches', tenant: currentTenant(), user: req.user?.id });
+            if (!gate.allowed) {
+                // Passive telemetry is dropped silently; one log line per window.
+                if (gate.firstExceeded) logger.warn(`Telemetry batch rate limit (${gate.scope}, ${gate.limit}/min) reached for ${req.user?.id || 'anonymous'} in tenant ${currentTenant()}.`);
+                return { acceptedUsage: 0, acceptedPerformance: 0 };
+            }
             const sessionId = clampText(req.data.sessionId, 64);
             const appVersion = clampText(req.data.appVersion, 60);
             const tenantId = currentTenant();
@@ -240,6 +255,11 @@ function registerFeedbackTelemetryHandlers(service, { inMemory }) {
         try {
             const settings = await readEffectiveTelemetrySettings();
             if (!settings.CrashReportingEnabled) {
+                return { received: false, fingerprint: null, occurrenceCount: 0 };
+            }
+            const gate = checkTelemetryRateLimit({ stream: 'errors', tenant: currentTenant(), user: req.user?.id });
+            if (!gate.allowed) {
+                if (gate.firstExceeded) logger.warn(`Client error rate limit (${gate.scope}, ${gate.limit}/min) reached for ${req.user?.id || 'anonymous'} in tenant ${currentTenant()}.`);
                 return { received: false, fingerprint: null, occurrenceCount: 0 };
             }
             const errorType = normalizeChoice(req.data.errorType, ERROR_TYPES, 'WINDOW_ERROR');

@@ -260,7 +260,7 @@ export function TargetSystemsPage() {
           subtitleText="Register the S/4HANA system this subaccount's destination points at."
         />
       ) : (
-        <Table
+        <Table accessibleName="Target systems"
           style={{ marginTop: 'var(--adops-space-md)' }}
           headerRow={
             <TableHeaderRow sticky>
@@ -343,7 +343,7 @@ export function TargetSystemsPage() {
               subtitleText="This subaccount has no destinations, or the catalog could not be read."
             />
           ) : (
-            <Table
+            <Table accessibleName="Destinations"
               style={{ marginTop: 'var(--adops-space-md)' }}
               headerRow={
                 <TableHeaderRow sticky>
