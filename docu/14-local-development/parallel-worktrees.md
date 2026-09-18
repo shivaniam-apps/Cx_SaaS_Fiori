@@ -99,6 +99,27 @@ node scripts/worktree.mjs remove spare
 Refuses while the worktree has uncommitted changes. `list` prints every
 slot with its branch.
 
+## Seed the journey in a fresh worktree
+
+A new worktree database is empty. `scripts/seed-dev.mjs` drives the whole
+Activate journey through the public actions against the worktree's CAP
+port, exactly as a user would (target system -> usage extraction with the
+USR02/AGR inventory -> proposals -> wave -> approvals -> plan -> simulate ->
+execute), so every page has data to show:
+
+```bash
+node scripts/seed-dev.mjs --port 4114              # overview slot
+node scripts/seed-dev.mjs --port 4124 --approve 8  # scheduling slot, more approvals
+node scripts/seed-dev.mjs --port 4134 --no-activate
+```
+
+It refuses a server that is not in mock mode (`ADOPTOPS_MOCK_S4=true`, which
+the sqlite dev-server scripts set): the journey ends in an activation
+execute that must never reach a real S/4HANA. Re-running reuses the target
+system on the seed destination (`MOCK_RD1_DEV`, override with
+`--destination`) and adds another extraction, proposal set, wave and plan.
+The script prints deep links into the client for every object it created.
+
 ## Manual equivalent
 
 The script only wraps standard git commands:
