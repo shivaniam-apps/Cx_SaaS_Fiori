@@ -26,7 +26,11 @@ const { envValue, envNumber, envFlag } = require('./env.js');
 
 const LOG = cds.log('s4-http-client');
 
-const DEFAULT_DESTINATION = envValue('S4_DESTINATION', 'S4H_2023');
+// No hardcoded destination (S11): a call without a destination name uses
+// ADOPTOPS_S4_DESTINATION when the operator set one (single-system lab),
+// otherwise it fails with noDestinationMessage before any lookup.
+const DEFAULT_DESTINATION = envValue('S4_DESTINATION', '');
+const { noDestinationMessage } = require('./config-hardening.js');
 const DEFAULT_S4_SERVICE_ROOT = envValue(
   'S4_SERVICE_ROOT',
   '/sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001'
@@ -714,6 +718,9 @@ function destinationUrl(destinationConfiguration, path) {
 }
 
 async function callS4Destination({ destinationName = DEFAULT_DESTINATION, path = '/', method = 'GET', body, headers: extraHeaders = {}, req, subdomain, timeoutMs = 20000, maxAttempts: maxAttemptsOverride, _noDirect = false, _noSessionRetry = false }) {
+  if (!String(destinationName || '').trim()) {
+    throw Object.assign(new Error(noDestinationMessage()), { status: 400, code: 'NO_DESTINATION' });
+  }
   if (shouldMockSap()) {
     return {
       mocked: true,

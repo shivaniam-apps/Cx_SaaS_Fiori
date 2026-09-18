@@ -15,6 +15,7 @@ const { isActivationTargetEnvironment } = require('./activation-plan.js');
 // S6's 404 fallback and A9's metadata read log through it; A6 had removed
 // an unused logger from this file, so main referenced LOG without defining it.
 const LOG = require('@sap/cds').log('s4-fiori-adapter');
+const { noDestinationMessage } = require('./config-hardening.js');
 
 
 // ---------------------------------------------------------------------------
@@ -29,8 +30,13 @@ function serviceRoot(targetSystem) {
   return root.replace(/\/+$/, '');
 }
 
+// The destination of a target system, or the operator's ADOPTOPS_S4_DESTINATION
+// for a single-system lab. Nothing else: a system without a destination fails
+// here, before any S/4 call, with a message naming the system (S11).
 function destinationNameOf(targetSystem) {
-  return String(targetSystem?.destinationName || DEFAULT_DESTINATION).trim();
+  const name = String(targetSystem?.destinationName || DEFAULT_DESTINATION).trim();
+  if (!name) throw Object.assign(new Error(noDestinationMessage(targetSystem)), { status: 400, code: 'NO_DESTINATION' });
+  return name;
 }
 
 function entityPath(targetSystem, entitySet) {
@@ -131,6 +137,10 @@ async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATI
     ...partial
   });
   const readPath = String(path || `${DEFAULT_S4_SERVICE_ROOT}/UsagePeriods`).trim();
+
+  if (!String(destinationName || '').trim()) {
+    return finish({ Message: noDestinationMessage(targetSystem), Path: readPath });
+  }
 
   // Rollup over the endpoint verdicts: usage failure is a SERVICE stage, an
   // activation finding is its own ACTIVATION stage (the usage path is fine,
