@@ -10,10 +10,10 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## To-do (milestone order)
 
-- [ ] O6 User & Role Landscape page with server-side paging — after S8
 
 ## Accomplished
 
+- [x] O6 User & Role Landscape page (/landscape/:view?, Users + Roles tabs on AdopsPageTabs): run-scoped, server-filtered/sorted UserInventory + RoleInventory pages with $top/$skip/$count load-more, KPI strips from $apply=filter/groupby over the same filter scope, per-row detail reads (RoleUsers, RoleTransactions), role/user cross-links as URL params — this PR, 2026-09-18
 - [x] I16 Global error reporting: WINDOW_ERROR, UNHANDLED_REJECTION and API_FAILURE (network / 5xx) crash reports through recordClientError, deduped and session-capped client-side — PR #33, 2026-09-17
 - [x] I17 Client telemetry emitter: PAGE_VIEWED + activation usage events and APP_LOAD / slow ROUTE_RENDER / slow API performance events batched to recordTelemetryBatch, gated by getTelemetrySettings — PR #29, 2026-09-17
 - [x] O7 Product Insights page on AdopsPageTabs (/product-insights/:view?): Feedback triage, Crash reports triage, Usage and Performance server summaries — this PR, 2026-09-17
@@ -26,6 +26,9 @@ Format: see [program-tracker.md](../program-tracker.md).
 - [x] Activation Runs monitor page, queryActivationRuns / readActivationRun, shared Kpi tile — PR #6, 2026-09-15
 
 ## Daily log
+
+### 2026-09-18
+- O6 done on feat/landscape-page: features/landscape/landscapeModel.js (views, run filter, $filter/$orderby builders, KPI partitions, deep-link params; node --test) + LandscapePage.jsx, queryInventoryPage / queryInventoryGroups in fioriService, information icon registered, PlaceholderPage removed (last consumer). Verified in the browser on 5283 with a mock USR02+AGR extraction (163 users / 11 roles): cards, filters + Go/Clear, load more ($skip), user -> role and role -> user cross-links, (i) popover. Found that AppErrorBoundary keyed on pathname remounts pages on tab switches (I30).
 
 ### 2026-09-17
 - I16 done on feat/global-error-reporting: features/telemetry/errorReporting.js (report builder, dedupe/cap gate, API-failure policy, rejection describer; node --test), crash reporting moved into telemetryService with window error / unhandledrejection listeners and failure capture on the shared axios timing listener; verified WINDOW_ERROR and UNHANDLED_REJECTION rows in the browser (I17 merged via PR #29). PR #33 opened; merged origin/main (S5, A7, A8) into the branch.
