@@ -17,6 +17,7 @@ describe('readiness', function () {
       const response = await test.axios.get('/readyz', { validateStatus: () => true });
       expect(response.status, JSON.stringify(response.data)).to.equal(200);
       expect(response.data.status).to.equal('ok');
+      expect(response.data.version).to.match(/^\d+\.\d+\.\d+/);
       expect(response.data.checks.db.ok).to.equal(true);
       expect(response.data.checks.db.ms).to.be.a('number');
     });

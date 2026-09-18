@@ -9,8 +9,12 @@ ENDCLASS.
 CLASS zcl_ado_q_user_tx IMPLEMENTATION.
 
   METHOD if_rap_query_provider~select.
-    " Live ST03N user x transaction rows, pseudonymised, top-N per tcode
-    " bounded at the source. Only the requested page window materialises.
+    " ST03N user x transaction rows, pseudonymised, top-N per tcode
+    " bounded at the source. S7: served from the ZADO snapshot tables when
+    " the collector covers the window (DataSource SNAPSHOT, grouped at the
+    " database), live from SWNC otherwise (LIVE). $filter DataSource eq
+    " 'LIVE' / 'SNAPSHOT' forces a source. Only the requested page window
+    " materialises.
 
     TYPES: BEGIN OF ty_result,
              userkey         TYPE c LENGTH 64,
@@ -20,12 +24,14 @@ CLASS zcl_ado_q_user_tx IMPLEMENTATION.
              executioncount  TYPE int8,
              dialogstepcount TYPE int8,
              lastusedon      TYPE d,
+             datasource      TYPE c LENGTH 10,
            END OF ty_result.
     DATA lt_paged TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
     DATA(lv_from) = CONV d( sy-datum - 180 ).
     DATA(lv_to)   = sy-datum.
-    DATA lv_tcode TYPE c LENGTH 20.
+    DATA lv_tcode  TYPE c LENGTH 20.
+    DATA lv_source TYPE c LENGTH 10 VALUE 'AUTO'.
 
     " Entity parameters (S6): P_TopUsers / P_MinExecutions forwarded by the
     " SaaS extraction; absent or empty -> the reader defaults (20 / 1).
@@ -64,17 +70,37 @@ CLASS zcl_ado_q_user_tx IMPLEMENTATION.
         IF sy-subrc = 0 AND ls_tcode-range IS NOT INITIAL.
           lv_tcode = ls_tcode-range[ 1 ]-low.
         ENDIF.
+        READ TABLE lt_ranges WITH KEY name = 'DATASOURCE' INTO DATA(ls_source).
+        IF sy-subrc = 0 AND ls_source-range IS NOT INITIAL.
+          lv_source = to_upper( ls_source-range[ 1 ]-low ).
+        ENDIF.
       CATCH cx_rap_query_filter_no_range.
         "Defaults apply.
     ENDTRY.
 
-    zcl_ado_st03_reader=>get_window(
-      EXPORTING iv_from           = lv_from
-                iv_to             = lv_to
-                iv_top_users      = lv_top_users
-                iv_min_executions = lv_min_exec
-                iv_tenant         = lv_tenant
-      IMPORTING et_user_tx        = DATA(lt_all) ).
+    IF lv_source <> 'LIVE' AND lv_source <> 'SNAPSHOT'.
+      lv_source = COND #( WHEN zcl_ado_snap_reader=>covers( iv_from = lv_from iv_to = lv_to ) = abap_true
+                          THEN 'SNAPSHOT' ELSE 'LIVE' ).
+    ENDIF.
+
+    DATA lt_all TYPE zcl_ado_st03_reader=>ty_user_tx_t.
+    IF lv_source = 'SNAPSHOT'.
+      zcl_ado_snap_reader=>get_window(
+        EXPORTING iv_from           = lv_from
+                  iv_to             = lv_to
+                  iv_top_users      = lv_top_users
+                  iv_min_executions = lv_min_exec
+                  iv_tenant         = lv_tenant
+        IMPORTING et_user_tx        = lt_all ).
+    ELSE.
+      zcl_ado_st03_reader=>get_window(
+        EXPORTING iv_from           = lv_from
+                  iv_to             = lv_to
+                  iv_top_users      = lv_top_users
+                  iv_min_executions = lv_min_exec
+                  iv_tenant         = lv_tenant
+        IMPORTING et_user_tx        = lt_all ).
+    ENDIF.
 
     IF lv_tcode IS NOT INITIAL.
       DELETE lt_all WHERE transaction_code <> lv_tcode.
@@ -106,6 +132,7 @@ CLASS zcl_ado_q_user_tx IMPLEMENTATION.
           executioncount  = <ls_row>-execution_count
           dialogstepcount = <ls_row>-dialog_step_count
           lastusedon      = <ls_row>-period_to
+          datasource      = lv_source
         ) TO lt_paged.
       ENDLOOP.
     ENDIF.

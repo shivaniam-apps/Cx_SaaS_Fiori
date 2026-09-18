@@ -3,10 +3,12 @@ ID: adops-basic.prod
 extends: adops-basic
 version: 0.1.0
 
-# Production space. Deploy with:
-#   cf deploy mta_archives/adops-basic_0.1.0.mtar -e mtaext/prod.mtaext
-# Blue-green and the release checklist arrive with T5; until then a prod
-# deploy is a normal cf deploy with this descriptor.
+# Production space. Deploy blue-green with a testing phase (T5):
+#   cf deploy mta_archives/adops-basic_<version>.mtar -e mtaext/prod.mtaext --strategy blue-green
+#   ... verify /readyz and the approuter on the idle (blue/green) routes ...
+#   cf deploy -i <operation id> -a resume        (or -a abort)
+# The archive is the one built by the Release workflow for the tag; the
+# release checklist is docu/05-deployment-tiers/release-process.md.
 # See docu/05-deployment-tiers/environments.md.
 
 modules:

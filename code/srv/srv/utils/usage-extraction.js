@@ -11,6 +11,7 @@ const {
   INVENTORY_PAGE_SIZE
 } = require('./s4-fiori-adapter.js');
 const { pseudonymSaltFor } = require('./tenant-secrets.js');
+const { DATA_SOURCE, dataSourceLogLine } = require('./snapshot-coverage.js');
 
 const { SELECT, INSERT, UPDATE } = cds.ql;
 const LOG = cds.log('usage-extraction');
@@ -68,15 +69,29 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
   const userKeyOf = (key) => (pseudonymise ? pseudonymiseUser(key, salt) : key);
   let userTcodeSnapshotId = null;
 
+  // S7: the first page of an ST03N read tells what served it (SNAPSHOT from
+  // the ZADO collector tables, LIVE from SWNC, MOCK here); the run log says
+  // so and the CAP snapshot header keeps it.
+  const withDataSource = (fetchPage, { snapshotId, source }) => async (skip) => {
+    const page = await fetchPage(skip);
+    if (skip === 0) {
+      const dataSource = shouldMockSap() ? DATA_SOURCE.MOCK : page.rows?.[0]?.DataSource;
+      const line = dataSourceLogLine(dataSource, { periodFrom, periodTo });
+      await log(line.level, source, line.message);
+      await UPDATE('adops.db.UsageSnapshots').set({ DataSource: shouldMockSap() ? DATA_SOURCE.MOCK : (dataSource || 'LIVE') }).where({ ID: snapshotId });
+    }
+    return page;
+  };
+
   try {
     // --- ST03N: transaction profile -------------------------------------
     if (sources.includes('ST03N')) {
       await reportProgress({ phase: 'Collecting transaction profile (ST03N)', processedItems: 0, totalItems: 0 });
       const snapshotId = await createSnapshot(db, run, targetSystem, 'ST03N', granularity, periodFrom, periodTo);
 
-      const fetchPage = shouldMockSap()
+      const fetchPage = withDataSource(shouldMockSap()
         ? (skip) => mockTransactionUsagePage({ periodFrom, periodTo, skip, top: PAGE_SIZE })
-        : (skip) => fetchTransactionUsagePage({ targetSystem, periodFrom, periodTo, top: PAGE_SIZE, skip });
+        : (skip) => fetchTransactionUsagePage({ targetSystem, periodFrom, periodTo, top: PAGE_SIZE, skip }), { snapshotId, source: 'ST03N' });
 
       rollup.transactions = await pageInto(db, {
         fetchPage,
@@ -124,7 +139,7 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
 
       await log('INFO', 'USERTCODE', `Source bound: top ${topUsersPerTcode || 'all'} users per transaction, at least ${minExecutions} execution(s) per user row.`);
       let parameterWarningLogged = false;
-      const fetchPage = shouldMockSap()
+      const fetchPage = withDataSource(shouldMockSap()
         ? (skip) => mockUserTransactionUsagePage({ periodFrom, periodTo, skip, top: PAGE_SIZE, topUsersPerTcode, minExecutions })
         : async (skip) => {
           const page = await fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, tenantId: run.TenantId, top: PAGE_SIZE, skip });
@@ -133,7 +148,7 @@ async function runUsageExtraction({ task, payload, reportProgress, log, isCancel
             await log('WARN', 'USERTCODE', 'The add-on ignored topUsersPerTcode / minExecutions (no parameterized UserTransactionUsage entity - ZADO older than S6); the reader defaults (20 users, 1 execution) apply.');
           }
           return page;
-        };
+        }, { snapshotId, source: 'USERTCODE' });
 
       rollup.users = await pageInto(db, {
         fetchPage,

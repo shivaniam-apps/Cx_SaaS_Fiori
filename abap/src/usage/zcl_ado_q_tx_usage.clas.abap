@@ -9,9 +9,11 @@ ENDCLASS.
 CLASS zcl_ado_q_tx_usage IMPLEMENTATION.
 
   METHOD if_rap_query_provider~select.
-    " Live ST03N transaction profile. Materialises only the requested page
-    " window (the ZSHVM spool-content lesson); the heavy aggregate itself is
-    " session-cached in ZCL_ADO_ST03_READER.
+    " ST03N transaction profile. S7: served from the ZADO snapshot tables
+    " when the collector covers the window (DataSource SNAPSHOT, rollup at
+    " the database), live from SWNC otherwise (LIVE, session-cached in
+    " ZCL_ADO_ST03_READER). $filter DataSource eq 'LIVE' / 'SNAPSHOT'
+    " forces a source. Materialises only the requested page window.
 
     TYPES: BEGIN OF ty_result,
              transactioncode      TYPE c LENGTH 20,
@@ -28,12 +30,14 @@ CLASS zcl_ado_q_tx_usage IMPLEMENTATION.
              totalcputimems       TYPE p LENGTH 16 DECIMALS 2,
              totaldbtimems        TYPE p LENGTH 16 DECIMALS 2,
              lastusedon           TYPE d,
+             datasource           TYPE c LENGTH 10,
            END OF ty_result.
     DATA lt_paged TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
     " Window from $filter (PeriodFrom ge X / PeriodTo le Y); default 180 days.
     DATA(lv_from) = CONV d( sy-datum - 180 ).
     DATA(lv_to)   = sy-datum.
+    DATA lv_source TYPE c LENGTH 10 VALUE 'AUTO'.
     TRY.
         DATA(lt_ranges) = io_request->get_filter( )->get_as_ranges( ).
         READ TABLE lt_ranges WITH KEY name = 'PERIODFROM' INTO DATA(ls_from).
@@ -44,14 +48,31 @@ CLASS zcl_ado_q_tx_usage IMPLEMENTATION.
         IF sy-subrc = 0 AND ls_to-range IS NOT INITIAL.
           lv_to = CONV d( ls_to-range[ 1 ]-low ).
         ENDIF.
+        READ TABLE lt_ranges WITH KEY name = 'DATASOURCE' INTO DATA(ls_source).
+        IF sy-subrc = 0 AND ls_source-range IS NOT INITIAL.
+          lv_source = to_upper( ls_source-range[ 1 ]-low ).
+        ENDIF.
       CATCH cx_rap_query_filter_no_range.
         "Defaults apply.
     ENDTRY.
 
-    zcl_ado_st03_reader=>get_window(
-      EXPORTING iv_from = lv_from
-                iv_to   = lv_to
-      IMPORTING et_tx_usage = DATA(lt_all) ).
+    IF lv_source <> 'LIVE' AND lv_source <> 'SNAPSHOT'.
+      lv_source = COND #( WHEN zcl_ado_snap_reader=>covers( iv_from = lv_from iv_to = lv_to ) = abap_true
+                          THEN 'SNAPSHOT' ELSE 'LIVE' ).
+    ENDIF.
+
+    DATA lt_all TYPE zcl_ado_st03_reader=>ty_tx_usage_t.
+    IF lv_source = 'SNAPSHOT'.
+      zcl_ado_snap_reader=>get_window(
+        EXPORTING iv_from = lv_from
+                  iv_to   = lv_to
+        IMPORTING et_tx_usage = lt_all ).
+    ELSE.
+      zcl_ado_st03_reader=>get_window(
+        EXPORTING iv_from = lv_from
+                  iv_to   = lv_to
+        IMPORTING et_tx_usage = lt_all ).
+    ENDIF.
 
     DATA(lv_total) = lines( lt_all ).
     IF io_request->is_total_numb_of_rec_requested( ).
@@ -83,6 +104,7 @@ CLASS zcl_ado_q_tx_usage IMPLEMENTATION.
           totalcputimems      = <ls_row>-total_cpu_ms
           totaldbtimems       = <ls_row>-total_db_ms
           lastusedon          = <ls_row>-period_to
+          datasource          = lv_source
         ) TO lt_paged.
       ENDLOOP.
 

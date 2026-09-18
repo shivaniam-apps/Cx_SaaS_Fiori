@@ -28,7 +28,7 @@ so the daily routine in section 1 stays.
 | What | Where |
 |---|---|
 | Liveness | `GET /healthz` on the server route answers `OK` while the process is up; the Cloud Foundry health check uses it |
-| Readiness | `GET /readyz` answers 200 with `{"status":"ok","checks":{"db":{"ok":true,"ms":n}}}`; 503 with `"status":"unavailable"` and the error text when the database does not answer within five seconds |
+| Readiness | `GET /readyz` answers 200 with `{"status":"ok","version":"X.Y.Z","checks":{"db":{"ok":true,"ms":n}}}` (the version is the release that is running); 503 with `"status":"unavailable"` and the error text when the database does not answer within five seconds |
 | Recent server log | `cf logs adops-basic-srv-<space> --recent` |
 | Persistent log | SAP Cloud Logging: the `<space>-adops-basic-cloud-logging` instance (BTP cockpit > the space > Instances > open the dashboard). The server logs JSON under the production profile, so every line carries the level, the component, the correlation id and the message as fields; Cloud Foundry metrics and router logs arrive through the same binding. Retention is 14 days (`retentionPeriod` in `deploy/cf/mta.yaml`) |
 | Client-side failures | Product Insights > Crash reports (render errors, window errors, unhandled rejections, API failures) |
@@ -242,5 +242,4 @@ assigned in the BTP cockpit. Both outcomes are audited.
 | Item | Roadmap |
 |---|---|
 | BTP Audit Log service binding (external anchor for the chain) | T3 |
-| Release process, blue-green | T5 |
 | Secret rotation runbook, security review, `docu/16` troubleshooting | T6 |

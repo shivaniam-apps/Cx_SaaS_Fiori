@@ -1,4 +1,4 @@
-@EndUserText.label: 'AdoptOps User x Tx Usage (ST03N, live)'
+@EndUserText.label: 'AdoptOps User x Tx Usage (ST03N snapshot or live)'
 @ObjectModel.query.implementedBy: 'ABAP:ZCL_ADO_Q_USER_TX'
 // Extraction parameters are bound at the SOURCE (ZCL_ADO_ST03_READER):
 // only the top-N users per transaction above the execution threshold leave
@@ -36,4 +36,8 @@ define custom entity ZADO_C_USER_TX_USAGE
 
       @EndUserText.label: 'Last Used On'
       LastUsedOn        : abap.dats;
+
+      // S7: SNAPSHOT (ZADO collector tables) or LIVE (SWNC); filterable to force a source
+      @EndUserText.label: 'Data Source'
+      DataSource        : abap.char(10);
 }
