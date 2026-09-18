@@ -3,7 +3,7 @@
 // demand the mtcallback scope, and responses carry no server fingerprint.
 import { expect } from 'chai';
 import { createRequire } from 'node:module';
-import { cds, test, as, json, expectInMemoryDb } from './helpers/cds-http-test.mjs';
+import { test, as, json, expectInMemoryDb } from './helpers/cds-http-test.mjs';
 
 const require = createRequire(import.meta.url);
 const client = require('../srv/srv/utils/s4-http-client.js');
