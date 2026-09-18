@@ -358,6 +358,24 @@ function mapRoleInventory(row) {
   };
 }
 
+// S10: ZADO_C_TRANSPORT_STATUS (E070 as seen by the answering system).
+function mapTransportStatus(row) {
+  return {
+    Trkorr: row.Trkorr ?? row.trkorr,
+    RequestType: row.RequestType ?? row.Trfunction ?? '',
+    RequestStatus: row.RequestStatus ?? row.Trstatus ?? '',
+    Owner: row.Owner ?? row.As4user ?? '',
+    TargetSystem: row.TargetSystem ?? row.Tarsystem ?? '',
+    ParentRequest: row.ParentRequest ?? row.Strkorr ?? '',
+    ChangedOn: row.ChangedOn || row.As4date || null,
+    ChangedAt: row.ChangedAt || row.As4time || null,
+    Description: row.Description ?? row.As4text ?? '',
+    ObjectCount: Number(row.ObjectCount ?? 0),
+    SystemId: row.SystemId ?? '',
+    Client: row.Client ?? ''
+  };
+}
+
 function mapRoleUser(row) {
   return {
     RoleName: row.RoleName ?? row.AgrName,
@@ -546,6 +564,45 @@ async function fetchRoleTransactionsPage({ targetSystem, source = 'MENU', top, s
   });
 }
 
+// S10: the request as the follow-on system sees it. An add-on older than
+// S10 has no TransportStatus entity and answers 404: reported as
+// { supported: false } so the caller records UNKNOWN instead of failing.
+function odataLiteral(value) {
+  return String(value ?? '').replace(/'/g, "''");
+}
+
+async function fetchTransportStatus({ targetSystem, trkorr, req }) {
+  const key = String(trkorr || '').trim().toUpperCase();
+  if (!key) return { supported: true, row: null };
+  try {
+    const page = await fetchPagedEntity({
+      targetSystem, entitySet: 'TransportStatus', filter: `Trkorr eq '${odataLiteral(key)}'`, top: 1, req, timeoutMs: 30000
+    });
+    const row = page.rows.length ? mapTransportStatus(page.rows[0]) : null;
+    return { supported: true, row };
+  } catch (error) {
+    if (error?.remoteStatus !== 404) throw error;
+    LOG.warn(`TransportStatus not exposed by ${targetSystem?.displayName || targetSystem?.destinationName || 'target'} (404) - add-on older than S10.`);
+    return { supported: false, row: null };
+  }
+}
+
+// S10: RoleInventory rows for a set of role names (one OR-filter per
+// chunk, so a wave with many roles stays a handful of reads).
+const ROLE_NAME_CHUNK = 40;
+
+async function fetchRolesByName({ targetSystem, roleNames, req }) {
+  const names = [...new Set((roleNames || []).map((n) => String(n || '').trim().toUpperCase()).filter(Boolean))];
+  const rows = [];
+  for (let i = 0; i < names.length; i += ROLE_NAME_CHUNK) {
+    const chunk = names.slice(i, i + ROLE_NAME_CHUNK);
+    const filter = chunk.map((n) => `RoleName eq '${odataLiteral(n)}'`).join(' or ');
+    const page = await fetchInventoryPage({ targetSystem, entitySet: 'RoleInventory', filter, mapRow: mapRoleInventory, top: chunk.length, req });
+    rows.push(...page.rows);
+  }
+  return rows;
+}
+
 module.exports = {
   checkTargetSystemConnection,
   activationEndpointVerdict,
@@ -564,6 +621,8 @@ module.exports = {
   fetchRoleInventoryPage,
   fetchRoleUsersPage,
   fetchRoleTransactionsPage,
+  fetchTransportStatus,
+  fetchRolesByName,
   // Exported for contract tests: the mappers ARE the ABAP<->CAP contract.
   mapTransactionUsage,
   mapUserTransactionUsage,
@@ -572,5 +631,6 @@ module.exports = {
   mapRoleInventory,
   mapRoleUser,
   mapRoleTransaction,
+  mapTransportStatus,
   lockStatusOf
 };

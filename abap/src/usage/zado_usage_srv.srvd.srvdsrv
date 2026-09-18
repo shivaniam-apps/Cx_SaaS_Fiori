@@ -8,4 +8,5 @@ define service ZADO_USAGE_SRV {
   expose ZADO_C_ROLE_INVENTORY  as RoleInventory;
   expose ZADO_C_ROLE_USERS      as RoleUsers;
   expose ZADO_C_ROLE_TCODES     as RoleTransactions;
+  expose ZADO_C_TRANSPORT_STATUS as TransportStatus;
 }

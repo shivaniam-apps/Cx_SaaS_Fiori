@@ -48,6 +48,7 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   @readonly entity ActivationSteps as projection on db.ActivationSteps;
   @readonly entity ActivationStepMessages as projection on db.ActivationStepMessages;
   @readonly entity TransportRequests as projection on db.TransportRequests;
+  @readonly entity TransportImports as projection on db.TransportImports;
   @readonly entity BackgroundTasks as projection on db.BackgroundTasks;
   @readonly entity BackgroundTaskLogs as projection on db.BackgroundTaskLogs;
   @readonly entity AuditEvents as projection on db.AuditEvents;
@@ -321,4 +322,17 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   // The QA/PROD replay runbook for a plan: what arrives via transport, what
   // must be repeated per system, and how to verify each item.
   function readActivationManifest(planId: UUID) returns LargeString;
+
+  // S10: verification on a follow-on system (QA, PROD). verifyTransportImport
+  // reads the request status (E070/E071 through the ZADO read unit) and runs
+  // the manifest verification reads against that system, persisting one
+  // TransportImports row per transport and system. recordTransportImport is
+  // the operator path for the runbook outcome when the read unit cannot see
+  // it (older add-on, no destination). Both are read-only towards S/4.
+  action verifyTransportImport(transportId: UUID, targetSystemId: UUID) returns LargeString;
+  @(requires: 'Activator')
+  action recordTransportImport(transportId: UUID, targetSystemId: UUID, status: String, note: String) returns LargeString;
+  // The persisted row for one transport and follow-on system, verification
+  // verdicts included (the list read leaves them out).
+  function readTransportImport(transportId: UUID, targetSystemId: UUID) returns LargeString;
 };
