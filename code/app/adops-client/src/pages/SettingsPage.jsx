@@ -121,7 +121,7 @@ function TargetSystemsSettings({ notify }) {
         </Text>
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
-          <Table
+          <Table accessibleName="Target system settings"
             headerRow={
               <TableHeaderRow>
                 <TableHeaderCell><span>System</span></TableHeaderCell>
@@ -181,7 +181,7 @@ function TargetSystemsSettings({ notify }) {
         ) : events.length === 0 ? (
           <Text>No identified-usage change has been recorded yet. Every toggle lands in the audit chain.</Text>
         ) : (
-          <Table
+          <Table accessibleName="Identified usage changes"
             headerRow={
               <TableHeaderRow>
                 <TableHeaderCell><span>When</span></TableHeaderCell>

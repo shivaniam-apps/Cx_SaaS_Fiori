@@ -191,7 +191,7 @@ export function AccessRequestsPage() {
 
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <FilterField label="Search">
-          <Input
+          <Input accessibleName="Search"
             value={draft.search}
             placeholder="Reference, requester, justification"
             showClearIcon
@@ -199,7 +199,7 @@ export function AccessRequestsPage() {
           />
         </FilterField>
         <FilterField label="Status">
-          <Select onChange={(e) => setDraft({ ...draft, status: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Status" onChange={(e) => setDraft({ ...draft, status: e.detail.selectedOption.dataset.value || '' })}>
             <Option data-value="" selected={draft.status === ''}>All statuses</Option>
             {ACCESS_REQUEST_STATUS_OPTIONS.map((o) => (
               <Option key={o.value} data-value={o.value} selected={draft.status === o.value}>{o.label}</Option>
@@ -207,7 +207,7 @@ export function AccessRequestsPage() {
           </Select>
         </FilterField>
         <FilterField label="Area">
-          <Select onChange={(e) => setDraft({ ...draft, area: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Area" onChange={(e) => setDraft({ ...draft, area: e.detail.selectedOption.dataset.value || '' })}>
             <Option data-value="" selected={draft.area === ''}>All areas</Option>
             {accessRequestAreaOptions().map((o) => (
               <Option key={o.value} data-value={o.value} selected={draft.area === o.value}>{o.label}</Option>
@@ -215,7 +215,7 @@ export function AccessRequestsPage() {
           </Select>
         </FilterField>
         <FilterField label="Urgency">
-          <Select onChange={(e) => setDraft({ ...draft, urgency: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Urgency" onChange={(e) => setDraft({ ...draft, urgency: e.detail.selectedOption.dataset.value || '' })}>
             <Option data-value="" selected={draft.urgency === ''}>All urgencies</Option>
             {ACCESS_REQUEST_URGENCY_OPTIONS.map((o) => (
               <Option key={o.value} data-value={o.value} selected={draft.urgency === o.value}>{o.label}</Option>
@@ -250,7 +250,7 @@ export function AccessRequestsPage() {
               Showing the newest {items.length} of {list.count} requests - narrow the filters to see older ones.
             </MessageStrip>
           ) : null}
-          <Table
+          <Table accessibleName="Access requests"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Reference</span></TableHeaderCell>
@@ -327,7 +327,7 @@ export function AccessRequestsPage() {
           {decisionError ? <MessageStrip design="Negative" hideCloseButton>{decisionError}</MessageStrip> : null}
           <Text>{decisionDescription(decision.request, decision.action)}</Text>
           <Label>Decision notes (visible to the requester)</Label>
-          <TextArea
+          <TextArea accessibleName="Decision notes"
             value={decisionNotes}
             rows={3}
             maxlength={2000}

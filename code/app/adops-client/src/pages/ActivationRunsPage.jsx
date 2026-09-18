@@ -251,7 +251,7 @@ export function ActivationRunsPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '16rem' }}>
           <Label>Target system</Label>
-          <Select onChange={(e) => setDraftSystemId(e.detail.selectedOption.dataset.value || '')}>
+          <Select accessibleName="Target system" onChange={(e) => setDraftSystemId(e.detail.selectedOption.dataset.value || '')}>
             <Option data-value="" selected={draftSystemId === ''}>All target systems</Option>
             {systems.map((s) => (
               <Option key={s.ID} data-value={s.ID} selected={draftSystemId === s.ID}>
@@ -262,7 +262,7 @@ export function ActivationRunsPage() {
         </div>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '12rem' }}>
           <Label>Status</Label>
-          <Select onChange={(e) => setDraftStatus(e.detail.selectedOption.dataset.value || '')}>
+          <Select accessibleName="Status" onChange={(e) => setDraftStatus(e.detail.selectedOption.dataset.value || '')}>
             <Option data-value="" selected={draftStatus === ''}>All statuses</Option>
             {summaryCards(null).map((card) => (
               <Option key={card.key} data-value={card.key} selected={draftStatus === card.key}>{card.label}</Option>
@@ -306,7 +306,7 @@ export function ActivationRunsPage() {
         />
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
-          <Table
+          <Table accessibleName="Activation runs"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Started</span></TableHeaderCell>
@@ -410,7 +410,7 @@ export function ActivationRunsPage() {
                 ) : groupSteps(steps).map(({ group, steps: groupRows }) => (
                   <div key={group} style={{ marginBottom: 'var(--adops-space-sm)' }}>
                     <Label style={{ fontWeight: 700 }}>{group}</Label>
-                    <Table
+                    <Table accessibleName={`${group} steps`}
                       headerRow={
                         <TableHeaderRow>
                           <TableHeaderCell><span>#</span></TableHeaderCell>
@@ -478,7 +478,7 @@ export function ActivationRunsPage() {
                 {logs.length === 0 ? (
                   <Text>No log lines yet.</Text>
                 ) : (
-                  <Table
+                  <Table accessibleName="Run log"
                     headerRow={
                       <TableHeaderRow>
                         <TableHeaderCell><span>Time</span></TableHeaderCell>

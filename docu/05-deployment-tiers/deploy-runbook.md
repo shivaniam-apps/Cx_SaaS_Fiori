@@ -198,6 +198,10 @@ the next deployment overwrites it.
 | `ADOPTOPS_TASK_STALE_MS` | `120000` | a task without heartbeat for this long is reclaimed |
 | `ADOPTOPS_TASK_POLL_MS` | `3000` | queue polling interval |
 | `ADOPTOPS_TELEMETRY_CLEANUP_INTERVAL_HOURS` | `24` | retention scheduler; `0` disables, capped at `168` |
+| `ADOPTOPS_TELEMETRY_FEEDBACK_PER_MINUTE` | `5` | feedback submissions per user and minute; the next one answers 429; `0` disables |
+| `ADOPTOPS_TELEMETRY_ERRORS_PER_MINUTE` | `30` | crash reports per user and minute; excess is dropped silently; `0` disables |
+| `ADOPTOPS_TELEMETRY_BATCHES_PER_MINUTE` | `20` | usage and performance batches per user and minute; excess is dropped silently; `0` disables |
+| `ADOPTOPS_TELEMETRY_TENANT_MULTIPLIER` | `20` | tenant ceiling per stream = user limit x this |
 | `ADOPTOPS_ONPREM_CONCURRENCY` | `4` | parallel calls through the connectivity proxy per destination |
 | `ADOPTOPS_ONPREM_KEEPALIVE` | unset | `on` / `off` overrides the keep-alive heuristic for on-premise calls |
 | `ADOPTOPS_S4_SLOW_MS` | `2500` | S/4 calls slower than this are logged as slow |

@@ -287,7 +287,7 @@ export function AdoptionWavesPage() {
         />
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
-          <Table
+          <Table accessibleName="Adoption waves"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Wave</span></TableHeaderCell>
@@ -349,7 +349,7 @@ export function AdoptionWavesPage() {
                 {(detail.Proposals || []).length === 0 ? (
                   <Text>No proposals assigned. Approve proposals into this wave from the Proposals page.</Text>
                 ) : (
-                  <Table
+                  <Table accessibleName="Proposals in this wave"
                     headerRow={
                       <TableHeaderRow>
                         <TableHeaderCell><span>#</span></TableHeaderCell>
@@ -384,7 +384,7 @@ export function AdoptionWavesPage() {
                 {(detail.Plans || []).length === 0 ? (
                   <Text>No plans yet. Build one from the approved proposals of this wave.</Text>
                 ) : (
-                  <Table
+                  <Table accessibleName="Activation plans of this wave"
                     headerRow={
                       <TableHeaderRow>
                         <TableHeaderCell><span>Plan</span></TableHeaderCell>
@@ -455,7 +455,7 @@ export function AdoptionWavesPage() {
                   {groupSteps(plan.Steps).map(({ group, steps }) => (
                     <div key={group} style={{ marginBottom: 'var(--adops-space-sm)' }}>
                       <Label style={{ fontWeight: 700 }}>{group}</Label>
-                      <Table
+                      <Table accessibleName={`${group} steps`}
                         headerRow={
                           <TableHeaderRow>
                             <TableHeaderCell><span>#</span></TableHeaderCell>
@@ -507,11 +507,11 @@ export function AdoptionWavesPage() {
         {creating ? (
           <div style={{ display: 'grid', gap: 'var(--adops-space-sm)', padding: 'var(--adops-space-sm)', minWidth: '22rem' }}>
             <Label required>Name</Label>
-            <Input value={creating.name} onInput={(e) => setCreating({ ...creating, name: e.target.value })} />
+            <Input accessibleName="Name" value={creating.name} onInput={(e) => setCreating({ ...creating, name: e.target.value })} />
             <Label>Description</Label>
-            <TextArea rows={3} value={creating.description} onInput={(e) => setCreating({ ...creating, description: e.target.value })} />
+            <TextArea accessibleName="Description" rows={3} value={creating.description} onInput={(e) => setCreating({ ...creating, description: e.target.value })} />
             <Label>Target date</Label>
-            <DatePicker
+            <DatePicker accessibleName="Target date"
               formatPattern="yyyy-MM-dd"
               value={creating.targetDate}
               onChange={(e) => setCreating({ ...creating, targetDate: e.detail.value })}
@@ -561,7 +561,7 @@ export function AdoptionWavesPage() {
               selected development system; QA/PROD receive the content via transport.
             </Text>
             <Label required>Target system (write)</Label>
-            <Select onChange={(e) => setBuildingPlan({ ...buildingPlan, targetSystemId: e.detail.selectedOption.dataset.value })}>
+            <Select accessibleName="Target system (write)" onChange={(e) => setBuildingPlan({ ...buildingPlan, targetSystemId: e.detail.selectedOption.dataset.value })}>
               {systems.filter(isActivationTargetAllowed).map((s) => (
                 <Option key={s.ID} data-value={s.ID} selected={buildingPlan.targetSystemId === s.ID}>
                   {s.displayName}{s.environment ? ` (${s.environment})` : ''}{s.client ? ` · client ${s.client}` : ''}

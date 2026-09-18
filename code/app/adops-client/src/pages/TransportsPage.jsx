@@ -217,7 +217,7 @@ export function TransportsPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '16rem' }}>
           <Label>Target system</Label>
-          <Select onChange={(e) => setDraft({ ...draft, systemId: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Target system" onChange={(e) => setDraft({ ...draft, systemId: e.detail.selectedOption.dataset.value || '' })}>
             <Option data-value="" selected={draft.systemId === ''}>All target systems</Option>
             {systems.map((s) => (
               <Option key={s.ID} data-value={s.ID} selected={draft.systemId === s.ID}>
@@ -228,7 +228,7 @@ export function TransportsPage() {
         </div>
         <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '14rem' }}>
           <Label>Status</Label>
-          <Select onChange={(e) => setDraft({ ...draft, status: e.detail.selectedOption.dataset.value || '' })}>
+          <Select accessibleName="Status" onChange={(e) => setDraft({ ...draft, status: e.detail.selectedOption.dataset.value || '' })}>
             {TRANSPORT_STATUS_OPTIONS.map((o) => (
               <Option key={o.id || 'all'} data-value={o.id} selected={draft.status === o.id}>{o.label}</Option>
             ))}
@@ -248,7 +248,7 @@ export function TransportsPage() {
         />
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
-          <Table
+          <Table accessibleName="Transport requests"
             headerRow={
               <TableHeaderRow sticky>
                 <TableHeaderCell><span>Request</span></TableHeaderCell>
@@ -353,7 +353,7 @@ export function TransportsPage() {
           <div style={{ padding: 'var(--adops-space-sm)', display: 'grid', gap: 'var(--adops-space-sm)' }}>
             <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', maxWidth: '24rem' }}>
               <Label required>Follow-on system</Label>
-              <Select disabled={verifying.loading} onChange={(e) => pickVerifySystem(e.detail.selectedOption.dataset.value || '')}>
+              <Select accessibleName="Follow-on system" disabled={verifying.loading} onChange={(e) => pickVerifySystem(e.detail.selectedOption.dataset.value || '')}>
                 {verifySystems.map((s) => (
                   <Option key={s.ID} data-value={s.ID} selected={verifying.systemId === s.ID}>{systemLabel(s)}</Option>
                 ))}
@@ -378,7 +378,7 @@ export function TransportsPage() {
                 <MessageStrip design={verificationDesign(verifyResult.Verification)} hideCloseButton>
                   Manifest verification{verifyResult.fromRecord ? ' (last run)' : ''}: {verificationSummary(verifyResult.Verification.counts) || 'no entries'}
                 </MessageStrip>
-                <Table
+                <Table accessibleName="Manifest verification"
                   headerRow={
                     <TableHeaderRow>
                       <TableHeaderCell><span>Section</span></TableHeaderCell>
@@ -420,19 +420,19 @@ export function TransportsPage() {
         {recording ? (
           <div style={{ padding: 'var(--adops-space-sm)', display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '24rem' }}>
             <Label required>Follow-on system</Label>
-            <Select onChange={(e) => setRecording({ ...recording, systemId: e.detail.selectedOption.dataset.value || '' })}>
+            <Select accessibleName="Follow-on system" onChange={(e) => setRecording({ ...recording, systemId: e.detail.selectedOption.dataset.value || '' })}>
               {recordSystems.map((s) => (
                 <Option key={s.ID} data-value={s.ID} selected={recording.systemId === s.ID}>{systemLabel(s)}</Option>
               ))}
             </Select>
             <Label required>Outcome</Label>
-            <Select onChange={(e) => setRecording({ ...recording, status: e.detail.selectedOption.dataset.value || 'IMPORTED' })}>
+            <Select accessibleName="Outcome" onChange={(e) => setRecording({ ...recording, status: e.detail.selectedOption.dataset.value || 'IMPORTED' })}>
               {RECORDABLE_IMPORT_STATUSES.map((s) => (
                 <Option key={s.value} data-value={s.value} selected={recording.status === s.value}>{s.label}</Option>
               ))}
             </Select>
             <Label>Note</Label>
-            <TextArea
+            <TextArea accessibleName="Note"
               rows={3}
               maxlength={500}
               value={recording.note}

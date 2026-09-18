@@ -131,7 +131,7 @@ export function ExtractionsPage() {
           </Button>
           {/* Offline bridge: a ZADO_EXPORT_USAGE JSON downloaded via SAP GUI
               becomes a normal run - no Cloud Connector required. */}
-          <input
+          <input aria-label="Import extract file"
             id="adops-extract-file"
             type="file"
             accept=".json,application/json"
@@ -187,7 +187,7 @@ export function ExtractionsPage() {
           subtitleText="Run the first usage extraction to pull the real transaction pattern from the backend."
         />
       ) : (
-        <Table
+        <Table accessibleName="Extraction runs"
           style={{ marginTop: 'var(--adops-space-md)' }}
           headerRow={
             <TableHeaderRow sticky>
