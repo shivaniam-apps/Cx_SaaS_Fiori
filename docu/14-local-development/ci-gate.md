@@ -10,11 +10,20 @@ asks for before a push, run on Linux with a clean install.
 |---|---|---|
 | CAP server | `code/` | `npm ci`, `npm run lint`, `npm test` (mocha, in-memory sqlite), `npm run build:basic` (cds production build plus the PostgreSQL deployer / runtime CSN check) |
 | Client | `code/app/adops-client/` | rolldown lock check, `npm ci`, `npm run lint`, `npm test` (`node --test`), `npm run build` (Vite on Linux, the platform the CF build uses) |
-| Program tracker | repo root | `node scripts/tracker.mjs --check` |
+| Program tracker | repo root | `node scripts/tracker.mjs --check`, `node scripts/release.mjs check` (one product version across the MTA descriptors and package files) |
 
 The jobs are independent, so a client lint failure and a server test failure
 are reported side by side. A new push to the same branch cancels the run in
 progress.
+
+## Release workflow
+
+`.github/workflows/release.yml` runs on a pushed tag `vX.Y.Z`: it checks
+that the tag matches the product version, installs the Cloud MTA Build
+Tool, runs `mbt build` on Linux, uploads `adops-basic_X.Y.Z.mtar` as a
+workflow artefact and attaches it to a GitHub release with generated
+notes. The archive it produces is the one deployed to every space
+([docu/05 release process](../05-deployment-tiers/release-process.md)).
 
 ## What "blocks the PR" means here
 

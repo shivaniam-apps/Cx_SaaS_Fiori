@@ -76,3 +76,4 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: node scripts/tracker.mjs --check
+      - run: node scripts/release.mjs check
