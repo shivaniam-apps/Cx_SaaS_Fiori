@@ -713,11 +713,23 @@ module.exports = cds.service.impl(async function () {
         const fioriIds = [...new Set(approved.map((p) => p.FioriId).filter(Boolean))];
         const catalogRows = fioriIds.length
             ? await SELECT.from('adops.db.BackendCatalogApps')
-                .columns('FioriId', 'BspApplication')
+                .columns('FioriId', 'BspApplication', 'BusinessCatalogId', 'ODataServicesJson')
                 .where({ targetSystem_ID: target.ID, FioriId: { in: fioriIds } })
             : [];
-        const bspByFioriId = new Map(catalogRows.filter((r) => r.BspApplication).map((r) => [r.FioriId, r.BspApplication]));
-        const proposals = approved.map((p) => ({ ...p, BspApplication: bspByFioriId.get(p.FioriId) || '' }));
+        // The catalog row is the truth of the TARGET system: BSP application
+        // (ICF node), business catalog (role menu) and OData services. The
+        // proposal's own catalog id (mapping overlay) only fills a gap.
+        const catalogByFioriId = new Map(catalogRows.map((r) => [r.FioriId, r]));
+        const proposals = approved.map((p) => {
+            const row = catalogByFioriId.get(p.FioriId);
+            return {
+                ...p,
+                InCatalog: Boolean(row),
+                BspApplication: row?.BspApplication || '',
+                BusinessCatalogId: row?.BusinessCatalogId || p.BusinessCatalogId || '',
+                ODataServicesJson: row?.ODataServicesJson || '[]'
+            };
+        });
         const { steps, spaceId, roleName } = deriveActivationSteps({ proposals, waveName: wave.Name });
 
         const crossSystem = target.ID !== wave.targetSystem_ID;

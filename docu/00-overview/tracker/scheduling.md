@@ -8,7 +8,7 @@ wholesale re-sync at milestones only). Format: see [program-tracker.md](../progr
 
 ## In progress
 
-- [~] S9 Catalog derivation: ZADO_CATALOG package + CATALOG_DERIVATION task handler writing BackendCatalogApps / BackendLaunchpadContent (after PO-1) — split: part 1 (CAP pipeline, mock derivation, catalog endpoint, ZADO_PROBE_CATALOG) on branch feat/catalog-derivation, started 2026-09-18; part 2 (ABAP readers from the probe output + mapping source) on branch feat/catalog-derivation-2, started 2026-09-18 (part 1 merged PR #59, 2026-09-18: derivation pipeline, catalog endpoint, mock derivation, ZADO_PROBE_CATALOG; part 2 waits for the probe output from RD1 DEV/100 and PO-1)
+- [~] S9 Catalog derivation: ZADO_CATALOG package + CATALOG_DERIVATION task handler writing BackendCatalogApps / BackendLaunchpadContent (PO-1 concerns the mapping source only, not the readers) — split: part 1 (CAP pipeline, mock derivation, catalog endpoint, ZADO_PROBE_CATALOG) on branch feat/catalog-derivation, started 2026-09-18; part 2 (ABAP readers from the probe output + mapping source) on branch feat/catalog-derivation-2, started 2026-09-18 (part 1 merged PR #59, 2026-09-18: derivation pipeline, catalog endpoint, mock derivation, ZADO_PROBE_CATALOG; part 2 = ABAP readers in the usage read unit + planner use of the derived catalog, a4h feat/catalog-readers, pushed 2026-09-19, awaiting the RD1 run)
 - [~] S3 Implement ABAP step types returning not_implemented (ACTIVATE_ODATA_SERVICE, CREATE_SPACE, CREATE_PAGE, ASSIGN_PAGE_TO_SPACE, ADD_SPACE_TO_ROLE, ASSIGN_BUSINESS_CATALOG, ADD_CATALOG_TO_ROLE) + transport-append step; verify-first / verify-after / one commit per step — XL, needs RD1 DEV/100 — part 2 on branch feat/abap-activation-steps-2, started 2026-09-17 (part 1 merged PR #23, 2026-09-17: transport-first sequencing, APPEND_TO_TRANSPORT step, plan TRKORR threaded into keys, ZADO_PROBE_ACTIVATION report; part 2 = the seven executors, blocked until the probe output from RD1 DEV/100 is available)
 
 ## To-do (critical path first)
@@ -30,6 +30,9 @@ wholesale re-sync at milestones only). Format: see [program-tracker.md](../progr
 - [x] ST03 reader fixes from the RD1 export run (top-users 0 = unlimited, truncated-tcode aggregation, control bytes in JSON) — PR #4, 2026-09-15
 
 ## Daily log
+
+### 2026-09-19
+- Product owner: finish the must-haves, lock a version, deploy for end-to-end testing; park the rest -> docu/00-overview/pilot-release-scope.md (must-have table with exit criterion, accepted limitations, parked items with their idea ids). S9 part 2 written: ZCL_ADO_Q_CATALOG_APPS and ZCL_ADO_Q_LP_CONTENT as new entity sets of ZADO_USAGE_SRV (no new binding to publish), /UI2/ tables read dynamically through ZCL_ADO_Q_DYN (I58); CAP: catalog root follows the usage root, createActivationPlan takes BSP, business catalog and services from BackendCatalogApps, one ACTIVATE_ODATA_SERVICE step per distinct inactive service (I56). S9 does not depend on PO-1 (tracker wording corrected). ABAP not compiled - first activation on RD1 will show. Ideas I63-I65.
 
 ### 2026-09-18
 - S3 part 2 merged (Cx PR #77, a4h #38) and activated on RD1 without syntax errors. Probe round 5 read: transport mode E = External, P = Transport Popup -> executor fixed to set E with the plan's request (a4h fix/space-transport-mode-external); launchpad customizing is on customizing requests (W / CUST) - default confirmed; no add-tile method on the section interface -> probe round 6 (3f) in the same a4h PR. Acceptance rows for ZADO_ACTIVATE_SMOKE (Custom) written into docu/09. Next: S9 part 2 readers on branch feat/catalog-derivation-2.

@@ -38,7 +38,9 @@ describe('catalog derivation: adapter contract', () => {
   });
 
   it('resolves the catalog root from the target system or the default', () => {
-    expect(catalogRoot({})).to.match(/zado_catalog_srv/);
+    // Same read unit as the usage entities unless a system says otherwise.
+    expect(catalogRoot({})).to.match(/zado_usage_srv/);
+    expect(catalogRoot({ serviceRootPath: '/sap/opu/odata4/x/usage/0001/' })).to.equal('/sap/opu/odata4/x/usage/0001');
     expect(catalogRoot({ catalogRootPath: '/custom/root/' })).to.equal('/custom/root');
   });
 

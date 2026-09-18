@@ -8,6 +8,7 @@ const {
   withPlanTrkorr,
   TRKORR_STEP_TYPES,
   deriveActivationSteps,
+  servicesOf,
   deriveActivationEffort,
   simulateSteps,
   mockSimulationProbe,
@@ -46,6 +47,42 @@ describe('waveTechnicalKey', () => {
     expect(waveTechnicalKey('A very long descriptive wave name indeed').length).to.be.at.most(12);
     expect(waveTechnicalKey('')).to.equal('WAVE');
     expect(waveTechnicalKey('///')).to.equal('WAVE');
+  });
+});
+
+describe('OData service steps from the derived catalog (S9 part 2)', () => {
+  const stepsFor = (proposals) => deriveActivationSteps({ proposals, waveName: 'Wave S' }).steps
+    .filter((s) => s.StepType === 'ACTIVATE_ODATA_SERVICE');
+  const keyOf = (s) => JSON.parse(s.ObjectKeyJson);
+
+  it('emits one step per distinct inactive service, shared services once', () => {
+    const shared = { service: 'sd_common_srv', version: '0001', active: false };
+    const steps = stepsFor([
+      { ID: 'a', FioriId: 'F1873', InCatalog: true, ODataServicesJson: JSON.stringify([
+        { service: 'SD_F1873_SO_WL_SRV', version: '0001', active: true }, shared]) },
+      { ID: 'b', FioriId: 'F3893', InCatalog: true, ODataServicesJson: [shared, { service: 'SD_SO_V2', version: '0002', active: false }] }
+    ]);
+    expect(steps.map((s) => s.ObjectName)).to.deep.equal(['SD_COMMON_SRV', 'SD_SO_V2']);
+    expect(keyOf(steps[1])).to.include({ fioriId: 'F3893', serviceName: 'SD_SO_V2', serviceVersion: '0002', systemAlias: '' });
+    expect(steps[0].ObjectType).to.equal('ODATA_SERVICE');
+  });
+
+  it('needs no step when the catalog reports everything active or knows no service', () => {
+    expect(stepsFor([
+      { ID: 'a', FioriId: 'F1', InCatalog: true, ODataServicesJson: '[{"service":"X_SRV","version":"0001","active":true}]' },
+      { ID: 'b', FioriId: 'F2', InCatalog: true, ODataServicesJson: 'not json' }
+    ])).to.have.length(0);
+  });
+
+  it('keeps the fail-fast per-app step for an app the catalog does not know', () => {
+    const steps = stepsFor([{ ID: 'a', FioriId: 'F9', ODataServicesJson: '[{"service":"X_SRV","active":false}]' }]);
+    expect(steps).to.have.length(1);
+    expect(keyOf(steps[0])).to.include({ fioriId: 'F9', serviceName: '' });
+  });
+
+  it('servicesOf normalises names and versions', () => {
+    expect(servicesOf({ ODataServicesJson: '[{"service":" a_srv "},{"version":"0001"}]' }))
+      .to.deep.equal([{ service: 'A_SRV', version: '0001', active: false }]);
   });
 });
 

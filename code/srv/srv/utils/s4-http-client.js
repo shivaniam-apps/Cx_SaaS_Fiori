@@ -35,12 +35,11 @@ const DEFAULT_S4_SERVICE_ROOT = envValue(
   'S4_SERVICE_ROOT',
   '/sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001'
 );
-// S9: the ZADO catalog read unit (ZADO_CATALOG_SRV); a target system may
-// override it with catalogRootPath.
-const DEFAULT_S4_CATALOG_ROOT = envValue(
-  'S4_CATALOG_ROOT',
-  '/sap/opu/odata4/sap/zado_catalog_o4/srvd/sap/zado_catalog_srv/0001'
-);
+// S9: CatalogApps / LaunchpadContent are entity sets of the usage read unit
+// (ZADO_USAGE_SRV) - one published binding per system, nothing extra to set
+// up. Empty = "follow the system's usage root"; ADOPTOPS_S4_CATALOG_ROOT or
+// TargetSystems.catalogRootPath point at a separate service when one exists.
+const DEFAULT_S4_CATALOG_ROOT = envValue('S4_CATALOG_ROOT', '');
 
 function connectivityResponseText(data) {
   if (typeof data === 'string') return data;
