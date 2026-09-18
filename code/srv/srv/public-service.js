@@ -7,6 +7,7 @@ const { shouldMockSap } = require('./utils/s4-http-client.js');
 const { enqueueTask } = require('./utils/task-runner.js');
 const { appendAuditEvent } = require('./utils/audit-chain.js');
 const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
+const { shapeDashboardSummary, bucketStatuses } = require('./utils/dashboard-summary.js');
 
 module.exports = cds.service.impl(async function () {
     registerTenantScope(this);
@@ -298,7 +299,10 @@ module.exports = cds.service.impl(async function () {
         if (!analysisRunId) return req.reject(400, 'analysisRunId is required.');
 
         const where = { analysisRun_ID: analysisRunId };
-        if (reviewStatus) where.ReviewStatus = reviewStatus;
+        // A dashboard bucket (OPEN, APPROVED, ...) expands to its statuses so
+        // the card and this slice share one expression; a raw status still
+        // matches exactly.
+        if (reviewStatus) where.ReviewStatus = bucketStatuses('proposals', reviewStatus) ? { in: bucketStatuses('proposals', reviewStatus) } : reviewStatus;
         if (confidence) where.Confidence = confidence;
         if (lineOfBusiness) where.LineOfBusiness = lineOfBusiness;
         if (search) where.AppTitle = { like: `%${search}%` };
@@ -806,9 +810,34 @@ module.exports = cds.service.impl(async function () {
 
     // --- Transports (Phase 3) ------------------------------------------------
 
+    // The QA/PROD replay manifest of a plan (null when the plan does not
+    // exist); shared by readActivationManifest and the S10 verification.
+    async function manifestForPlan(planId) {
+        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
+        if (!plan) return null;
+        const steps = await SELECT.from('adops.db.ActivationSteps')
+            .where({ plan_ID: planId }).orderBy('SequenceNo asc');
+        const wave = plan.wave_ID ? await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: plan.wave_ID }) : null;
+        const targetSystem = plan.targetSystem_ID
+            ? await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID })
+            : null;
+        const transport = plan.transportRequest_ID
+            ? await SELECT.one.from('adops.db.TransportRequests').where({ ID: plan.transportRequest_ID })
+            : null;
+        const { buildActivationManifest } = require('./utils/activation-manifest.js');
+        return buildActivationManifest({ plan, steps, wave, targetSystem, transport });
+    }
+
     this.on('queryTransportRequests', async (req) => {
-        const { targetSystemId } = req.data;
+        const { targetSystemId, status } = req.data;
         const where = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
+        // Optional dashboard bucket (OPEN | RELEASED | FAILED): the same
+        // expression the cockpit counted with.
+        if (status) {
+            const statuses = bucketStatuses('transports', status);
+            if (!statuses) return req.reject(400, `Unknown transport status bucket: ${status}`);
+            where.Status = { in: statuses };
+        }
         const rows = await SELECT.from('adops.db.TransportRequests').where(where)
             .orderBy('createdAt desc').limit(200);
 
@@ -829,6 +858,29 @@ module.exports = cds.service.impl(async function () {
         const waveById = new Map(waves.map((w) => [w.ID, w]));
         const systemById = new Map(systems.map((s) => [s.ID, s]));
 
+        // S10: the import rows of these requests (one read, verification
+        // payload left out - readTransportImport carries it) and the systems
+        // a request can be verified on: every active registered system; the
+        // client hides the request's own source system.
+        const transportIds = rows.map((r) => r.ID);
+        const importRows = transportIds.length
+            ? await SELECT.from('adops.db.TransportImports')
+                .columns('ID', 'transport_ID', 'targetSystem_ID', 'ImportStatus', 'Source', 'RequestStatus', 'ObjectCount',
+                    'ImportedAt', 'CheckedAt', 'CheckedBy', 'Note', 'VerifiedAt', 'VerifiedCount', 'NotFoundCount',
+                    'ManualCount', 'UnknownCount')
+                .where({ transport_ID: { in: transportIds } }).orderBy('CheckedAt desc')
+            : [];
+        const followOnSystems = await SELECT.from('adops.db.TargetSystems')
+            .columns('ID', 'displayName', 'environment', 'active').orderBy('displayName asc');
+        const labelOf = (system) => (system ? `${system.displayName}${system.environment ? ` (${system.environment})` : ''}` : '');
+        const followOnById = new Map(followOnSystems.map((s) => [s.ID, s]));
+        const importsByTransport = new Map();
+        for (const imp of importRows) {
+            const list = importsByTransport.get(imp.transport_ID) || [];
+            list.push({ ...imp, TargetSystemName: labelOf(followOnById.get(imp.targetSystem_ID)) });
+            importsByTransport.set(imp.transport_ID, list);
+        }
+
         const items = rows.map((row) => {
             const plan = planById.get(row.plan_ID);
             const system = systemById.get(row.targetSystem_ID);
@@ -836,10 +888,17 @@ module.exports = cds.service.impl(async function () {
                 ...row,
                 PlanName: plan?.Name || '',
                 WaveName: plan?.wave_ID ? (waveById.get(plan.wave_ID)?.Name || '') : '',
-                TargetSystemName: system ? `${system.displayName}${system.environment ? ` (${system.environment})` : ''}` : ''
+                TargetSystemName: labelOf(system),
+                Imports: importsByTransport.get(row.ID) || []
             };
         });
-        return JSON.stringify({ Items: items, Count: items.length });
+        return JSON.stringify({
+            Items: items,
+            Count: items.length,
+            FollowOnSystems: followOnSystems
+                .filter((s) => s.active !== false)
+                .map((s) => ({ ID: s.ID, displayName: s.displayName, environment: s.environment || '' }))
+        });
     });
 
     this.on('releaseTransport', async (req) => {
@@ -893,6 +952,117 @@ module.exports = cds.service.impl(async function () {
         return JSON.stringify({ Status: fresh.Status, Simulated: Boolean(simulate), StepStatus: result.status, Messages: result.messages || [] });
     });
 
+    // --- Transport verification on follow-on systems (S10) ----------------------
+    // Read-only towards S/4: the read unit answers E070 (TransportStatus) and
+    // AGR_DEFINE (RoleInventory) on QA/PROD; the write unit is never touched.
+
+    const {
+        verifyTransportImport, mockReaders, importRowFrom, operatorRowFrom, RECORDABLE_IMPORT_STATUSES
+    } = require('./utils/transport-verification.js');
+
+    const loadTransportAndFollowOn = async (req, { transportId, targetSystemId }) => {
+        const transport = await SELECT.one.from('adops.db.TransportRequests').where({ ID: transportId });
+        if (!transport) return req.reject(404, 'Transport request not found.');
+        if (!transport.TransportRequestId) return req.reject(400, 'The row carries no TRKORR.');
+        const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
+        if (!targetSystem) return req.reject(404, 'Target system not found.');
+        if (targetSystem.ID === transport.targetSystem_ID) {
+            return req.reject(400, `${targetSystem.displayName} is the source system of ${transport.TransportRequestId} - verify on the follow-on system (QA, PROD) the request was imported into.`);
+        }
+        return { transport, targetSystem };
+    };
+
+    // One row per transport and follow-on system; a re-check overwrites it.
+    const upsertTransportImport = async ({ transport, targetSystem, fields }) => {
+        const existing = await SELECT.one.from('adops.db.TransportImports')
+            .where({ transport_ID: transport.ID, targetSystem_ID: targetSystem.ID });
+        if (existing) {
+            await UPDATE('adops.db.TransportImports').set(fields).where({ ID: existing.ID });
+            return { previousStatus: existing.ImportStatus || '', row: await SELECT.one.from('adops.db.TransportImports').where({ ID: existing.ID }) };
+        }
+        const id = randomUUID();
+        await INSERT.into('adops.db.TransportImports').entries({
+            ID: id, TenantId: currentTenant(), transport_ID: transport.ID, targetSystem_ID: targetSystem.ID, ...fields
+        });
+        return { previousStatus: '', row: await SELECT.one.from('adops.db.TransportImports').where({ ID: id }) };
+    };
+
+    const importView = (row) => {
+        if (!row) return null;
+        const { VerificationJson, ...rest } = row;
+        let verification = null;
+        try {
+            verification = VerificationJson ? JSON.parse(VerificationJson) : null;
+        } catch {
+            verification = null;
+        }
+        return { ...rest, Verification: verification };
+    };
+
+    const importAudit = ({ req, eventType, transport, targetSystem, previousStatus, row, message }) => appendAuditEvent({
+        Timestamp: new Date().toISOString(),
+        EventType: eventType,
+        Severity: row.ImportStatus === 'IMPORT_FAILED' ? 'WARN' : 'INFO',
+        ObjectType: 'TransportRequests',
+        ObjectName: `${transport.TransportRequestId} on ${targetSystem.displayName}`,
+        ObjectId: transport.ID,
+        UserId: req.user?.id || '',
+        Source: 'PublicService',
+        Message: String(message || ''),
+        BeforeValue: previousStatus || '',
+        AfterValue: row.ImportStatus || ''
+    });
+
+    this.on('verifyTransportImport', async (req) => {
+        const { transport, targetSystem } = await loadTransportAndFollowOn(req, req.data);
+        const manifest = transport.plan_ID ? await manifestForPlan(transport.plan_ID) : null;
+
+        let readers;
+        if (shouldMockSap()) {
+            readers = mockReaders({ transport });
+        } else {
+            if (!targetSystem.destinationName) {
+                return req.reject(400, `${targetSystem.displayName} has no BTP destination - record the import by hand instead.`);
+            }
+            const { fetchTransportStatus, fetchRolesByName } = require('./utils/s4-fiori-adapter.js');
+            readers = {
+                readTransportStatus: ({ targetSystem: system, trkorr }) => fetchTransportStatus({ targetSystem: system, trkorr, req }),
+                readRoles: ({ targetSystem: system, roleNames }) => fetchRolesByName({ targetSystem: system, roleNames, req })
+            };
+        }
+
+        const result = await verifyTransportImport({ transport, targetSystem, manifest, readers });
+        const { previousStatus, row } = await upsertTransportImport({
+            transport, targetSystem, fields: importRowFrom({ result, checkedBy: req.user?.id })
+        });
+        await importAudit({
+            req, eventType: 'TRANSPORT_IMPORT_CHECKED', transport, targetSystem, previousStatus, row, message: result.importStatus.detail
+        });
+        return JSON.stringify({ Import: importView(row), TransportStatus: result.transportStatus.row || null, Verification: result.verification });
+    });
+
+    this.on('recordTransportImport', async (req) => {
+        const status = String(req.data.status || '').trim().toUpperCase();
+        if (!RECORDABLE_IMPORT_STATUSES.includes(status)) {
+            return req.reject(400, `status must be one of ${RECORDABLE_IMPORT_STATUSES.join(', ')}.`);
+        }
+        const { transport, targetSystem } = await loadTransportAndFollowOn(req, req.data);
+        const { previousStatus, row } = await upsertTransportImport({
+            transport, targetSystem, fields: operatorRowFrom({ status, note: req.data.note, checkedBy: req.user?.id })
+        });
+        await importAudit({
+            req, eventType: 'TRANSPORT_IMPORT_RECORDED', transport, targetSystem, previousStatus, row, message: row.Note || ''
+        });
+        return JSON.stringify({ Import: importView(row) });
+    });
+
+    this.on('readTransportImport', async (req) => {
+        const { transportId, targetSystemId } = req.data;
+        const row = await SELECT.one.from('adops.db.TransportImports')
+            .where({ transport_ID: transportId, targetSystem_ID: targetSystemId });
+        return JSON.stringify({ Import: importView(row) });
+    });
+
     // --- Operator decisions on steps (S5) ----------------------------------------
 
     const {
@@ -938,7 +1108,7 @@ module.exports = cds.service.impl(async function () {
 
     // --- Activation runs (monitor) ---------------------------------------------
 
-    const { decorateRun, summarizeRunStatuses } = require('./utils/activation-runs.js');
+    const { decorateRun, summarizeRunStatuses, statusesForRunBucket } = require('./utils/activation-runs.js');
 
     // Task columns the monitor needs - ResultJson is projected to Outcome by
     // decorateRun, never returned raw (it also carries the enqueue payload).
@@ -990,15 +1160,20 @@ module.exports = cds.service.impl(async function () {
     };
 
     this.on('queryActivationRuns', async (req) => {
-        const { targetSystemId } = req.data;
+        const { targetSystemId, status } = req.data;
         const where = { TaskType: 'ACTIVATION_EXECUTION' };
         if (targetSystemId) where.targetSystem_ID = targetSystemId;
+        // Optional status bucket for the list; the summary stays the partition
+        // over the system scope, so the card that was clicked equals the slice.
+        const bucket = status ? statusesForRunBucket(status) : null;
+        if (status && !bucket) return req.reject(400, `Unknown run status bucket: ${status}`);
 
         // Rows are bounded; the summary is a grouped count over the SAME
         // scope so the KPI cards never disagree with the list.
         const [tasks, grouped] = await Promise.all([
             SELECT.from('adops.db.BackgroundTasks').columns(...RUN_TASK_COLUMNS)
-                .where(where).orderBy('QueuedAt desc', 'createdAt desc').limit(200),
+                .where(bucket ? { ...where, Status: { in: bucket } } : where)
+                .orderBy('QueuedAt desc', 'createdAt desc').limit(200),
             SELECT.from('adops.db.BackgroundTasks').columns('Status', 'count(*) as cnt')
                 .where(where).groupBy('Status')
         ]);
@@ -1038,21 +1213,9 @@ module.exports = cds.service.impl(async function () {
     });
 
     this.on('readActivationManifest', async (req) => {
-        const { planId } = req.data;
-        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
-        if (!plan) return req.reject(404, 'Activation plan not found.');
-        const steps = await SELECT.from('adops.db.ActivationSteps')
-            .where({ plan_ID: planId }).orderBy('SequenceNo asc');
-        const wave = plan.wave_ID ? await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: plan.wave_ID }) : null;
-        const targetSystem = plan.targetSystem_ID
-            ? await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID })
-            : null;
-        const transport = plan.transportRequest_ID
-            ? await SELECT.one.from('adops.db.TransportRequests').where({ ID: plan.transportRequest_ID })
-            : null;
-
-        const { buildActivationManifest, renderManifestMarkdown } = require('./utils/activation-manifest.js');
-        const manifest = buildActivationManifest({ plan, steps, wave, targetSystem, transport });
+        const manifest = await manifestForPlan(req.data.planId);
+        if (!manifest) return req.reject(404, 'Activation plan not found.');
+        const { renderManifestMarkdown } = require('./utils/activation-manifest.js');
         return JSON.stringify({ Manifest: manifest, Markdown: renderManifestMarkdown(manifest) });
     });
 
@@ -1082,5 +1245,48 @@ module.exports = cds.service.impl(async function () {
             roleRowCount: run.RoleRowCount,
             truncated: run.Truncated
         });
+    });
+
+    // --- Adoption Cockpit (O8) ------------------------------------------------
+    // One read, eight grouped counts at the database (tenant scope is added
+    // by registerTenantScope), nothing row-level leaves the server.
+    this.on('queryDashboardSummary', async (req) => {
+        const { targetSystemId } = req.data;
+        const scoped = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
+        const grouped = (entity, field, where) => {
+            const query = SELECT.from(entity).columns(field, 'count(*) as cnt');
+            return (where && Object.keys(where).length ? query.where(where) : query).groupBy(field);
+        };
+
+        // Proposals: the current analysis run per target system in scope
+        // (latest COMPLETED), so the figures match what the Proposals page
+        // opens by default instead of summing every historical run.
+        const completedRuns = await SELECT.from('adops.db.AnalysisRuns')
+            .columns('ID', 'targetSystem_ID', 'CompletedAt', 'createdAt')
+            .where({ ...scoped, Status: 'COMPLETED' })
+            .orderBy('CompletedAt desc', 'createdAt desc');
+        const currentRunBySystem = new Map();
+        for (const run of completedRuns) {
+            const key = run.targetSystem_ID || '';
+            if (!currentRunBySystem.has(key)) currentRunBySystem.set(key, run.ID);
+        }
+        const analysisRunIds = [...currentRunBySystem.values()];
+
+        const [systems, extractions, analyses, proposals, waves, plans, runs, transports] = await Promise.all([
+            grouped('adops.db.TargetSystems', 'lastCheckStatus', targetSystemId ? { ID: targetSystemId } : {}),
+            grouped('adops.db.ExtractionRuns', 'Status', scoped),
+            grouped('adops.db.AnalysisRuns', 'Status', scoped),
+            analysisRunIds.length
+                ? grouped('adops.db.AppProposals', 'ReviewStatus', { analysisRun_ID: { in: analysisRunIds } })
+                : [],
+            grouped('adops.db.AdoptionWaves', 'Status', scoped),
+            grouped('adops.db.ActivationPlans', 'Status', scoped),
+            grouped('adops.db.BackgroundTasks', 'Status', { ...scoped, TaskType: 'ACTIVATION_EXECUTION' }),
+            grouped('adops.db.TransportRequests', 'Status', scoped)
+        ]);
+        return JSON.stringify(shapeDashboardSummary(
+            { systems, extractions, analyses, proposals, waves, plans, runs, transports },
+            { targetSystemId: targetSystemId || null, analysisRunIds }
+        ));
     });
 });

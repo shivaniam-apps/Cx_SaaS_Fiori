@@ -63,6 +63,7 @@ entities (names are the CAP adapter contract — do not rename):
 | `TransactionUsage` | `ZCL_ADO_Q_TX_USAGE` | Per-tcode profile aggregated from the `USERTCODE` aggregate; page-window materialisation; TSTC/TSTCT enrichment per page. |
 | `UserTransactionUsage` | `ZCL_ADO_Q_USER_TX` | User×tcode rows, **pseudonymised** (`ZCL_ADO_PSEUDONYM`, SHA-256), top-20 users per tcode bounded at source. |
 | `SystemInfo` | `ZCL_ADO_Q_SYSTEM_INFO` | SID/client/S4CORE/SAP_UI, collector-running flag, add-on version. |
+| `TransportStatus` | `ZCL_ADO_Q_TRANSPORT` | E070/E07T/E071 rows for a `Trkorr` filter (required). On a follow-on system the row exists only after import - the AdoptOps transport verification evidence (S10). |
 
 The workhorse is `ZCL_ADO_ST03_READER`: loops monthly
 `SWNC_COLLECTOR_GET_AGGREGATES` calls over the requested window

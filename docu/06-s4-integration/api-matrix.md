@@ -127,6 +127,7 @@ used when building `ZCL_ADO_ACT_USER_ASSIGN`.
 | `TR_INSERT_NEW_COMM` / `TRINT_INSERT_NEW_COMM` | ✅ ×2 | Incl. `IV_SIMULATION`. |
 | `TR_APPEND_TO_COMM_OBJS_KEYS` / `TR_OBJECTS_CHECK` / `TR_READ_COMM` | ✅ ×2 | Append + appendability pre-check + read-back. |
 | `TR_RELEASE_REQUEST` / `TRINT_RELEASE_REQUEST` | ✅ ×2 | `IV_AS_BACKGROUND_JOB`, `IV_SIMULATION`, TRINT message tables. Poll `E070-TRSTATUS`. |
+| `E070` / `E07T` / `E071` table read on the **follow-on** system (S10 `ZADO_C_TRANSPORT_STATUS`) | table read, not yet run on RD1 | Import evidence without TMS: a request exists in the target's `E070` only once tp imported it (object list travels with the import), status `R`. tp return codes stay in the TMS logs (idea I31). |
 | `STC_TM_GET_SCENARIO_LIST` + task-list read family | ✅ ×2 | Incl. `STC_EXT_CALLER_INFO`. |
 | `STC_TM_SESSION_BEGIN` | ✅ RD1 | **The task-list execution driver**: scenario + template + `IT_PARAMETER` + `IS_EXEC_SETTINGS` → `E_SESSION_ID`/`E_EXEC_ID`; `I_INIT_ONLY` separates create from run. |
 | `STC_TM_SESSION_GET_STATUS` | ✅ RD1 | **The polling surface**: `E_STATUS`, `E_PROGRESS`, `ES_CURRENT_TASK`, full `ET_TASKLIST`, and action flags (`E_ACTION_RESUME`/`_INTERRUPT`). Maps 1:1 onto `ZADO_ACT_TL_RUN` / `BackgroundTasks` progress. |

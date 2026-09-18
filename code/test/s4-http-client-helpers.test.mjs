@@ -72,7 +72,7 @@ describe('s4-http-client helpers', () => {
       const masked = client.safeResponseData({ user: 'x', Password: 'hunter2', authorization: 'Bearer abc', note: 'ok' });
       expect(masked).to.include('"Password":"***"');
       // The mask covers the first token of the value only ('Bearer' of
-      // 'Bearer abc'); the remainder is a known gap (tracker idea I31).
+      // 'Bearer abc'); the remainder is a known gap (tracker idea I35).
       expect(masked).to.include('"authorization":"***');
       expect(masked).to.not.include('hunter2');
       expect(masked).to.not.include('Bearer');
