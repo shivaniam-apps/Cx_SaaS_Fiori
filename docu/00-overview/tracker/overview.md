@@ -13,7 +13,8 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## Accomplished
 
-- [x] O6 User & Role Landscape page (/landscape/:view?, Users + Roles tabs on AdopsPageTabs): run-scoped, server-filtered/sorted UserInventory + RoleInventory pages with $top/$skip/$count load-more, KPI strips from $apply=filter/groupby over the same filter scope, per-row detail reads (RoleUsers, RoleTransactions), role/user cross-links as URL params — this PR, 2026-09-18
+- [x] O8 Adoption Cockpit KPI strip (promoted from I1): queryDashboardSummary (one read, grouped counts per journey stage at the database, proposals scoped to the current analysis run per system), per-stage KPI tiles on the Dashboard with a target-system scope and a next-step prompt, click-through into Proposals / Activation Runs / Transports with the same status bucket pre-applied (new URL filters on those pages, bucket status params on queryProposals / queryActivationRuns / queryTransportRequests) — PR #42, 2026-09-18
+- [x] O6 User & Role Landscape page (/landscape/:view?, Users + Roles tabs on AdopsPageTabs): run-scoped, server-filtered/sorted UserInventory + RoleInventory pages with $top/$skip/$count load-more, KPI strips from $apply=filter/groupby over the same filter scope, per-row detail reads (RoleUsers, RoleTransactions), role/user cross-links as URL params — PR #39, 2026-09-18
 - [x] I16 Global error reporting: WINDOW_ERROR, UNHANDLED_REJECTION and API_FAILURE (network / 5xx) crash reports through recordClientError, deduped and session-capped client-side — PR #33, 2026-09-17
 - [x] I17 Client telemetry emitter: PAGE_VIEWED + activation usage events and APP_LOAD / slow ROUTE_RENDER / slow API performance events batched to recordTelemetryBatch, gated by getTelemetrySettings — PR #29, 2026-09-17
 - [x] O7 Product Insights page on AdopsPageTabs (/product-insights/:view?): Feedback triage, Crash reports triage, Usage and Performance server summaries — this PR, 2026-09-17
@@ -28,6 +29,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 ## Daily log
 
 ### 2026-09-18
+- O8 done on feat/dashboard-kpis: srv/utils/dashboard-summary.js (partitions + bucketStatuses shared with the list reads; mocha shaping + HTTP tests on the in-memory db), queryDashboardSummary handler, status bucket params on queryActivationRuns / queryTransportRequests / queryProposals (additive), client features/dashboard/dashboardModel.js (journey cards, links, next step; node --test), DashboardPage rewrite, Kpi gains design/onClick, Proposals / Activation Runs / Transports read system/status navigation params into their filter bars. Verified in the browser on 5283: tiles, scope select, To review -> Proposals (23 rows, filter shown), Open transports -> Transports, Runs failed -> Activation Runs. PR #42 opened; merged origin/main (A11 #40, S10 #41) into the branch, resolving the client package.json test line and the Transports page filter bar against S10.
 - O6 done on feat/landscape-page: features/landscape/landscapeModel.js (views, run filter, $filter/$orderby builders, KPI partitions, deep-link params; node --test) + LandscapePage.jsx, queryInventoryPage / queryInventoryGroups in fioriService, information icon registered, PlaceholderPage removed (last consumer). Verified in the browser on 5283 with a mock USR02+AGR extraction (163 users / 11 roles): cards, filters + Go/Clear, load more ($skip), user -> role and role -> user cross-links, (i) popover. Found that AppErrorBoundary keyed on pathname remounts pages on tab switches (I30).
 
 ### 2026-09-17

@@ -22,6 +22,16 @@ function runBucket(status) {
   return 'OTHER';
 }
 
+// The statuses behind one KPI bucket: the list filter for a card's
+// click-through uses exactly the expression the card was counted with
+// (performance.md). Unknown bucket -> null (no filter).
+function statusesForRunBucket(bucket) {
+  const name = String(bucket ?? '').trim().toUpperCase();
+  if (!name) return null;
+  const statuses = [...ACTIVE_TASK_STATES, ...TERMINAL_TASK_STATES].filter((status) => runBucket(status) === name);
+  return statuses.length ? statuses : null;
+}
+
 // Grouped Status counts (SELECT Status, count(*) ... GROUP BY Status) into
 // the summary the list page renders. Computed server-side over the FULL
 // filter scope, never from the rows currently loaded.
@@ -115,6 +125,7 @@ module.exports = {
   ACTIVE_TASK_STATES,
   TERMINAL_TASK_STATES,
   runBucket,
+  statusesForRunBucket,
   summarizeRunStatuses,
   parseRunOutcome,
   runDurationMs,

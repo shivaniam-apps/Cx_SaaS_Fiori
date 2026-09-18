@@ -43,6 +43,28 @@ async function getFunction(nameWithArgs) {
   return response.data;
 }
 
+// OData V4 function parameter list: UUIDs unquoted, strings quoted (single
+// quotes doubled), empty values left out. Keys are the CDS parameter names.
+const UUID_LITERAL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function functionArgs(params) {
+  return Object.entries(params || {})
+    .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+    .map(([key, value]) => {
+      const text = String(value).trim();
+      return `${key}=${UUID_LITERAL.test(text) ? text : `'${text.replace(/'/g, "''")}'`}`;
+    })
+    .join(',');
+}
+
+// --- Adoption Cockpit ---------------------------------------------------------
+
+// One purpose-built read: grouped status counts per journey stage over the
+// tenant or one target system (performance.md, Dashboard).
+export async function queryDashboardSummary(targetSystemId) {
+  const response = await http.get(`/fiori/queryDashboardSummary(${functionArgs({ targetSystemId })})`);
+  return parseJsonActionResult(response.data);
+}
+
 // --- Target systems ---------------------------------------------------------
 
 export async function listTargetSystems() {
@@ -267,11 +289,10 @@ export async function rollbackActivationStep(stepId, reason) {
 
 // --- Activation runs (monitor) ------------------------------------------------
 
-export async function queryActivationRuns(targetSystemId) {
-  const path = targetSystemId
-    ? `queryActivationRuns(targetSystemId=${targetSystemId})`
-    : 'queryActivationRuns()';
-  const response = await http.get(`/fiori/${path}`);
+// `status` is a KPI bucket (ACTIVE | SUCCEEDED | FAILED | CANCELLED); the
+// Summary in the response stays the partition over the system scope.
+export async function queryActivationRuns(targetSystemId, status) {
+  const response = await http.get(`/fiori/queryActivationRuns(${functionArgs({ targetSystemId, status })})`);
   return parseJsonActionResult(response.data);
 }
 
@@ -284,11 +305,9 @@ export async function readActivationRun(runId) {
 
 // --- Transports ---------------------------------------------------------------
 
-export async function queryTransportRequests(targetSystemId) {
-  const path = targetSystemId
-    ? `queryTransportRequests(targetSystemId=${targetSystemId})`
-    : 'queryTransportRequests()';
-  const response = await http.get(`/fiori/${path}`);
+// `status` is a dashboard bucket (OPEN | RELEASED | FAILED).
+export async function queryTransportRequests(targetSystemId, status) {
+  const response = await http.get(`/fiori/queryTransportRequests(${functionArgs({ targetSystemId, status })})`);
   return parseJsonActionResult(response.data);
 }
 

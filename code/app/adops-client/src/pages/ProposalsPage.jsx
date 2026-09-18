@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Title } from '@ui5/webcomponents-react/Title';
 import { Text } from '@ui5/webcomponents-react/Text';
 import { Button } from '@ui5/webcomponents-react/Button';
@@ -51,11 +52,31 @@ function Kpi({ label, value, emphasis }) {
   );
 }
 
+// Review-status buckets shared with the cockpit (dashboard-summary.js on the
+// server expands a bucket to its statuses), so a cockpit tile and this
+// filter are one server expression.
+const REVIEW_STATUS_OPTIONS = [
+  { id: '', label: 'All statuses' },
+  { id: 'OPEN', label: 'To review' },
+  { id: 'APPROVED', label: 'Approved' },
+  { id: 'REJECTED', label: 'Rejected' },
+  { id: 'DEFERRED', label: 'Deferred' },
+  { id: 'NOPATH', label: 'No Fiori path' }
+];
+
 export function ProposalsPage() {
+  // Navigation intent from the cockpit: `run` picks the analysis run,
+  // `status` pre-applies the review-status filter (fiori-ux.md, Navigation).
+  const [searchParams] = useSearchParams();
+  const runFromUrl = searchParams.get('run') || '';
+  const statusFromUrl = (searchParams.get('status') || '').toUpperCase();
+
   const [userInfo, setUserInfo] = useState(null);
   const [analysisRuns, setAnalysisRuns] = useState([]);
   const [extractionRuns, setExtractionRuns] = useState([]);
-  const [analysisRunId, setAnalysisRunId] = useState('');
+  const [analysisRunId, setAnalysisRunId] = useState(runFromUrl);
+  const [draftStatus, setDraftStatus] = useState(statusFromUrl);
+  const [appliedStatus, setAppliedStatus] = useState(statusFromUrl);
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -83,12 +104,12 @@ export function ProposalsPage() {
     if (!analysisRunId) return undefined;
     let cancelled = false;
     setLoading(true);
-    queryProposals({ analysisRunId, top: 200, includeSummary: true })
+    queryProposals({ analysisRunId, reviewStatus: appliedStatus || undefined, top: 200, includeSummary: true })
       .then((result) => { if (!cancelled) { setPage(result); setError(''); } })
       .catch((e) => { if (!cancelled) setError(getServiceErrorMessage(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [analysisRunId, reloadToken]);
+  }, [analysisRunId, appliedStatus, reloadToken]);
 
   const polling = useRunPolling({
     id: generatingTaskId,
@@ -172,6 +193,20 @@ export function ProposalsPage() {
         </div>
       ) : null}
 
+      {/* Filter bar contract: the Select edits a DRAFT, Go commits it, Clear resets and applies. */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
+        <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '12rem' }}>
+          <Label>Review status</Label>
+          <Select onChange={(e) => setDraftStatus(e.detail.selectedOption.dataset.value || '')}>
+            {REVIEW_STATUS_OPTIONS.map((o) => (
+              <Option key={o.id || 'all'} data-value={o.id} selected={draftStatus === o.id}>{o.label}</Option>
+            ))}
+          </Select>
+        </div>
+        <Button design="Emphasized" onClick={() => setAppliedStatus(draftStatus)}>Go</Button>
+        <Button design="Transparent" onClick={() => { setDraftStatus(''); setAppliedStatus(''); }}>Clear</Button>
+      </div>
+
       <div style={{ display: 'flex', gap: 'var(--adops-space-md)', marginTop: 'var(--adops-space-md)', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 auto', minWidth: 0 }}>
           {loading ? (
@@ -179,8 +214,8 @@ export function ProposalsPage() {
           ) : !page || page.Items.length === 0 ? (
             <IllustratedMessage
               name="NoData"
-              titleText="No proposals yet"
-              subtitleText="Generate proposals from a completed extraction run."
+              titleText={appliedStatus ? 'No proposals match the filter' : 'No proposals yet'}
+              subtitleText={appliedStatus ? 'Clear the review-status filter to see every proposal of this run.' : 'Generate proposals from a completed extraction run.'}
             />
           ) : (
             <Table

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Title } from '@ui5/webcomponents-react/Title';
 import { Text } from '@ui5/webcomponents-react/Text';
 import { Label } from '@ui5/webcomponents-react/Label';
@@ -19,6 +20,7 @@ import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { fetchUserInfo } from '../services/coreService.js';
 import { hasActivatorAccess } from '../features/auth/memberAccess.js';
 import {
+  listTargetSystems,
   queryTransportRequests,
   releaseTransport,
   verifyTransportImport,
@@ -41,6 +43,15 @@ import {
   verificationDesign
 } from '../features/transports/transportModel.js';
 
+// Status buckets shared with the cockpit (dashboard-summary.js on the server
+// expands a bucket to its statuses).
+const TRANSPORT_STATUS_OPTIONS = [
+  { id: '', label: 'All statuses' },
+  { id: 'OPEN', label: 'Open (modifiable / releasing)' },
+  { id: 'RELEASED', label: 'Released' },
+  { id: 'FAILED', label: 'Release failed' }
+];
+
 const systemLabel = (s) => `${s.displayName}${s.environment ? ` (${s.environment})` : ''}`;
 
 export function TransportsPage() {
@@ -54,18 +65,31 @@ export function TransportsPage() {
   const [verifying, setVerifying] = useState(null);           // { transport, systemId, result, loading }
   const [recording, setRecording] = useState(null);           // { transport, systemId, status, note }
   const [reloadToken, setReloadToken] = useState(0);
+  const [systems, setSystems] = useState([]);
+
+  // Navigation intent from the cockpit (`system`, `status` = bucket)
+  // pre-applies the bar; the bar edits a DRAFT, Go commits, Clear resets.
+  const [searchParams] = useSearchParams();
+  const systemFromUrl = searchParams.get('system') || '';
+  const statusFromUrl = (searchParams.get('status') || '').toUpperCase();
+  const [draft, setDraft] = useState({ systemId: systemFromUrl, status: statusFromUrl });
+  const [applied, setApplied] = useState({ systemId: systemFromUrl, status: statusFromUrl });
 
   useEffect(() => {
     let cancelled = false;
     fetchUserInfo()
       .then((info) => { if (!cancelled) setUserInfo(info); })
       .catch(() => {});
+    listTargetSystems()
+      .then((rows) => { if (!cancelled) setSystems(rows); })
+      .catch(() => { /* the system select degrades to "all"; the list read reports errors */ });
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    queryTransportRequests()
+    setItems(null);
+    queryTransportRequests(applied.systemId || undefined, applied.status || undefined)
       .then((result) => {
         if (cancelled) return;
         setItems(result.Items);
@@ -74,7 +98,7 @@ export function TransportsPage() {
       })
       .catch((e) => { if (!cancelled) setError(getServiceErrorMessage(e)); });
     return () => { cancelled = true; };
-  }, [reloadToken]);
+  }, [applied, reloadToken]);
 
   const runRelease = async (transport, simulate) => {
     try {
@@ -183,13 +207,37 @@ export function TransportsPage() {
         </MessageStrip>
       ) : null}
 
+      <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
+        <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '16rem' }}>
+          <Label>Target system</Label>
+          <Select onChange={(e) => setDraft({ ...draft, systemId: e.detail.selectedOption.dataset.value || '' })}>
+            <Option data-value="" selected={draft.systemId === ''}>All target systems</Option>
+            {systems.map((s) => (
+              <Option key={s.ID} data-value={s.ID} selected={draft.systemId === s.ID}>
+                {s.displayName}{s.environment ? ` (${s.environment})` : ''}
+              </Option>
+            ))}
+          </Select>
+        </div>
+        <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '14rem' }}>
+          <Label>Status</Label>
+          <Select onChange={(e) => setDraft({ ...draft, status: e.detail.selectedOption.dataset.value || '' })}>
+            {TRANSPORT_STATUS_OPTIONS.map((o) => (
+              <Option key={o.id || 'all'} data-value={o.id} selected={draft.status === o.id}>{o.label}</Option>
+            ))}
+          </Select>
+        </div>
+        <Button design="Emphasized" onClick={() => setApplied(draft)}>Go</Button>
+        <Button design="Transparent" onClick={() => { setDraft({ systemId: '', status: '' }); setApplied({ systemId: '', status: '' }); }}>Clear</Button>
+      </div>
+
       {!items ? (
         <BusyIndicator active delay={200} style={{ display: 'block', marginTop: '6vh' }} />
       ) : items.length === 0 ? (
         <IllustratedMessage
           name="NoData"
-          titleText="No transport requests yet"
-          subtitleText="Executing an activation plan creates the transport that carries its content."
+          titleText={applied.status || applied.systemId ? 'No transport requests match the filter' : 'No transport requests yet'}
+          subtitleText={applied.status || applied.systemId ? 'Clear the filter to see every transport request.' : 'Executing an activation plan creates the transport that carries its content.'}
         />
       ) : (
         <div style={{ marginTop: 'var(--adops-space-md)' }}>
