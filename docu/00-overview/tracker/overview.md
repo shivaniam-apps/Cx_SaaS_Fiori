@@ -10,6 +10,8 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## To-do (milestone order)
 
+- [ ] O9 UI hygiene (promoted I2, I14, I30): shared AdopsToast for success feedback on Transports / Access Requests / Activation Runs / Activation Plans; icon registration audit of every icon= prop against ui5Assets.js (restart / stop missing) with a node --test guard; AppErrorBoundary keyed per page instead of full pathname so /page/:view tab switches keep state
+- [ ] O10 Activation Runs KPI cards as status filters (promoted I7): queryActivationRuns gains a status parameter so card and slice use the same server expression; in-content scope gesture applies and writes the draft
 
 ## Accomplished
 

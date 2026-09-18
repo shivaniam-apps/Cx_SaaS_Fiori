@@ -11,6 +11,7 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## To-do (critical path first)
 
+- [ ] S11 Configuration hardening (promoted I38, I21, I26): drop the hardcoded S4_DESTINATION default in s4-http-client.js so callers without a target-system destination fail with a clear error; align the local CORS_ORIGINS default in server.js with the worktree port slots; warn or refuse under the production profile when ADOPTOPS_S4_URL_OVERRIDES / DIRECT_USER / DIRECT_PASSWORD / INSECURE_TLS are set - shared change (adapters + server.js), land before S7
 - [ ] S7 ABAP snapshot collector: ZADO_CFG, ZADO_RUN, ZADO_AUDIT, snapshot tables, background job; CAP reads snapshots instead of live ST03N — XL
 - [ ] S9 Catalog derivation: ZADO_CATALOG package + CATALOG_DERIVATION task handler writing BackendCatalogApps / BackendLaunchpadContent (after PO-1)
 
