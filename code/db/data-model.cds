@@ -512,6 +512,33 @@ context adops.db {
             ObjectCount        : Integer;
             ReleaseLogText     : LargeString;
             RawJson            : LargeString;
+            // S10: one row per follow-on system the request was checked or recorded on
+            imports            : Composition of many TransportImports
+                                       on imports.transport = $self;
+      }
+
+      // S10: import status of a transport request on a follow-on system (QA,
+      // PROD) plus the last manifest verification run against that system.
+      // Written by verifyTransportImport (read unit, Source READ_UNIT) or by
+      // an operator recording the runbook outcome (Source OPERATOR).
+      entity TransportImports : cuid, managed, tenantScoped {
+            transport        : Association to TransportRequests;
+            targetSystem     : Association to TargetSystems;   // the follow-on system
+            ImportStatus     : String(20);   // PENDING|IMPORTED|IMPORT_FAILED|UNKNOWN
+            Source           : String(20);   // READ_UNIT|OPERATOR
+            RequestStatus    : String(1);    // E070-TRSTATUS as seen on the follow-on system
+            ObjectCount      : Integer;      // E071 rows seen on the follow-on system
+            ImportedAt       : Timestamp;
+            CheckedAt        : Timestamp;
+            CheckedBy        : String(120);
+            Note             : String(500);
+            // Last manifest verification against this system
+            VerifiedAt       : Timestamp;
+            VerifiedCount    : Integer;      // entries VERIFIED
+            NotFoundCount    : Integer;      // entries NOT_FOUND
+            ManualCount      : Integer;      // entries MANUAL (no read-unit check exists)
+            UnknownCount     : Integer;      // entries UNKNOWN (read failed)
+            VerificationJson : LargeString;  // [{sequence, stepType, object, kind, verdict, detail}]
       }
 
       // ------------------------------------------------------------------

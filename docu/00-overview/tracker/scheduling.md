@@ -7,13 +7,13 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 
 ## In progress
 
+- [~] S10 Transport QA/PROD verification reads behind the manifest; import status on TransportRequests — M/L — branch feat/transport-verification, started 2026-09-18 (taken while S3 part 2 waits for the RD1 probe output)
 - [~] S3 Implement ABAP step types returning not_implemented (ACTIVATE_ODATA_SERVICE, CREATE_SPACE, CREATE_PAGE, ASSIGN_PAGE_TO_SPACE, ADD_SPACE_TO_ROLE, ASSIGN_BUSINESS_CATALOG, ADD_CATALOG_TO_ROLE) + transport-append step; verify-first / verify-after / one commit per step — XL, needs RD1 DEV/100 — part 2 on branch feat/abap-activation-steps-2, started 2026-09-17 (part 1 merged PR #23, 2026-09-17: transport-first sequencing, APPEND_TO_TRANSPORT step, plan TRKORR threaded into keys, ZADO_PROBE_ACTIVATION report; part 2 = the seven executors, blocked until the probe output from RD1 DEV/100 is available)
 
 ## To-do (critical path first)
 
 - [ ] S7 ABAP snapshot collector: ZADO_CFG, ZADO_RUN, ZADO_AUDIT, snapshot tables, background job; CAP reads snapshots instead of live ST03N — XL
 - [ ] S9 Catalog derivation: ZADO_CATALOG package + CATALOG_DERIVATION task handler writing BackendCatalogApps / BackendLaunchpadContent (after PO-1)
-- [ ] S10 Transport QA/PROD verification reads behind the manifest; import status on TransportRequests
 
 ## Accomplished
 
@@ -27,6 +27,9 @@ wholesale into `abap/src`. Format: see [program-tracker.md](../program-tracker.m
 - [x] ST03 reader fixes from the RD1 export run (top-users 0 = unlimited, truncated-tcode aggregation, control bytes in JSON) — PR #4, 2026-09-15
 
 ## Daily log
+
+### 2026-09-18
+- S10 on branch feat/transport-verification (both repos; ABAP branch feat/transport-status-reader). Verification goes through the READ unit only (the write unit is unpublished on QA/PROD): new ZADO_C_TRANSPORT_STATUS on E070/E07T/E071 (a request exists there only once tp imported it - that presence is the import evidence; no TRKORR filter = empty set, never the whole history) plus the S8 RoleInventory for role existence / user assignment; spaces, pages, ICF, OData, task lists stay MANUAL with the manifest hint. TransportImports keeps one row per transport and follow-on system with the verdict counts; operators record IMPORT_FAILED from STMS since tp return codes are not read (idea I30). Browser check on 5293 in mock mode: released RD1K974247, Verify on RD1 Production -> Imported, 5 verified / 8 manual, Record import -> "recorded" on the row. ABAP not compiled here: RD1 acceptance = syntax check + TransportStatus read on DEV with and without the filter, then Verify before and after importing a smoke request into the follow-on client (docu/09 transport-verification).
 
 ### 2026-09-17
 - S8 on branch feat/roles-users-readers (both repos). Providers page with ORDER BY + OFFSET + UP TO at the database and cap an unbounded $top at 5000 (zcl_ado_q_util), so AGR_USERS-sized tables never materialise in ABAP memory; counts per page use a range of the page's keys (FOR ALL ENTRIES cannot combine with GROUP BY). Column names relied on without an RD1 check: AGR_AGRS(agr_name, child_agr) for composite detection, AGR_TCODES.type = 'TR', AGR_1251(object, field, low, deleted), AGR_TEXTS(spras, line, text), USR02(ustyp, class, gltgv, gltgb, uflag, trdat) - the syntax check on RD1 is the acceptance gate, then one extraction on PROD with the default sources and the four row counts in the run log. UsesFioriToday and HasFioriCatalog stay false until the FIORI source / S9 exist; FullName/Email stay empty (pseudonymised).

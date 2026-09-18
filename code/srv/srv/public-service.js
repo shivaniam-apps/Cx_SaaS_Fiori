@@ -806,6 +806,24 @@ module.exports = cds.service.impl(async function () {
 
     // --- Transports (Phase 3) ------------------------------------------------
 
+    // The QA/PROD replay manifest of a plan (null when the plan does not
+    // exist); shared by readActivationManifest and the S10 verification.
+    async function manifestForPlan(planId) {
+        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
+        if (!plan) return null;
+        const steps = await SELECT.from('adops.db.ActivationSteps')
+            .where({ plan_ID: planId }).orderBy('SequenceNo asc');
+        const wave = plan.wave_ID ? await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: plan.wave_ID }) : null;
+        const targetSystem = plan.targetSystem_ID
+            ? await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID })
+            : null;
+        const transport = plan.transportRequest_ID
+            ? await SELECT.one.from('adops.db.TransportRequests').where({ ID: plan.transportRequest_ID })
+            : null;
+        const { buildActivationManifest } = require('./utils/activation-manifest.js');
+        return buildActivationManifest({ plan, steps, wave, targetSystem, transport });
+    }
+
     this.on('queryTransportRequests', async (req) => {
         const { targetSystemId } = req.data;
         const where = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
@@ -829,6 +847,29 @@ module.exports = cds.service.impl(async function () {
         const waveById = new Map(waves.map((w) => [w.ID, w]));
         const systemById = new Map(systems.map((s) => [s.ID, s]));
 
+        // S10: the import rows of these requests (one read, verification
+        // payload left out - readTransportImport carries it) and the systems
+        // a request can be verified on: every active registered system; the
+        // client hides the request's own source system.
+        const transportIds = rows.map((r) => r.ID);
+        const importRows = transportIds.length
+            ? await SELECT.from('adops.db.TransportImports')
+                .columns('ID', 'transport_ID', 'targetSystem_ID', 'ImportStatus', 'Source', 'RequestStatus', 'ObjectCount',
+                    'ImportedAt', 'CheckedAt', 'CheckedBy', 'Note', 'VerifiedAt', 'VerifiedCount', 'NotFoundCount',
+                    'ManualCount', 'UnknownCount')
+                .where({ transport_ID: { in: transportIds } }).orderBy('CheckedAt desc')
+            : [];
+        const followOnSystems = await SELECT.from('adops.db.TargetSystems')
+            .columns('ID', 'displayName', 'environment', 'active').orderBy('displayName asc');
+        const labelOf = (system) => (system ? `${system.displayName}${system.environment ? ` (${system.environment})` : ''}` : '');
+        const followOnById = new Map(followOnSystems.map((s) => [s.ID, s]));
+        const importsByTransport = new Map();
+        for (const imp of importRows) {
+            const list = importsByTransport.get(imp.transport_ID) || [];
+            list.push({ ...imp, TargetSystemName: labelOf(followOnById.get(imp.targetSystem_ID)) });
+            importsByTransport.set(imp.transport_ID, list);
+        }
+
         const items = rows.map((row) => {
             const plan = planById.get(row.plan_ID);
             const system = systemById.get(row.targetSystem_ID);
@@ -836,10 +877,17 @@ module.exports = cds.service.impl(async function () {
                 ...row,
                 PlanName: plan?.Name || '',
                 WaveName: plan?.wave_ID ? (waveById.get(plan.wave_ID)?.Name || '') : '',
-                TargetSystemName: system ? `${system.displayName}${system.environment ? ` (${system.environment})` : ''}` : ''
+                TargetSystemName: labelOf(system),
+                Imports: importsByTransport.get(row.ID) || []
             };
         });
-        return JSON.stringify({ Items: items, Count: items.length });
+        return JSON.stringify({
+            Items: items,
+            Count: items.length,
+            FollowOnSystems: followOnSystems
+                .filter((s) => s.active !== false)
+                .map((s) => ({ ID: s.ID, displayName: s.displayName, environment: s.environment || '' }))
+        });
     });
 
     this.on('releaseTransport', async (req) => {
@@ -891,6 +939,117 @@ module.exports = cds.service.impl(async function () {
         }
         const fresh = await SELECT.one.from('adops.db.TransportRequests').where({ ID: transportId });
         return JSON.stringify({ Status: fresh.Status, Simulated: Boolean(simulate), StepStatus: result.status, Messages: result.messages || [] });
+    });
+
+    // --- Transport verification on follow-on systems (S10) ----------------------
+    // Read-only towards S/4: the read unit answers E070 (TransportStatus) and
+    // AGR_DEFINE (RoleInventory) on QA/PROD; the write unit is never touched.
+
+    const {
+        verifyTransportImport, mockReaders, importRowFrom, operatorRowFrom, RECORDABLE_IMPORT_STATUSES
+    } = require('./utils/transport-verification.js');
+
+    const loadTransportAndFollowOn = async (req, { transportId, targetSystemId }) => {
+        const transport = await SELECT.one.from('adops.db.TransportRequests').where({ ID: transportId });
+        if (!transport) return req.reject(404, 'Transport request not found.');
+        if (!transport.TransportRequestId) return req.reject(400, 'The row carries no TRKORR.');
+        const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
+        if (!targetSystem) return req.reject(404, 'Target system not found.');
+        if (targetSystem.ID === transport.targetSystem_ID) {
+            return req.reject(400, `${targetSystem.displayName} is the source system of ${transport.TransportRequestId} - verify on the follow-on system (QA, PROD) the request was imported into.`);
+        }
+        return { transport, targetSystem };
+    };
+
+    // One row per transport and follow-on system; a re-check overwrites it.
+    const upsertTransportImport = async ({ transport, targetSystem, fields }) => {
+        const existing = await SELECT.one.from('adops.db.TransportImports')
+            .where({ transport_ID: transport.ID, targetSystem_ID: targetSystem.ID });
+        if (existing) {
+            await UPDATE('adops.db.TransportImports').set(fields).where({ ID: existing.ID });
+            return { previousStatus: existing.ImportStatus || '', row: await SELECT.one.from('adops.db.TransportImports').where({ ID: existing.ID }) };
+        }
+        const id = randomUUID();
+        await INSERT.into('adops.db.TransportImports').entries({
+            ID: id, TenantId: currentTenant(), transport_ID: transport.ID, targetSystem_ID: targetSystem.ID, ...fields
+        });
+        return { previousStatus: '', row: await SELECT.one.from('adops.db.TransportImports').where({ ID: id }) };
+    };
+
+    const importView = (row) => {
+        if (!row) return null;
+        const { VerificationJson, ...rest } = row;
+        let verification = null;
+        try {
+            verification = VerificationJson ? JSON.parse(VerificationJson) : null;
+        } catch {
+            verification = null;
+        }
+        return { ...rest, Verification: verification };
+    };
+
+    const importAudit = ({ req, eventType, transport, targetSystem, previousStatus, row, message }) => appendAuditEvent({
+        Timestamp: new Date().toISOString(),
+        EventType: eventType,
+        Severity: row.ImportStatus === 'IMPORT_FAILED' ? 'WARN' : 'INFO',
+        ObjectType: 'TransportRequests',
+        ObjectName: `${transport.TransportRequestId} on ${targetSystem.displayName}`,
+        ObjectId: transport.ID,
+        UserId: req.user?.id || '',
+        Source: 'PublicService',
+        Message: String(message || ''),
+        BeforeValue: previousStatus || '',
+        AfterValue: row.ImportStatus || ''
+    });
+
+    this.on('verifyTransportImport', async (req) => {
+        const { transport, targetSystem } = await loadTransportAndFollowOn(req, req.data);
+        const manifest = transport.plan_ID ? await manifestForPlan(transport.plan_ID) : null;
+
+        let readers;
+        if (shouldMockSap()) {
+            readers = mockReaders({ transport });
+        } else {
+            if (!targetSystem.destinationName) {
+                return req.reject(400, `${targetSystem.displayName} has no BTP destination - record the import by hand instead.`);
+            }
+            const { fetchTransportStatus, fetchRolesByName } = require('./utils/s4-fiori-adapter.js');
+            readers = {
+                readTransportStatus: ({ targetSystem: system, trkorr }) => fetchTransportStatus({ targetSystem: system, trkorr, req }),
+                readRoles: ({ targetSystem: system, roleNames }) => fetchRolesByName({ targetSystem: system, roleNames, req })
+            };
+        }
+
+        const result = await verifyTransportImport({ transport, targetSystem, manifest, readers });
+        const { previousStatus, row } = await upsertTransportImport({
+            transport, targetSystem, fields: importRowFrom({ result, checkedBy: req.user?.id })
+        });
+        await importAudit({
+            req, eventType: 'TRANSPORT_IMPORT_CHECKED', transport, targetSystem, previousStatus, row, message: result.importStatus.detail
+        });
+        return JSON.stringify({ Import: importView(row), TransportStatus: result.transportStatus.row || null, Verification: result.verification });
+    });
+
+    this.on('recordTransportImport', async (req) => {
+        const status = String(req.data.status || '').trim().toUpperCase();
+        if (!RECORDABLE_IMPORT_STATUSES.includes(status)) {
+            return req.reject(400, `status must be one of ${RECORDABLE_IMPORT_STATUSES.join(', ')}.`);
+        }
+        const { transport, targetSystem } = await loadTransportAndFollowOn(req, req.data);
+        const { previousStatus, row } = await upsertTransportImport({
+            transport, targetSystem, fields: operatorRowFrom({ status, note: req.data.note, checkedBy: req.user?.id })
+        });
+        await importAudit({
+            req, eventType: 'TRANSPORT_IMPORT_RECORDED', transport, targetSystem, previousStatus, row, message: row.Note || ''
+        });
+        return JSON.stringify({ Import: importView(row) });
+    });
+
+    this.on('readTransportImport', async (req) => {
+        const { transportId, targetSystemId } = req.data;
+        const row = await SELECT.one.from('adops.db.TransportImports')
+            .where({ transport_ID: transportId, targetSystem_ID: targetSystemId });
+        return JSON.stringify({ Import: importView(row) });
     });
 
     // --- Operator decisions on steps (S5) ----------------------------------------
@@ -1038,21 +1197,9 @@ module.exports = cds.service.impl(async function () {
     });
 
     this.on('readActivationManifest', async (req) => {
-        const { planId } = req.data;
-        const plan = await SELECT.one.from('adops.db.ActivationPlans').where({ ID: planId });
-        if (!plan) return req.reject(404, 'Activation plan not found.');
-        const steps = await SELECT.from('adops.db.ActivationSteps')
-            .where({ plan_ID: planId }).orderBy('SequenceNo asc');
-        const wave = plan.wave_ID ? await SELECT.one.from('adops.db.AdoptionWaves').where({ ID: plan.wave_ID }) : null;
-        const targetSystem = plan.targetSystem_ID
-            ? await SELECT.one.from('adops.db.TargetSystems').where({ ID: plan.targetSystem_ID })
-            : null;
-        const transport = plan.transportRequest_ID
-            ? await SELECT.one.from('adops.db.TransportRequests').where({ ID: plan.transportRequest_ID })
-            : null;
-
-        const { buildActivationManifest, renderManifestMarkdown } = require('./utils/activation-manifest.js');
-        const manifest = buildActivationManifest({ plan, steps, wave, targetSystem, transport });
+        const manifest = await manifestForPlan(req.data.planId);
+        if (!manifest) return req.reject(404, 'Activation plan not found.');
+        const { renderManifestMarkdown } = require('./utils/activation-manifest.js');
         return JSON.stringify({ Manifest: manifest, Markdown: renderManifestMarkdown(manifest) });
     });
 

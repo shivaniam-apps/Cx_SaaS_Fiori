@@ -47,6 +47,9 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 
 - I28 (2026-09-17) A9 CAP side passes P_TopUsers / P_MinExecutions to the usage entity whenever $metadata declares them, which is the CAP half of S6; scheduling should verify on RD1 and close S6 instead of re-implementing it.
 - I29 (2026-09-17) docu/15 target-system onboarding (A10) must include "run ZADO_CFG_INIT in every productive client" and the check that the connection verdict reports the pseudonym secret as configured (add a SystemInfo field for it in the usage service).
+- I30 (2026-09-18) S10 reads import evidence from E070 on the follow-on system but not the tp return code (RC 4/8/12): TMS_MGR_READ_TRANSPORT_HISTORY / the ALOG surface is not RD1-verified. Add it to ZADO_PROBE_APIS, then let ZADO_C_TRANSPORT_STATUS carry ImportReturnCode / ImportedAt so IMPORT_FAILED no longer depends on an operator record.
+- I31 (2026-09-18) Verification kinds that stay MANUAL for lack of a read-unit entity: ICF node active (ICFSERVICE), OData service active (/IWFND/ tables), space / page existence (/UI2/ FDM tables from the S3 probe), task-list run (STC session). One read-only custom entity per family in ZADO_USAGE_SRV would let verifyTransportImport close the whole manifest; the space/page one depends on the S3 part 2 probe output.
+- I32 (2026-09-18) The Transports page verifies against any registered system but the request's source; a landscape link (DEV -> QAS -> PRD route per tenant) on TargetSystems would preselect the right follow-on system and let the import status roll up per route. Ties in with the O6 landscape page.
 
 ## Parked
 
