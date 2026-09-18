@@ -5,10 +5,10 @@ import MemberGate from '../components/MemberGate.jsx';
 import AppErrorBoundary from '../components/AppErrorBoundary.jsx';
 import { trackPageView, measureRouteRender } from '../services/telemetryService.js';
 import DashboardPage from '../pages/DashboardPage.jsx';
-import PlaceholderPage from '../pages/PlaceholderPage.jsx';
 import TargetSystemsPage from '../pages/TargetSystemsPage.jsx';
 import ExtractionsPage from '../pages/ExtractionsPage.jsx';
 import UsageInsightPage from '../pages/UsageInsightPage.jsx';
+import LandscapePage from '../pages/LandscapePage.jsx';
 import ProposalsPage from '../pages/ProposalsPage.jsx';
 import AdoptionWavesPage from '../pages/AdoptionWavesPage.jsx';
 import TransportsPage from '../pages/TransportsPage.jsx';
@@ -29,7 +29,7 @@ function AppRoutes({ userInfo }) {
       <Route path="/systems/:systemId?" element={<TargetSystemsPage />} />
       <Route path="/extractions/:extractionId?" element={<ExtractionsPage />} />
       <Route path="/usage/:view?" element={<UsageInsightPage />} />
-      <Route path="/landscape/:view?" element={<PlaceholderPage title="User & Role Landscape" phase="Phase 2" />} />
+      <Route path="/landscape/:view?" element={<LandscapePage />} />
       <Route path="/proposals/:proposalId?" element={<ProposalsPage />} />
       <Route path="/waves/:waveId?" element={<AdoptionWavesPage />} />
       <Route path="/activation/:planId?" element={<ActivationPlansPage />} />

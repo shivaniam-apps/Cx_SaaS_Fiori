@@ -114,6 +114,44 @@ export async function queryTransactionUsers(extractionRunId, transactionCode) {
   });
 }
 
+// --- User & Role Landscape (S8 inventory) -----------------------------------
+// Bounded, server-filtered, server-sorted pages plus server-side groupby for
+// the KPI strip. `filter` is a ready $filter expression scoped to one
+// extraction run (features/landscape/landscapeModel). The page never reads
+// an inventory table without a run scope.
+
+const INVENTORY_ENTITIES = new Set(['UserInventory', 'RoleInventory', 'RoleUsers', 'RoleTransactions']);
+
+function inventoryEntity(entity) {
+  if (!INVENTORY_ENTITIES.has(entity)) throw new Error(`Unknown inventory entity: ${entity}`);
+  return entity;
+}
+
+export async function queryInventoryPage(entity, { filter, orderby, top = 100, skip = 0, select } = {}) {
+  const query = Object.entries({
+    $select: select,
+    $filter: filter,
+    $orderby: orderby,
+    $top: String(top),
+    $skip: skip ? String(skip) : '',
+    $count: 'true'
+  })
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+  const response = await http.get(`/fiori/${inventoryEntity(entity)}?${query}`);
+  const items = unwrapOData(response.data);
+  return { items, count: Number(response.data?.['@odata.count'] ?? items.length) };
+}
+
+// Counts per distinct value of `field` over the same filter scope as the
+// list: [{ <field>: value, count: n }].
+export async function queryInventoryGroups(entity, filter, field) {
+  const apply = `filter(${filter})/groupby((${field}),aggregate($count as count))`;
+  const response = await http.get(`/fiori/${inventoryEntity(entity)}?$apply=${encodeURIComponent(apply)}`);
+  return unwrapOData(response.data);
+}
+
 // --- Proposals ---------------------------------------------------------------
 
 export async function listAnalysisRuns() {

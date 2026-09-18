@@ -38,6 +38,7 @@ import '@ui5/webcomponents-icons/dist/navigation-down-arrow.js';
 import '@ui5/webcomponents-icons/dist/feedback.js';
 import '@ui5/webcomponents-icons/dist/message-error.js';
 import '@ui5/webcomponents-icons/dist/workflow-tasks.js';
+import '@ui5/webcomponents-icons/dist/information.js';
 import '@ui5/webcomponents-icons/dist/cargo-train.js';
 import '@ui5/webcomponents-icons/dist/edit.js';
 import '@ui5/webcomponents-icons/dist/synchronize.js';
