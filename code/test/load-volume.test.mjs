@@ -17,9 +17,14 @@
 import { expect } from 'chai';
 import { writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { cds, test, as, json, expectInMemoryDb, fixtures } from './helpers/cds-http-test.mjs';
 
+const require = createRequire(import.meta.url);
+
 const { INSERT, DELETE } = cds.ql;
+const { indexStatements } = require('../db/indexes.js');
+const WITH_INDEXES = process.env.ADOPTOPS_LOAD_INDEXES !== '0';
 const F = fixtures('LOAD');
 const SCALE = Math.max(1, Number(process.env.ADOPTOPS_LOAD_SCALE) || 1);
 const BUDGET_MS = Number(process.env.ADOPTOPS_LOAD_BUDGET_MS) || (SCALE >= 10 ? 3000 : 1000);
@@ -108,6 +113,10 @@ describe(`enterprise-volume load (scale ${SCALE}, budget ${BUDGET_MS} ms)`, func
 
   before(async () => {
     expectInMemoryDb();
+    // The deployer and the local refresh create these; the test database
+    // gets them the same way so the numbers describe the product as shipped.
+    // ADOPTOPS_LOAD_INDEXES=0 measures the tables without them.
+    if (WITH_INDEXES) for (const statement of indexStatements()) await cds.db.run(statement);
     const started = Date.now();
     const system = await test.axios.post('/fiori/TargetSystems', {
       displayName: F.name('Load DEV'), destinationName: F.destination('DEV'), systemId: 'LOD', client: '100', environment: 'DEV'
@@ -202,7 +211,7 @@ describe(`enterprise-volume load (scale ${SCALE}, budget ${BUDGET_MS} ms)`, func
       `| Read | Rows | p50 ms | p95 ms | max ms |`, '|---|---|---|---|---|',
       ...results.map((r) => `| ${r.label} | ${r.rows} | ${r.p50} | ${r.p95} | ${r.max} |`),
       '',
-      `scale ${SCALE}: ${VOLUME.tcodes} transactions, ${VOLUME.users} users, ${VOLUME.userTcodeRows} user x transaction rows, ${VOLUME.roles} roles, ${VOLUME.roleUsers} assignments, ${VOLUME.roleTcodes} role transactions, ${VOLUME.proposals} proposals; seeded in ${seedMs} ms; ${CONCURRENCY} concurrent x ${ROUNDS} rounds per read; budget ${BUDGET_MS} ms.`
+      `scale ${SCALE}, indexes ${WITH_INDEXES ? 'on' : 'off'}: ${VOLUME.tcodes} transactions, ${VOLUME.users} users, ${VOLUME.userTcodeRows} user x transaction rows, ${VOLUME.roles} roles, ${VOLUME.roleUsers} assignments, ${VOLUME.roleTcodes} role transactions, ${VOLUME.proposals} proposals; seeded in ${seedMs} ms; ${CONCURRENCY} concurrent x ${ROUNDS} rounds per read; budget ${BUDGET_MS} ms.`
     ].join('\n');
     // cds.test captures console output; stdout and an optional report file get the table.
     process.stdout.write(`${summary}\n`);
