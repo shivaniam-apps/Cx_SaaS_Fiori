@@ -127,11 +127,22 @@ async function main() {
   if (!open.length) throw new Error('No open proposals were generated; nothing to approve.');
 
   // 5. Wave + approvals + membership.
-  const stamp = `${isoDate(new Date())} ${new Date().toISOString().slice(11, 16)}`;
-  const wave = await call('POST', '/fiori/createAdoptionWave', {
-    targetSystemId: system.ID, name: `Seed wave ${stamp}`, description: 'Seeded by scripts/seed-dev.mjs (mock mode).',
-    targetDate: isoDate(new Date(Date.now() + 30 * 86400000)), adoptLabelled: false
-  });
+  // Wave names are unique per system (409 otherwise): stamp to the second
+  // and, should two seeds still collide, retry with a counter suffix.
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  let wave = null;
+  for (let attempt = 0; attempt < 5 && !wave; attempt += 1) {
+    const name = `Seed wave ${stamp}${attempt ? ` #${attempt + 1}` : ''}`;
+    try {
+      wave = await call('POST', '/fiori/createAdoptionWave', {
+        targetSystemId: system.ID, name, description: 'Seeded by scripts/seed-dev.mjs (mock mode).',
+        targetDate: isoDate(new Date(Date.now() + 30 * 86400000)), adoptLabelled: false
+      });
+    } catch (error) {
+      if (!/409/.test(error.message)) throw error;
+    }
+  }
+  if (!wave) throw new Error('Could not find a free wave name for the seed.');
   const chosen = open.slice(0, APPROVE);
   for (const proposal of chosen) {
     await call('POST', '/fiori/approveProposal', { proposalId: proposal.ID, notes: 'Approved by seed-dev', targetWave: wave.Name });
