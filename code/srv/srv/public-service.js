@@ -7,11 +7,13 @@ const { shouldMockSap } = require('./utils/s4-http-client.js');
 const { enqueueTask } = require('./utils/task-runner.js');
 const { appendAuditEvent } = require('./utils/audit-chain.js');
 const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
+const { registerTargetSystemValidation } = require('./utils/target-system-validation.js');
 const { shapeDashboardSummary, bucketStatuses } = require('./utils/dashboard-summary.js');
 
 module.exports = cds.service.impl(async function () {
     registerTenantScope(this);
     registerIdentifiedUsageAudit(this);
+    registerTargetSystemValidation(this);
 
     // --- Connectivity / discovery ------------------------------------------
 

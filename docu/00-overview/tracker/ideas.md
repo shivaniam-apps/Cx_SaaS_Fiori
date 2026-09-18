@@ -11,7 +11,7 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I3 (2026-09-16) The hardcoded catalog in `shipped-overlay-catalog.js` (42 rows) needs an owner for content verification of the F-numbers regardless of PO-1.
 - I4 (2026-09-16) Worktrees share `node_modules` via junctions; a branch that changes dependencies must run `npm ci` locally. Consider a `worktree.mjs doctor` command that detects lockfile drift between a worktree and the primary checkout.
 - I5 (2026-09-16) `cds serve --watch` children stop serving HTTP after a reload on this machine; root cause unknown (cds-dk 8.9). Investigate or document a supported restart shortcut.
-- I6 (2026-09-16) Two "RD1 Development" target-system rows exist in the local dev sqlite (pre-existing); decide whether Target Systems should enforce unique destinationName per tenant.
+- I6 (2026-09-16) Two "RD1 Development" target-system rows exist in the local dev sqlite (pre-existing); decide whether Target Systems should enforce unique destinationName per tenant. -> promoted to O11 (2026-09-18)
 - I7 (2026-09-16) Activation Runs list: KPI cards could act as status filters once the run query accepts a status parameter (same server expression for card and slice). -> promoted to O10 (run status filters)
 - I8 (2026-09-16) Audit chain proves internal consistency, not completeness: a DBA can truncate the tail and rewind AuditChainHeads undetected. Anchor the latest Hash externally (BTP Audit Log service, T3) or publish a periodic checkpoint.
 - I9 (2026-09-16) Subscription purge (T2) vs. append-only AuditEvents: the database guard refuses DELETE; decide whether a tenant's audit rows are exported-then-purged or retained under a legal hold, and give the purge an explicit bypass.
@@ -54,6 +54,8 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I33 (2026-09-18) The Transports page verifies against any registered system but the request's source; a landscape link (DEV -> QAS -> PRD route per tenant) on TargetSystems would preselect the right follow-on system and let the import status roll up per route. Ties in with the O6 landscape page.
 - I35 (2026-09-18) `safeResponseData` in s4-http-client.js masks secret-shaped fields with a regex that stops at the first space, so `"authorization":"Bearer abc"` becomes `"authorization":"*** abc"` and the token itself survives into connection-check messages and logs. Mask to the closing quote (or the value end) instead; pinned as a known gap in s4-http-client-helpers.test.mjs. Belongs to T6.
 - I41 (2026-09-18) A full-page load of a deep link (for example /audit-log, /transports) renders the Dashboard although location.pathname is the deep link; the page appears only after a side-navigation click. Bookmarks and shared links therefore open the cockpit. Seen on the Vite dev server with mocked auth while verifying A13; check AdopsShell's initial navigation / route guard (overview workstream).
+
+- I41 (2026-09-18) The HTTP test suites share one in-memory db per mocha process (cds-http-test.mjs), so fixtures collide across suites: audit-chain and public-service-auth both registered destination RD1_DEV and the O11 uniqueness rule exposed it; dashboard-summary asserts deltas against a baseline for the same reason. Give each suite a distinct fixture prefix (or a per-suite tenant via the tenant-scope middleware pattern) as a convention in the helper comment, and consider a shared fixture module.
 
 ## Parked
 

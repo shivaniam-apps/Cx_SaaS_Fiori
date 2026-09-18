@@ -176,7 +176,7 @@ Target Systems page (Administrator), "New target system":
 | Field | Value |
 |---|---|
 | Display name | what users see, e.g. "RD1 Development" |
-| BTP destination name | exactly the destination name from step 5 |
+| BTP destination name | exactly the destination name from step 5. One destination identifies one system and client, so AdoptOps refuses a second target system on a destination that is already registered in the tenant (edit the existing system instead) |
 | SAP system ID | `RD1` |
 | Client | `100` |
 | Environment | `DEV`, `QAS`, `PRD` or `SANDBOX`. This decides the activation semantics: plans execute only against `DEV` and `SANDBOX`, and Test Connection expects the write unit unpublished on `QAS` and `PRD` |

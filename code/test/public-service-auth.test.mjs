@@ -23,7 +23,9 @@ describe('PublicService write authorization', function () {
 
     // Admin registers the target system every other check hangs off.
     const created = await test.axios.post('/fiori/TargetSystems', {
-      displayName: 'RD1 Development', destinationName: 'RD1_DEV', systemId: 'RD1', client: '100', environment: 'DEV'
+      // Distinct destination: the audit-chain suite registers RD1_DEV in the
+      // same in-memory db, and a destination is unique per tenant (O11).
+      displayName: 'RD1 Development', destinationName: 'RD1_DEV_AUTH', systemId: 'RD1', client: '100', environment: 'DEV'
     }, json('alice'));
     expect(created.status, JSON.stringify(created.data)).to.equal(201);
     systemId = created.data.ID;
