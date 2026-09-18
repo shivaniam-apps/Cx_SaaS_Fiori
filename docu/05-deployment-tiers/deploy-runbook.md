@@ -191,7 +191,7 @@ the next deployment overwrites it.
 |---|---|---|
 | `ADOPTOPS_TIER` | `basic` | tier; `basic` registers the subscription callbacks |
 | `ADOPTOPS_DB_MODE` | `postgres` | persistence; never change in CF |
-| `CORS_ORIGINS` | approuter URL | allowed browser origins; dev adds the local client ports |
+| `CORS_ORIGINS` | approuter URL (mtaext); local port slots 5273/5283/5293/5303/5313 when unset | allowed browser origins; the server warns when it is unset in CF or under the production profile |
 | `ADOPTOPS_S4_SERVICE_ROOT` | `/sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001` | default ZADO usage service root; a target system can override it |
 | `ADOPTOPS_TASK_CONCURRENCY` | `2` | background tasks claimed per server instance |
 | `ADOPTOPS_TASK_HEARTBEAT_MS` | `5000` | worker heartbeat |
@@ -208,8 +208,11 @@ Never set in Cloud Foundry: `ADOPTOPS_MOCK_S4`, `ADOPTOPS_S4_URL_OVERRIDES`,
 `ADOPTOPS_S4_DIRECT_USER`, `ADOPTOPS_S4_DIRECT_PASSWORD`,
 `ADOPTOPS_S4_DIRECT_INSECURE_TLS` (development conveniences, see
 [docu/06 direct access](../06-s4-integration/direct-access.md)) and
-`ADOPTOPS_S4_DESTINATION` (there is no default destination in CF; every
-target system carries its own).
+`ADOPTOPS_S4_DESTINATION` (there is no default destination; every target
+system carries its own). Since S11 the server **refuses to start** in a CF
+instance (`VCAP_APPLICATION` present) when one of the conveniences is set
+and logs which variable; a wrong `.mtaext` therefore fails the deployment
+instead of routing a tenant's S/4 calls somewhere unexpected.
 
 ## 11. Secrets
 

@@ -8,6 +8,7 @@ const { currentTier } = require('./utils/tier.js');
 const { checkReadiness } = require('./utils/readiness.js');
 
 const STARTUP_LOG = cds.log('startup');
+const { assessStartupConfig, corsOriginsFrom } = require('./utils/config-hardening.js');
 
 // Keep in sync with the client contract in
 // app/adops-client/src/features/telemetry/correlation.js.
@@ -42,12 +43,22 @@ cds.on('bootstrap', async (app) => {
         } catch (error) {
             STARTUP_LOG.warn(`Unable to resolve Connectivity proxy details: ${error.message}`);
         }
+
+        // S11: development conveniences (direct S/4 access, mock S/4) are
+        // warned about everywhere and refused in a Cloud Foundry instance.
+        const config = assessStartupConfig({ env: process.env, profiles: cds.env?.profiles });
+        for (const finding of config.findings) {
+            if (finding.level === 'refuse') STARTUP_LOG.error(finding.message);
+            else STARTUP_LOG.warn(finding.message);
+        }
+        if (config.refused) {
+            throw new Error(`Refusing to start: ${config.findings.filter((f) => f.level === 'refuse').map((f) => f.variable).join(', ')} set in Cloud Foundry (see docu/05 deploy-runbook, "Never set in Cloud Foundry").`);
+        }
     }
 
-    const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean);
+    // CORS_ORIGINS, or the local client port slots (5273 primary, 5283/5293/
+    // 5303/5313 worktrees) when unset - never Vite's stock 5173.
+    const allowedOrigins = corsOriginsFrom(process.env.CORS_ORIGINS);
 
     // Adopt (or mint) the correlation id before CAP's own correlate middleware
     // runs, and echo it on the response so the frontend can show users the id
