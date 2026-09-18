@@ -47,10 +47,10 @@ INITIALIZATION.
   " 13 when unset) up to today.
   p_to = sy-datum.
   DATA(lv_months) = zcl_ado_cfg=>collect_months( ).
-  p_from = CONV d( |{ sy-datum(6) }01| ).
+  p_from = |{ sy-datum(6) }01|.
   DO lv_months - 1 TIMES.
     DATA(lv_prev) = CONV d( p_from - 1 ).
-    p_from = CONV d( |{ lv_prev(6) }01| ).
+    p_from = |{ lv_prev(6) }01|.
   ENDDO.
   DATA(lv_reten) = zcl_ado_cfg=>snapshot_retention_months( ).
   IF lv_reten >= 0.
