@@ -87,7 +87,7 @@ Browser ──(XSUAA login, approuter)──▶ adops-basic-srv ──(destinati
   (docu/15 step 3). The add-on ships the RFC authorization
   `Z_ADO_ACT_EXEC_STEP` (`abap/src/activate/*.sush.xml`) for the dispatcher;
   the confirmed object list per user is derived from an ST01 trace during
-  onboarding and recorded here once RD1 has run it (open, see finding 4).
+  onboarding and recorded here once RD1 has run it (open, see finding 6).
 - `ZADO_USAGE` never depends on `ZADO_ACTIVATE`, so the PROD install carries
   no write capability.
 - Every activation step is one commit, verify-first, with the initiating
