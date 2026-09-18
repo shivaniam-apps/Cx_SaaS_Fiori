@@ -116,7 +116,7 @@ What GA then adds (Milestone 3): flipping `multitenancy` on for the profile, ten
 - **Weeks 1-2:** A alone on A1-A8; S starts S2 (no infra dependency); O does O4, O5.
 - **Week 3+:** S on S3/S4; O on O1-O3 after A3/A4 reach `main`; A on A9-A11.
 - **Shared contracts to land on `main` first:** A3 (CDS restrictions change what the client may write), A4 (AuditEvents shape), S2 (ObjectKeyJson). Consumers listed in `.claude/rules/architecture.md` must be checked before each.
-- ABAP work always starts in `a4h_2023_zado`, is smoke-tested on RD1 DEV/100, then mirrored wholesale into `abap/src` (the mirror drifted once already).
+- ABAP changes start and are merged in `a4h_2023_zado` and are smoke-tested on RD1 DEV/100. `abap/src` is a reference copy, not a delivery path (the add-on reaches a system only through abapGit from the ABAP repository): update the two files the contract test reads (`zcl_ado_activate.clas.abap`, `zado_activate_smoke.prog.abap`) in the same PR that changes a step type or key shape, and re-sync wholesale only at milestones (release, pilot hand-over). (Until 2026-09-18 every ABAP change was mirrored wholesale; nine mirror PRs later the only consumer turned out to be that one test.)
 
 ## Product-owner decisions needed
 
