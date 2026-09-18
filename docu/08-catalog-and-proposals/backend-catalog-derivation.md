@@ -55,14 +55,14 @@ Published on every environment like the usage read unit; read-only.
 
 | Field | Source (to confirm with the probe) |
 |---|---|
-| `FioriId` | IAM app repository (`/IAM/I_APPL*`), the F-number |
-| `AppTitle`, `AppSubtitle` | `/IAM/I_APPL_T` |
-| `AppType` (SAPUI5 / WDA / GUI / WEBCLIENT / URL), `AppCategory` | IAM app type |
+| `FioriId` | PFCG app nodes: `AGR_BUFFI.URL` = `OTSERVICE <FioriId> TR` under a `CAT_PROVIDER` folder (probe round 2) |
+| `AppTitle`, `AppSubtitle` | `AGR_HIERT.TEXT` of the app node; `O2APPLT.TEXT` of the BSP |
+| `AppType` (SAPUI5 / WDA / GUI / WEBCLIENT / URL), `AppCategory` | target mapping of the app (round 3) |
 | `SemanticObject`, `SemanticAction` | target mapping of the app |
-| `IamAppId`, `UI5ComponentName`, `BspApplication` | IAM app / `O2APPL` |
+| `IamAppId`, `UI5ComponentName`, `BspApplication` | target mapping / SU22 data of the app id (round 3); `O2APPL` for the BSP inventory. `IamAppId` stays empty (the `/IAM/` assumption was wrong) |
 | `TechnicalCatalogId`, `BusinessCatalogId`, `BusinessGroupId`, `BusinessRoleId` | CDM3 catalog tables, `AGR_HIER` of `SAP_BR_*` roles |
 | `ODataServicesJson` `[{service, version, active}]`, `ServiceActivationState` | `/IWFND/` service registry |
-| `IcfNodeState` | `ICFSERVICE.ICF_NOACT` of `/sap/bc/ui5_ui5/sap/<bsp>` (verified on RD1) |
+| `IcfNodeState` | `ICFSERVICE.ICF_NOACT` where `ICF_NAME = to_upper( bsp )` (verified on RD1, round 2) |
 | `UiComponentState` | `TADIR` WAPA presence |
 | `Availability` | may be left empty; CAP applies the rule above |
 | `MinS4Release` | optional |
@@ -111,11 +111,37 @@ Consequences for the readers:
   CDM3 content sits under `/UI2/FLPRT*` / `/UI2/PB*` / `/UI2/CHIP*`
   (round 2 dumps the field lists).
 
+## Probe findings, round 2 (RD1/100, 2026-09-18)
+
+Raw output: [probe-catalog-rd1-100-round2-2026-09-18.txt](probe-catalog-rd1-100-round2-2026-09-18.txt).
+
+- **Correction:** the empty space / page tables are not a client-400 effect.
+  They have no client column and are empty in client 100 too; RD1 has no
+  spaces or pages and runs the CLASSIC launchpad runtime. `LaunchpadContent`
+  on RD1 is therefore catalogs and groups, read from PFCG and the
+  page-builder tables, not from `/UI2/STHEAD`.
+- **`FioriId` source:** TADIR `UIAD` names are GUIDs, so not TADIR. PFCG
+  carries the id: a `CAT_PROVIDER` folder (catalog id in `AGR_BUFFI.URL`,
+  `X-SAP-UI2-CATALOGPAGE:<catalog>?...`) with child nodes `REPORT = SERVICE`
+  whose URL reads `OTSERVICE <FioriId> TR`. 6468 such nodes across the
+  `SAP_BR_*` roles. `FioriId`, `AppTitle` (`AGR_HIERT`), `BusinessCatalogId`,
+  `BusinessRoleId` and the group (`sap-ui2-group:<id>`) come from there.
+- **`IcfNodeState`:** `ICFSERVICE.ICF_NAME` is upper case
+  (`ORIG_NAME` lower); compare `to_upper( bsp )`, `ICF_NOACT` is the flag.
+- **`ServiceActivationState`:** `/IWFND/I_MED_SRH` (`SERVICE_NAME`,
+  `SERVICE_VERSION`, `IS_ACTIVE`) or `/IWFND/CL_MGW_ACTIVATION_API=>IS_ACTIVE`;
+  client-specific alias rows in `/IWFND/C_MGDEAM`. V4: `/IWBEP/I_V4_MSRV`.
+- **Still open (round 3):** app id -> BSP application and app id -> OData
+  services. Candidates: the SU22 data of the app id (`USOBT` `S_SERVICE`
+  values resolved through `USOBHASH`) and the classic page-builder tables
+  (`/UI2/PB_C_PAGEM` catalogs, `/UI2/PB_C_CHIPM` tiles, `/UI2/PB_C_TMM` target
+  mappings). `/UI2/PB_C_PAGE` is keyed by `ID`, not `PAGE_ID`.
+
 ## Operator steps for part 2 (RD1 DEV/100)
 
-Round 2 of the probe (`ZADO_PROBE_CATALOG` section 7, `ZADO_PROBE_ACTIVATION`
-section 3b) must run in **client 100**; client 400 is the unit-test client
-without launchpad content.
+Round 3 of the probe (`ZADO_PROBE_CATALOG` section 8, `ZADO_PROBE_ACTIVATION`
+section 3c) runs in client 100: roles, alias assignments and the customizing
+layer are client-dependent, everything else it reads is cross-client.
 
 
 1. Run `ZADO_PROBE_CATALOG` (SE38) with a known BSP application and one

@@ -64,6 +64,7 @@ CLASS lcl_probe DEFINITION FINAL.
     METHODS class_methods IMPORTING iv_class TYPE string
                                     iv_max   TYPE i DEFAULT 40.
     METHODS probe_round_two.
+    METHODS probe_round_three.
     " Generic, dynamic row dump: table name and WHERE clause as strings,
     " so a wrong column or table name is reported, never a syntax error.
     METHODS dump_rows IMPORTING iv_table TYPE string
@@ -84,6 +85,7 @@ CLASS lcl_probe IMPLEMENTATION.
     probe_launchpad_content( ).
     probe_role_catalog_link( ).
     probe_round_two( ).
+    probe_round_three( ).
     manual_follow_ups( ).
     section( 'END OF PROBE' ).
   ENDMETHOD.
@@ -245,6 +247,51 @@ CLASS lcl_probe IMPLEMENTATION.
     dump_rows( iv_table = '/IWBEP/I_V4_MSRV' iv_where = |SERVICE_ID LIKE 'ZADO%'| iv_max = p_rows ).
     line( |  V2 services active in this client (/IWFND/C_MGDEAM): { count_rows( iv_table = '/IWFND/C_MGDEAM' iv_where = '' ) } (8 in client 400)| ).
     dump_rows( iv_table = '/IWFND/I_MED_SRH' iv_where = |SRV_IDENTIFIER LIKE 'SD_SO%' OR SRV_IDENTIFIER LIKE 'C_SALESORDER%'| iv_max = p_rows ).
+  ENDMETHOD.
+
+  METHOD probe_round_three.
+    " Round 3 (from the RD1/100 round-2 output of 2026-09-18). UIAD names are
+    " GUIDs, so the app id does not come from TADIR. PFCG carries it:
+    " CAT_PROVIDER folder (catalog id in AGR_BUFFI-URL) -> child SERVICE nodes
+    " 'OTSERVICE <FioriId> TR'. Open: app id -> BSP / OData services. Two
+    " candidates: the SU22 data of the app id (USOBT/USOBHASH, S_SERVICE
+    " values) and the classic page-builder tables (/UI2/PB_C_*: catalogs are
+    " pages, target mappings TM). The FLP runtime here is CLASSIC.
+    section( '8. ROUND 3 - APP ID TO BSP / ODATA SERVICES, CATALOG TABLES' ).
+    line( |Catalog folder and its app nodes in { p_brole } (parent/child):| ).
+    dump_rows( iv_table = 'AGR_HIER'  iv_where = |AGR_NAME = '{ p_brole }' AND REPORT = 'SERVICE'| iv_max = p_rows ).
+    dump_rows( iv_table = 'AGR_HIERT' iv_where = |AGR_NAME = '{ p_brole }' AND SPRAS = '{ sy-langu }' AND OBJECT_ID BETWEEN '00000180' AND '00000200'| iv_max = 12 ).
+    line( 'SU22 data of a Fiori app id (S_SERVICE defaults name the OData services):' ).
+    field_list( 'USOBHASH' ).
+    field_list( 'USOBT' ).
+    dump_rows( iv_table = 'USOBT' iv_where = |NAME = 'F1873' AND OBJECT = 'S_SERVICE'| iv_max = p_rows ).
+    dump_rows( iv_table = 'USOBT' iv_where = |NAME = 'F0029'| iv_max = p_rows ).
+    dump_rows( iv_table = 'USOBHASH' iv_where = |OBJ_NAME LIKE '%SD_F1873%' OR OBJ_NAME LIKE '%F1873%'| iv_max = p_rows ).
+    dump_rows( iv_table = 'USOBHASH' iv_where = |TYPE = 'IWSG'| iv_max = 4 ).
+    dump_rows( iv_table = 'USOBHASH' iv_where = |TYPE = 'IWSV'| iv_max = 4 ).
+    dump_rows( iv_table = 'USOBHASH' iv_where = |TYPE = 'HT'| iv_max = 4 ).
+    line( 'Classic page-builder content: catalogs (pages), tiles (CHIPs), target mappings (TM):' ).
+    field_list( '/UI2/PB_C_PAGEM' ).
+    field_list( '/UI2/PB_C_CHIPM' ).
+    field_list( '/UI2/PB_C_TM' ).
+    field_list( '/UI2/PB_C_TMM' ).
+    field_list( '/UI2/PB_C_PROPM' ).
+    line( |  /UI2/PB_C_PAGEM { count_rows( iv_table = '/UI2/PB_C_PAGEM' iv_where = '' ) }, /UI2/PB_C_CHIPM { count_rows( iv_table = '/UI2/PB_C_CHIPM' iv_where = '' ) }, /UI2/PB_C_TMM { count_rows( iv_table = '/UI2/PB_C_TMM' iv_where = '' ) }, /UI2/PB_C_TM { count_rows( iv_table = '/UI2/PB_C_TM' iv_where = '' ) }| ).
+    dump_rows( iv_table = '/UI2/PB_C_PAGEM' iv_where = |ID LIKE '%SAP_SD_BC_SO_DISPL%'| iv_max = 3 ).
+    dump_rows( iv_table = '/UI2/PB_C_PAGEM' iv_where = |ID LIKE '%SAP_TC_SD%'| iv_max = 3 ).
+    dump_rows( iv_table = '/UI2/PB_C_CHIPM' iv_where = |PAGE_ID LIKE '%SAP_SD_BC_SO_DISPL%'| iv_max = 3 ).
+    dump_rows( iv_table = '/UI2/PB_C_TMM'   iv_where = '' iv_max = 3 ).
+    dump_rows( iv_table = '/UI2/PB_C_TM'    iv_where = '' iv_max = 3 ).
+    line( 'Technical catalogs (TADIR UIAC, 200 entries) and one business application (UIBA):' ).
+    dump_rows( iv_table = 'TADIR' iv_where = |PGMID = 'R3TR' AND OBJECT = 'UIAC' AND OBJ_NAME LIKE 'SAP_TC_SD%'| iv_max = 4 ).
+    list_tables( '/UI2/APPDESC%' ).
+    list_tables( '/UI2/AD%' ).
+    list_tables( '/UI2/TC%' ).
+    list_tables( '/UI2/FDM%' ).
+    list_tables( '/UI2/FCM%' ).
+    line( 'V2 service of a known app and its activation row:' ).
+    dump_rows( iv_table = '/IWFND/I_MED_SRH' iv_where = |SERVICE_NAME LIKE 'SD_F1873%' OR SERVICE_NAME LIKE '%SALESORDER%MANAGE%'| iv_max = 4 ).
+    dump_rows( iv_table = '/IWFND/I_MED_SRH' iv_where = |IS_ACTIVE = 'A' AND IS_SAP_SERVICE = 'X'| iv_max = 3 ).
   ENDMETHOD.
 
   METHOD manual_follow_ups.

@@ -246,9 +246,44 @@ CLASS zcl_ado_act_role IMPLEMENTATION.
     DATA lv_fm   TYPE rs38l_fnam.
     DATA lv_used TYPE string.
     lv_role = iv_role.
+
+    " RD1 (probe round 2, 2026-09-18): PRGN_ACTIVITY_GROUP_DELETE is the
+    " deletion FM that exists - ACTIVITY_GROUP, ENQUEUE_AND_TRANSPORT,
+    " SHOW_DIALOG, DISTRIBUTE, REQUEST -> ERROR_FLAG, NEW_REQUEST, MESSAGES.
+    " No dialog, no distribution; the deletion is recorded by PFCG itself.
+    DATA lv_error_flag  TYPE char01.
+    DATA lv_new_request TYPE trkorr.
+    DATA lv_no          TYPE char01 VALUE space.
+    DATA lv_yes         TYPE char01 VALUE 'X'.
+    lv_fm = 'PRGN_ACTIVITY_GROUP_DELETE'.
+    TRY.
+        CALL FUNCTION lv_fm
+          EXPORTING
+            activity_group        = lv_role
+            enqueue_and_transport = lv_yes
+            show_dialog           = lv_no
+            distribute            = lv_no
+          IMPORTING
+            error_flag            = lv_error_flag
+            new_request           = lv_new_request
+          EXCEPTIONS
+            OTHERS                = 1.
+        lv_used = lv_fm.
+        APPEND VALUE bapiret2(
+            type    = COND #( WHEN sy-subrc = 0 AND lv_error_flag IS INITIAL THEN 'S' ELSE 'W' )
+            message = |{ lv_fm } called for { iv_role } (subrc { sy-subrc }, error flag '{ lv_error_flag }', request { lv_new_request }).| )
+          TO rs_result-messages.
+      CATCH cx_sy_dyn_call_illegal_func cx_sy_dyn_call_param_not_found cx_sy_dyn_call_illegal_type.
+        CLEAR lv_used.
+    ENDTRY.
+
+    " Older releases: the RFC-enabled variants (all MISSING on RD1).
     LOOP AT VALUE string_table( ( `PRGN_RFC_DELETE_AGR` )
                                 ( `PRGN_DELETE_AGR` )
                                 ( `PRGN_RFC_DELETE_ACTIVITY_GROUP` ) ) INTO DATA(lv_candidate).
+      IF lv_used IS NOT INITIAL.
+        EXIT.
+      ENDIF.
       lv_fm = lv_candidate.
       TRY.
           CALL FUNCTION lv_fm
@@ -271,7 +306,7 @@ CLASS zcl_ado_act_role IMPLEMENTATION.
       rs_result-status = zif_ado_act_step=>c_status-failed.
       APPEND VALUE bapiret2(
           type    = 'E'
-          message = |No role-deletion function module found (tried PRGN_RFC_DELETE_AGR, PRGN_DELETE_AGR, PRGN_RFC_DELETE_ACTIVITY_GROUP) - delete { iv_role } in PFCG and record the rollback.| )
+          message = |No role-deletion function module found (tried PRGN_ACTIVITY_GROUP_DELETE, PRGN_RFC_DELETE_AGR, PRGN_DELETE_AGR, PRGN_RFC_DELETE_ACTIVITY_GROUP) - delete { iv_role } in PFCG and record the rollback.| )
         TO rs_result-messages.
       RETURN.
     ENDIF.
