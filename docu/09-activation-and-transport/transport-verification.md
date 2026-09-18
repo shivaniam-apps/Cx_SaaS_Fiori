@@ -38,7 +38,7 @@ never to a false NOT_FOUND. The import status follows the same rule:
 | CAP | `utils/transport-verification.js` (pure: read spec per manifest entry, verdicts, counts, persisted row shapes; `verifyTransportImport` takes injected readers), `s4-fiori-adapter.js` (`fetchTransportStatus` with the 404 → `supported: false` fallback, `fetchRolesByName`), `public-service.js` actions. |
 | Data | `TransportImports`: one row per transport and follow-on system (`ImportStatus`, `Source` READ_UNIT / OPERATOR, `RequestStatus`, `ObjectCount`, `CheckedAt/By`, the verification counts and `VerificationJson`). `TransportRequests.imports` composes them. |
 | Audit | `TRANSPORT_IMPORT_CHECKED` and `TRANSPORT_IMPORT_RECORDED` on the hash chain, before/after = previous/new `ImportStatus`, WARN severity on `IMPORT_FAILED`. |
-| Client | Transports page: **Imports** column (status per follow-on system, source, stamp, verdict counts), **Verify** (released requests; picks a follow-on system, shows the last persisted verdicts, "Verify now" runs the reads), **Record import** (Activator; the runbook outcome with a note). Pure model in `features/transports/transportModel.js`. |
+| Client | Transports page: **Imports** column (status per follow-on system, source, stamp, verdict counts), **Verify** (released requests; preselects the next hop of the tenant's transport route configured on Target Systems (`followOnSystem`, DEV -> QAS -> PRD) that has no import row yet, falling back to environment order without a route; shows the last persisted verdicts, "Verify now" runs the reads; the System column shows the route per request), **Record import** (Activator; the runbook outcome with a note). Pure model in `features/transports/transportModel.js`. |
 
 ## API
 

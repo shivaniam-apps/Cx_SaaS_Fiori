@@ -181,6 +181,7 @@ Target Systems page (Administrator), "New target system":
 | Client | `100` |
 | Environment | `DEV`, `QAS`, `PRD` or `SANDBOX`. This decides the activation semantics: plans execute only against `DEV` and `SANDBOX`, and Test Connection expects the write unit unpublished on `QAS` and `PRD` |
 | S/4 release | `2023` |
+| Next system in transport route | optional: the system a released request is imported into next (DEV -> QAS, QAS -> PRD). The Transports page preselects it when verifying an import and shows the route per request; leave it empty on the last system of the route |
 
 The row also carries two path overrides for systems whose bindings were
 published under other names: the usage service root (defaults to the

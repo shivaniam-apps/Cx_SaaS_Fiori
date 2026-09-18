@@ -42,7 +42,8 @@ const EMPTY_DRAFT = {
   systemId: '',
   client: '',
   environment: 'DEV',
-  s4Release: '2023'
+  s4Release: '2023',
+  followOnSystemId: ''   // next system in the transport route (O13), '' = none
 };
 
 // Rollup tag plus one badge per ZADO endpoint (usage read service,
@@ -148,7 +149,8 @@ export function TargetSystemsPage() {
       systemId: system.systemId || '',
       client: system.client || '',
       environment: system.environment || 'DEV',
-      s4Release: system.s4Release || ''
+      s4Release: system.s4Release || '',
+      followOnSystemId: system.followOnSystem_ID || ''
     });
     setDialogOpen(true);
   };
@@ -185,7 +187,8 @@ export function TargetSystemsPage() {
           systemId: draft.systemId,
           client: draft.client,
           environment: draft.environment,
-          s4Release: draft.s4Release
+          s4Release: draft.s4Release,
+          followOnSystem_ID: draft.followOnSystemId || null
         };
         // Changing the destination invalidates the persisted last-check
         // verdict (it was keyed on the previous destination), so clear it
@@ -205,7 +208,8 @@ export function TargetSystemsPage() {
           });
         }
       } else {
-        await createTargetSystem(draft);
+        const { followOnSystemId, ...fields } = draft;
+        await createTargetSystem({ ...fields, followOnSystem_ID: followOnSystemId || null });
       }
       closeDialog();
       setReloadToken((t) => t + 1);
@@ -272,6 +276,7 @@ export function TargetSystemsPage() {
               <TableHeaderCell><span>Role</span></TableHeaderCell>
               <TableHeaderCell><span>SID / Client</span></TableHeaderCell>
               <TableHeaderCell><span>S/4 Release</span></TableHeaderCell>
+              <TableHeaderCell><span>Next in route</span></TableHeaderCell>
               <TableHeaderCell><span>Connection</span></TableHeaderCell>
               <TableHeaderCell><span>Actions</span></TableHeaderCell>
             </TableHeaderRow>
@@ -283,6 +288,7 @@ export function TargetSystemsPage() {
               <TableCell><span>{system.environment || '—'}</span></TableCell>
               <TableCell><span>{system.systemId || '—'} / {system.client || '—'}</span></TableCell>
               <TableCell><span>{system.s4Release || '—'}</span></TableCell>
+              <TableCell><span>{systems.find((s) => s.ID === system.followOnSystem_ID)?.displayName || '—'}</span></TableCell>
               <TableCell>{connectionCell(system, verdicts)}</TableCell>
               <TableCell>
                 <div style={{ display: 'flex', gap: 'var(--adops-space-xs)' }}>
@@ -413,6 +419,15 @@ export function TargetSystemsPage() {
           </Select>
           <Label for="ts-release">S/4 release</Label>
           <Input id="ts-release" value={draft.s4Release} onInput={(e) => setDraft({ ...draft, s4Release: e.target.value })} placeholder="2023" />
+          <Label for="ts-next">Next system in transport route</Label>
+          <Select id="ts-next" accessibleName="Next system in transport route" onChange={(e) => setDraft({ ...draft, followOnSystemId: e.detail.selectedOption.dataset.value || '' })}>
+            <Option data-value="" selected={!draft.followOnSystemId}>None (end of route)</Option>
+            {(systems || []).filter((s) => s.ID !== editingId).map((s) => (
+              <Option key={s.ID} data-value={s.ID} selected={draft.followOnSystemId === s.ID}>
+                {s.displayName}{s.environment ? ` (${s.environment})` : ''}
+              </Option>
+            ))}
+          </Select>
         </div>
         <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
           <Button design="Transparent" onClick={closeDialog}>Cancel</Button>

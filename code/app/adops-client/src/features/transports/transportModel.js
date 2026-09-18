@@ -80,11 +80,42 @@ export function followOnSystemsFor(transport, systems) {
     });
 }
 
-// The first follow-on system that has no import row yet, else the first one:
-// what the Verify dialog preselects.
+// The tenant's transport route from a source system (O13): each system may
+// name its followOnSystem (DEV -> QAS -> PRD). Walks the chain, cycle-safe,
+// and never returns the source itself. Empty when no route is configured.
+export function transportRoute(sourceId, systems) {
+  const byId = new Map((systems || []).filter((s) => s?.ID).map((s) => [s.ID, s]));
+  const route = [];
+  const seen = new Set([sourceId]);
+  let current = byId.get(sourceId);
+  while (current?.followOnSystem_ID && !seen.has(current.followOnSystem_ID)) {
+    const next = byId.get(current.followOnSystem_ID);
+    if (!next) break;
+    route.push(next);
+    seen.add(next.ID);
+    current = next;
+  }
+  return route;
+}
+
+// "RD1 Development (DEV) -> RD1 Quality (QAS) -> RD1 Production (PRD)" for
+// the transport's source, '' when no route is configured.
+export function routeLabel(transport, systems) {
+  const source = (systems || []).find((s) => s?.ID === transport?.targetSystem_ID);
+  const route = transportRoute(transport?.targetSystem_ID, systems);
+  if (!source || !route.length) return '';
+  const label = (s) => `${s.displayName || s.ID}${s.environment ? ` (${s.environment})` : ''}`;
+  return [source, ...route].map(label).join(' -> ');
+}
+
+// What the Verify dialog preselects: the first system on the configured
+// route that has no import row yet (then the first hop); without a route,
+// the first follow-on system not yet checked, else the first one.
 export function defaultFollowOnSystem(transport, systems) {
-  const candidates = followOnSystemsFor(transport, systems);
   const checked = new Set((transport?.Imports || []).map((i) => i.targetSystem_ID));
+  const route = transportRoute(transport?.targetSystem_ID, systems);
+  if (route.length) return route.find((s) => !checked.has(s.ID)) || route[0];
+  const candidates = followOnSystemsFor(transport, systems);
   return candidates.find((s) => !checked.has(s.ID)) || candidates[0] || null;
 }
 

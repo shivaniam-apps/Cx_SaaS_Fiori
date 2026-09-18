@@ -872,8 +872,10 @@ module.exports = cds.service.impl(async function () {
                     'ManualCount', 'UnknownCount')
                 .where({ transport_ID: { in: transportIds } }).orderBy('CheckedAt desc')
             : [];
+        // followOnSystem_ID carries the tenant's transport route (O13); the
+        // client walks it from a request's source to preselect the next hop.
         const followOnSystems = await SELECT.from('adops.db.TargetSystems')
-            .columns('ID', 'displayName', 'environment', 'active').orderBy('displayName asc');
+            .columns('ID', 'displayName', 'environment', 'active', 'followOnSystem_ID').orderBy('displayName asc');
         const labelOf = (system) => (system ? `${system.displayName}${system.environment ? ` (${system.environment})` : ''}` : '');
         const followOnById = new Map(followOnSystems.map((s) => [s.ID, s]));
         const importsByTransport = new Map();
@@ -899,7 +901,7 @@ module.exports = cds.service.impl(async function () {
             Count: items.length,
             FollowOnSystems: followOnSystems
                 .filter((s) => s.active !== false)
-                .map((s) => ({ ID: s.ID, displayName: s.displayName, environment: s.environment || '' }))
+                .map((s) => ({ ID: s.ID, displayName: s.displayName, environment: s.environment || '', followOnSystem_ID: s.followOnSystem_ID || null }))
         });
     });
 

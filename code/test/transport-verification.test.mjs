@@ -304,6 +304,18 @@ describe('transport verification: service actions', () => {
     expect(row.Imports[0]).to.not.have.property('VerificationJson');
     expect(payload.FollowOnSystems.map((s) => s.ID)).to.include.members([devId, qasId]);
 
+    // Transport route (O13): DEV -> QAS is stored on the source system and
+    // travels with the follow-on list; self-reference and unknown targets
+    // are refused.
+    const selfRoute = await test.axios.patch(`/fiori/TargetSystems(${devId})`, { followOnSystem_ID: devId }, json('alice'));
+    expect(selfRoute.status).to.equal(400);
+    const unknownRoute = await test.axios.patch(`/fiori/TargetSystems(${devId})`, { followOnSystem_ID: '99999999-9999-4999-8999-999999999999' }, json('alice'));
+    expect(unknownRoute.status).to.equal(400);
+    const routed = await test.axios.patch(`/fiori/TargetSystems(${devId})`, { followOnSystem_ID: qasId }, json('alice'));
+    expect(routed.status, JSON.stringify(routed.data)).to.equal(200);
+    const relisted = JSON.parse((await test.axios.get(`/fiori/queryTransportRequests(targetSystemId=${devId})`, as('carol'))).data.value);
+    expect(relisted.FollowOnSystems.find((s) => s.ID === devId).followOnSystem_ID).to.equal(qasId);
+
     const read = await test.axios.get(`/fiori/readTransportImport(transportId=${transportId},targetSystemId=${qasId})`, as('carol'));
     expect(read.status).to.equal(200);
     expect(JSON.parse(read.data.value).Import.Verification.counts.verified).to.be.greaterThan(0);

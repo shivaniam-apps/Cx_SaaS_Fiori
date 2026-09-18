@@ -23,6 +23,19 @@ async function findDestinationConflict(destinationName, ownId) {
 }
 
 function registerTargetSystemValidation(service) {
+    // Transport route (O13): a system cannot be its own follow-on system,
+    // and the follow-on system must exist in the caller's tenant.
+    service.before(['CREATE', 'UPDATE'], 'TargetSystems', async (req) => {
+        const next = req.data?.followOnSystem_ID;
+        if (next === undefined || next === null || next === '') {
+            if (next === '') req.data.followOnSystem_ID = null;
+            return;
+        }
+        if (req.event === 'UPDATE' && next === rowId(req)) return req.reject(400, 'A target system cannot be its own follow-on system.');
+        const target = await SELECT.one.from(TARGET_SYSTEMS).columns('ID').where({ ID: next });
+        if (!target) return req.reject(400, 'The follow-on system does not exist.');
+    });
+
     service.before(['CREATE', 'UPDATE'], 'TargetSystems', async (req) => {
         if (!req.data || req.data.destinationName === undefined) {
             if (req.event === 'CREATE') return req.reject(400, 'destinationName is required.');

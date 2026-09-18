@@ -40,6 +40,10 @@ context adops.db {
             lastCheckStatus         : String(20);    // OK | DESTINATION | SERVICE | ACTIVATION
             lastCheckMessage        : String(500);
             lastCheckEndpointsJson  : LargeString;   // [{Endpoint, Ok, Stage, HttpStatus, Path, Transport, Message}] per ZADO endpoint
+            // Transport route (O13): the next system a released request is
+            // imported into (DEV -> QAS -> PRD per tenant). Optional; the
+            // Transports page preselects it as the verification target.
+            followOnSystem          : Association to TargetSystems;
             extractions             : Composition of many ExtractionRuns
                                             on extractions.targetSystem = $self;
       }
