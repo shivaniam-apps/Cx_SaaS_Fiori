@@ -5,6 +5,9 @@
    <BDEF>
     <NAME>ZADO_ACT_I_LOG</NAME>
     <TYPE>BDEF</TYPE>
+    <DESCRIPTION>AdoptOps activation log (Execute / Probe actions)</DESCRIPTION>
+    <LANGUAGE>EN</LANGUAGE>
+    <MASTER_LANGUAGE>EN</MASTER_LANGUAGE>
    </BDEF>
   </asx:values>
  </asx:abap>
