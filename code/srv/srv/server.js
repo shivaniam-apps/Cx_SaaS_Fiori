@@ -102,7 +102,10 @@ cds.on('bootstrap', async (app) => {
     // Basic tier subscribes via SAP SaaS Provisioning without CAP MTX; the
     // callbacks only resolve the tenant URL. Enterprise (MTX) wiring returns
     // with ER-19..ER-26.
-    if (currentTier() === 'basic') registerBasicSubscriptionRoutes(app);
+    // Every shared-database tier (basic and standard share one PostgreSQL and
+    // one saas-registry entry) answers the registry; only the enterprise tier
+    // (CAP MTX) would provision differently (T2, I39).
+    if (currentTier() !== 'enterprise') registerBasicSubscriptionRoutes(app);
 
     app.use(cov2ap());
 });

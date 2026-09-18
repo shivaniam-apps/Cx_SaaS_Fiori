@@ -8,6 +8,7 @@ const { registerTenantScope, tenantFilter } = require('./utils/tenant-scope.js')
 const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
 const { registerTargetSystemValidation } = require('./utils/target-system-validation.js');
 const { verifyAuditChain } = require('./utils/audit-chain.js');
+const { purgeTenantData } = require('./utils/subscription-lifecycle.js');
 const { listDestinations, getBtpAccountInfo, callS4Destination } = require('./utils/s4-http-client.js');
 const { checkTargetSystemConnection } = require('./utils/s4-fiori-adapter.js');
 
@@ -27,6 +28,22 @@ module.exports = cds.service.impl(async function () {
 
     // Recomputes the current tenant's hash chain (roadmap A4). Bounded by
     // paging inside verifyAuditChain; the Audit Log page (O3) shows the verdict.
+    // Subscription lifecycle (T2): the only destructive tenant operation, an
+    // explicit Admin action on an UNSUBSCRIBED tenant, confirmed by repeating
+    // the tenant id. Audit events stay; the purge itself is audited.
+    this.on('purgeTenant', async (req) => {
+        const tenantId = String(req.data?.tenantId || '').trim();
+        const confirm = String(req.data?.confirm || '').trim();
+        if (!tenantId) return req.reject(400, 'tenantId is required.');
+        if (confirm !== tenantId) return req.reject(400, 'confirm must repeat the tenant id to purge.');
+        try {
+            const result = await purgeTenantData({ tenantId, userId: req.user?.id || 'anonymous', model: this.model });
+            return JSON.stringify(result);
+        } catch (error) {
+            return req.reject(Number(error?.status) || 500, error.message);
+        }
+    });
+
     this.on('verifyAuditChain', async () => {
         if (isDatabaseLess()) {
             return {

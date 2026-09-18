@@ -23,6 +23,10 @@ service AdminService @(path : '/catalog/AdminService', impl: 'srv/admin-service'
   // srv/utils/audit-chain.js; read-only here as on PublicService.
   @readonly entity AuditEvents as projection on db.AuditEvents;
 
+  // Tenant registry (T2): written by the SaaS provisioning callbacks
+  // (basic-subscription.js), read here; the only write is purgeTenant.
+  @readonly entity Tenants as projection on db.Tenants;
+
   entity Users as select from db.Users {
     *,
     (firstName || ' ' || lastName) as fullName : String
@@ -65,6 +69,12 @@ service AdminService @(path : '/catalog/AdminService', impl: 'srv/admin-service'
   // Redacted destination catalog + subaccount info for the Settings page.
   function listBtpDestinations() returns LargeString;
   function getBtpAccountInfo() returns LargeString;
+
+  // --- Subscription lifecycle (T2) --------------------------------------------
+  // Deletes every tenantScoped row of an UNSUBSCRIBED tenant (audit events
+  // and the chain head are retained). `confirm` must repeat the tenant id.
+  // Returns { TenantId, Status, Deleted: { entity: rows }, RetainedAuditEvents }.
+  action purgeTenant(tenantId: String, confirm: String) returns LargeString;
 
   // Lax generic GET proxy: returns the payload even when S/4 answers
   // 4xx/5xx — capability and value-help reads depend on exactly that.

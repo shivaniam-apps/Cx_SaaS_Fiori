@@ -638,6 +638,24 @@ context adops.db {
       // Per-tenant secrets (A9): the salt behind the CAP-side user
       // pseudonymisation (mock runs, file imports). Created on first use by
       // srv/utils/tenant-secrets.js; not exposed by any service.
+      // Tenant registry (T2): one row per SaaS subscription, written by the
+      // provisioning callbacks and read by administrators. Deliberately NOT
+      // tenantScoped (no TenantId element): it is the provider's view across
+      // tenants. Data of an unsubscribed tenant is retained until an
+      // administrator purges it explicitly (AuditEvents are never purged).
+      entity Tenants : managed {
+            key ID          : String(60);    // the tenant id the registry uses (zone id)
+            Subdomain       : String(120);
+            Plan            : String(40);
+            Status          : String(20);    // ACTIVE | UNSUBSCRIBED | PURGED
+            TenantUrl       : String(300);
+            SubscribedAt    : Timestamp;
+            UnsubscribedAt  : Timestamp;
+            PurgedAt        : Timestamp;
+            PurgedBy        : String(120);
+            LastEvent       : String(500);
+      }
+
       entity TenantSecrets {
             key TenantId  : String(60);
             PseudonymSalt : String(64);

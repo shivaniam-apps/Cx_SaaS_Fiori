@@ -165,9 +165,26 @@ cf map-route adops-basic-<space> <default-domain> --hostname <subdomain>-adops-b
    subaccount.
 4. Open the tenant URL and run the target-system onboarding (docu/15).
 
-Today the callbacks only resolve the URL; tenant rows on subscribe and
-purge on unsubscribe are roadmap item T2, and the server registers the
-callbacks only when `ADOPTOPS_TIER` is `basic` (idea I27, also T2).
+What the callbacks do (T2, `srv/basic-subscription.js` +
+`srv/utils/subscription-lifecycle.js`; every shared-database tier registers
+them, only `enterprise` would provision differently):
+
+| Event | Effect |
+|---|---|
+| subscribe (`PUT .../tenant/{tenantId}`) | `Tenants` row `ACTIVE` with subdomain, plan and tenant URL (idempotent, re-subscribing a purged tenant reactivates it); audit event `TENANT_SUBSCRIBED`; answers the tenant URL |
+| unsubscribe (`DELETE .../tenant/{tenantId}`) | `Tenants` row `UNSUBSCRIBED`; **the tenant's data is retained** (nothing of a customer is deleted by a callback); audit event `TENANT_UNSUBSCRIBED` (WARNING) |
+| dependencies (`GET .../dependencies`) | xsappnames of the bound HTML5 runtime, destination and connectivity services |
+
+Purging an unsubscribed tenant is an explicit administrator action:
+`POST /catalog/AdminService/purgeTenant` with `{ "tenantId": "<id>", "confirm": "<id>" }`
+deletes every tenant-scoped row of that tenant (target systems, extractions,
+usage, proposals, waves, plans, transports, telemetry, the per-tenant
+pseudonymisation secret) and answers the per-entity counts. Audit events
+and the chain head are never purged (append-only; whether they are exported
+first or kept under a legal hold is open, idea I9); the purge writes its own
+`TENANT_PURGED` event. The `Tenants` entity on AdminService lists every
+subscription with its status and stamps. Mapping the tenant route (step 2)
+is still manual (idea I34).
 
 ## 8. Redeploying
 
