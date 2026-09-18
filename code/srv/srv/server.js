@@ -26,6 +26,9 @@ function resolveCorrelationId(req) {
 let startupProxyLogged = false;
 
 cds.on('bootstrap', async (app) => {
+    // No server fingerprint on responses (T6 security review).
+    app.disable('x-powered-by');
+
     if (!startupProxyLogged) {
         startupProxyLogged = true;
 

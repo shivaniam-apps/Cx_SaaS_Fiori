@@ -719,8 +719,27 @@ function basicHeaders(destinationConfiguration) {
   return { Authorization: `Basic ${token}` };
 }
 
+// A request path must stay inside the destination (T6 security review):
+// `new URL('//evil.example/x', base)` and `new URL('https://evil.example', base)`
+// both leave the destination's host, and the call would carry the
+// destination's credentials there. Only a plain relative path is accepted;
+// backslashes count as slashes for http URLs, so they are refused too.
+function safeDestinationPath(path) {
+  const text = String(path ?? '').trim() || '/';
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) throw new Error('S/4 path must be relative to the destination, not an absolute URL');
+  if (/^[\\/]{2}/.test(text) || text.includes('\\')) throw new Error('S/4 path must not address another host');
+  return text.startsWith('/') ? text : `/${text}`;
+}
+
+function resolveDestinationUrl(baseUrl, path) {
+  const base = new URL(String(baseUrl || '').replace(/\/?$/, '/'));
+  const target = new URL(safeDestinationPath(path), base);
+  if (target.origin !== base.origin) throw new Error('S/4 path resolved outside the destination');
+  return target.toString();
+}
+
 function destinationUrl(destinationConfiguration, path) {
-  return new URL(path || '/', destinationConfiguration.URL).toString();
+  return resolveDestinationUrl(destinationConfiguration.URL, path);
 }
 
 async function callS4Destination({ destinationName = DEFAULT_DESTINATION, path = '/', method = 'GET', body, headers: extraHeaders = {}, req, subdomain, timeoutMs = 20000, maxAttempts: maxAttemptsOverride, _noDirect = false, _noSessionRetry = false }) {
@@ -771,7 +790,7 @@ async function callS4Destination({ destinationName = DEFAULT_DESTINATION, path =
     : '';
   const useDirect = Boolean(directBaseUrl);
   const targetUrl = useDirect
-    ? new URL(path || '/', `${directBaseUrl}/`).toString()
+    ? resolveDestinationUrl(directBaseUrl, path)
     : destinationUrl(config, path);
   const headers = {
     Accept: 'application/json',
@@ -1108,8 +1127,10 @@ async function fetchCsrfTokenLive({ destinationName, path, req }) {
 function safeResponseData(data) {
   if (!data) return data;
   const text = typeof data === 'string' ? data : JSON.stringify(data);
+  // Mask the whole value, quoted or bare, so a "Bearer <token>" does not keep
+  // its token after the first space (idea I35).
   return text
-    .replace(/(password|clientsecret|authorization|proxy-authorization)(["'\s:=]+)[^"',\s}]+/ig, '$1$2***')
+    .replace(/(password|clientsecret|authorization|proxy-authorization)(["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^,}\r\n"']+)/ig, '$1$2***')
     .slice(0, 2000);
 }
 
@@ -1299,6 +1320,8 @@ module.exports = {
   resolveDestination,
   responseHeader,
   safeResponseData,
+  safeDestinationPath,
+  resolveDestinationUrl,
   serviceRootFromPath,
   setODataQueryOption,
   shouldMockSap,

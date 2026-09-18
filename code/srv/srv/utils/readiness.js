@@ -8,6 +8,25 @@ const { isDatabaseLess } = require('./tier.js');
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
+// The running product version (one number for MTA, client and server, kept
+// in step by scripts/release.mjs) so operators can read it off /readyz. In
+// the deployed runtime (gen/srv/srv/utils) the package is two levels up; in
+// a local checkout (code/srv/srv/utils) code/srv/package.json exists only
+// after a hybrid run, so the project package one level further is the
+// fallback.
+function productVersion() {
+    for (const candidate of ['../../package.json', '../../../package.json']) {
+        try {
+            const version = require(candidate).version;
+            if (version) return String(version);
+        } catch {
+            // next candidate
+        }
+    }
+    return '0.0.0';
+}
+const PRODUCT_VERSION = productVersion();
+
 function withTimeout(promise, timeoutMs) {
     let timer;
     const deadline = new Promise((_, reject) => {
@@ -30,10 +49,10 @@ async function checkDatabase({ db = cds.db, timeoutMs = DEFAULT_TIMEOUT_MS, data
     }
 }
 
-// Aggregate readiness: { status: 'ok' | 'unavailable', checks: { db } }.
+// Aggregate readiness: { status: 'ok' | 'unavailable', version, checks: { db } }.
 async function checkReadiness(options = {}) {
     const db = await checkDatabase(options);
-    return { status: db.ok ? 'ok' : 'unavailable', checks: { db } };
+    return { status: db.ok ? 'ok' : 'unavailable', version: PRODUCT_VERSION, checks: { db } };
 }
 
-module.exports = { checkReadiness, checkDatabase, DEFAULT_TIMEOUT_MS };
+module.exports = { checkReadiness, checkDatabase, DEFAULT_TIMEOUT_MS, PRODUCT_VERSION };

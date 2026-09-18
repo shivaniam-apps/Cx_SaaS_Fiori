@@ -14,8 +14,10 @@ descriptor under `deploy/cf/mtaext/` and is applied at deploy time.
 - `CORS_ORIGINS` defaults to the approuter URL of the same deployment.
   Browser traffic never reaches `adops-basic-srv` directly in CF, so this is
   the only origin production needs.
-- `version` is the MTA version (`0.1.0` after A2). Bump it with every
-  release; the mtar file name carries it. T5 defines the semver rules.
+- `version` is the product version, shared with the extension descriptors
+  and the package files and maintained by `node scripts/release.mjs set`;
+  the mtar file name carries it. The semver rules and the release
+  checklist are in [release-process.md](release-process.md).
 
 ## Extension descriptors
 

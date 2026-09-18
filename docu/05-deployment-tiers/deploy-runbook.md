@@ -33,12 +33,15 @@ cd deploy/cf && mbt build
 The build installs the server dependencies, runs `npm run build:basic`
 (`cds build --production` plus the `prepare-basic-runtime` check that the
 deployer CSN matches the runtime CSN), builds the client and packages
-everything as `mta_archives/adops-basic_<version>.mtar`. The version comes
-from `mta.yaml`; every `mtaext/*.mtaext` carries the same version, and a
-mismatch fails the deploy. T5 defines when the version is bumped.
+everything as `mta_archives/adops-basic_<version>.mtar`. The version is
+the product version (`node scripts/release.mjs current`), identical in
+`mta.yaml`, every extension descriptor and the package files; a mismatch
+fails the deploy and the CI gate.
 
-Keep the produced `.mtar` (or its CI artefact): it is what you redeploy to
-roll back.
+For a release, do not build locally: the Release workflow builds the
+archive for the tag `vX.Y.Z` and attaches it to the GitHub release
+([release-process.md](release-process.md)). A local build is for the dev
+space only.
 
 ## 3. Deploy
 
@@ -88,7 +91,8 @@ The latest `deploy-to-postgresql` task must show `SUCCEEDED`.
 curl -s https://adops-basic-srv-<space>.<default-domain>/readyz
 ```
 
-Expected: HTTP 200 with `{"status":"ok","checks":{"db":{"ok":true,"ms":...}}}`.
+Expected: HTTP 200 with `{"status":"ok","version":"X.Y.Z","checks":{"db":{"ok":true,"ms":...}}}`
+and `version` equal to the release you deployed.
 `/readyz` runs a trivial query against the database with a five-second
 deadline and answers 503 with `"status":"unavailable"` and the error text
 when it fails. `/healthz` (plain `OK`) stays the Cloud Foundry health
@@ -167,17 +171,21 @@ callbacks only when `ADOPTOPS_TIER` is `basic` (idea I27, also T2).
 
 ## 8. Redeploying
 
-Run the build and the same `cf deploy` command with the new archive. The
-database delta is applied first, then the server is restarted; expect a
-short outage of the API while the health check passes. Blue-green
-deployment and the release checklist arrive with T5.
+Run the same `cf deploy` command with the new archive. The database delta
+is applied first, then the server is restarted; expect a short outage of
+the API while the health check passes. Production deploys blue-green with
+a testing phase instead (`--strategy blue-green`, then `-a resume` or
+`-a abort`), see [release-process.md](release-process.md).
 
 ## 9. Rolling back
 
-There is no automated rollback. Redeploy the previous `.mtar` with the same
-extension descriptor. Because the schema only ever grows, an older server
-runs correctly against a newer schema: it does not read the columns it does
-not know. Do not attempt to roll the schema back.
+During a blue-green testing phase, `cf deploy -i <operation id> -a abort`
+discards the new colour and production is untouched. After the switch, or
+on the other spaces, redeploy the previous release's `.mtar` (attached to
+its GitHub release) with the same extension descriptor. Because the schema
+only ever grows, an older server runs correctly against a newer schema: it
+does not read the columns it does not know. Do not attempt to roll the
+schema back.
 
 ## 10. Runtime configuration
 
@@ -224,11 +232,13 @@ The MTA contains none. XSUAA, PostgreSQL, destination and connectivity
 credentials are service bindings that Cloud Foundry injects. The
 pseudonymisation secret lives inside each S/4HANA system (`ZADO_CFG`,
 docu/11) and the per-tenant salt in the `TenantSecrets` table, generated
-on first use. The secret rotation runbook is T6.
+on first use. Rotation of every credential is described in
+[docu/10 secret rotation](../10-security-authorization/secret-rotation.md).
 
 ## Known limits
 
-- No blue-green deployment, no release checklist (T5).
+- Deployment to a space is a manual `cf deploy` with the operator's login;
+  a pipeline with a technical user is a later item (release-process.md).
 - Only the `basic` tier registers subscription callbacks (I27, T2).
 - Alert subscriptions (who is notified of `AdoptOpsTaskFailed`) are not
   part of the deployment: create them once per space on the Alert

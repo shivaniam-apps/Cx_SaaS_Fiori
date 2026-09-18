@@ -77,8 +77,8 @@ describe('queryDashboardSummary (HTTP)', () => {
     baseline = await read();
     const db = cds.db;
     await db.run(INSERT.into('adops.db.TargetSystems').entries([
-      { ID: SYS_A, displayName: 'A', destinationName: 'A', environment: 'DEV', lastCheckStatus: 'OK', TenantId: 'GLOBAL' },
-      { ID: SYS_B, displayName: 'B', destinationName: 'B', environment: 'QAS', TenantId: 'GLOBAL' }
+      { ID: SYS_A, displayName: 'A', destinationName: 'DASH_A_100', environment: 'DEV', lastCheckStatus: 'OK', TenantId: 'GLOBAL' },
+      { ID: SYS_B, displayName: 'B', destinationName: 'DASH_B_200', environment: 'QAS', TenantId: 'GLOBAL' }
     ]));
     await db.run(INSERT.into('adops.db.AnalysisRuns').entries([
       { ID: RUN_A_OLD, targetSystem_ID: SYS_A, Status: 'COMPLETED', CompletedAt: '2026-09-01T00:00:00Z', TenantId: 'GLOBAL' },

@@ -1,6 +1,6 @@
 {
   "name": "adops-basic-db-deployer",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "PostgreSQL schema deployer for AdoptOps Basic (runs `cds-deploy` as a Cloud Foundry task; see docu/05-deployment-tiers/postgres-schema-deployment.md)",
   "private": true,
   "engines": {

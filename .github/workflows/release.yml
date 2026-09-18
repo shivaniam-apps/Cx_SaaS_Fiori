@@ -1,0 +1,53 @@
+# Release build (roadmap T5). Pushing a tag vX.Y.Z on main builds the MTA
+# archive on Linux (the platform Cloud Foundry stages on), attaches it to a
+# GitHub release and keeps it as a workflow artefact. The tag must match the
+# version carried by mta.yaml, the extension descriptors and the package
+# files (scripts/release.mjs check --tag). Deployment stays a manual
+# `cf deploy` per space: docu/05-deployment-tiers/release-process.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: 22
+
+jobs:
+  mtar:
+    name: Build and publish the MTA archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Tag matches the product version
+        run: node scripts/release.mjs check --tag "$GITHUB_REF_NAME"
+      - name: Cloud MTA Build Tool
+        run: npm install -g mbt@1
+      - name: mbt build
+        working-directory: deploy/cf
+        run: mbt build
+      - name: Archive name carries the version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          test -f "deploy/cf/mta_archives/adops-basic_${VERSION}.mtar"
+          echo "MTAR=deploy/cf/mta_archives/adops-basic_${VERSION}.mtar" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adops-basic-${{ github.ref_name }}
+          path: ${{ env.MTAR }}
+          if-no-files-found: error
+          retention-days: 90
+      - name: GitHub release with the archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$MTAR" \
+            --title "AdoptOps $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
