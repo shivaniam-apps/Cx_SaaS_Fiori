@@ -70,12 +70,12 @@ describe('s4-http-client helpers', () => {
 
     it('safeResponseData masks secret-shaped fields and bounds the text', () => {
       const masked = client.safeResponseData({ user: 'x', Password: 'hunter2', authorization: 'Bearer abc', note: 'ok' });
-      expect(masked).to.include('"Password":"***"');
-      // The mask covers the first token of the value only ('Bearer' of
-      // 'Bearer abc'); the remainder is a known gap (tracker idea I35).
-      expect(masked).to.include('"authorization":"***');
+      expect(masked).to.include('"Password":***');
+      // The whole value is masked, quoted or bare (idea I35 closed by T6).
+      expect(masked).to.include('"authorization":***');
       expect(masked).to.not.include('hunter2');
       expect(masked).to.not.include('Bearer');
+      expect(masked).to.not.include('abc');
       expect(masked).to.include('"note":"ok"');
       expect(client.safeResponseData('x'.repeat(5000))).to.have.length(2000);
       expect(client.safeResponseData('')).to.equal('');

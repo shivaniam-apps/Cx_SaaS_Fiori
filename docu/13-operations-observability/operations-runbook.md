@@ -242,4 +242,3 @@ assigned in the BTP cockpit. Both outcomes are audited.
 | Item | Roadmap |
 |---|---|
 | BTP Audit Log service binding (external anchor for the chain) | T3 |
-| Secret rotation runbook, security review, `docu/16` troubleshooting | T6 |
