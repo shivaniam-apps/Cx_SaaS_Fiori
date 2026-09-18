@@ -38,6 +38,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 ## Daily log
 
 ### 2026-09-18
+- T2 (admin item) built in this worktree at the user's request; tracked in tracker/admin.md.
 - O17 done on feat/snapshot-coverage-ui: getBackendCapabilities client wrapper, coverage model + badge, verified on 5283 (Test Connection -> "Snapshots 12 mo" with tooltip, one capabilities read). The ABAP halves of I34 and the S10 follow-ups I31 / I32 need RD1 and stay with scheduling.
 - O16 done on fix/deep-link-initial-route: reproduced in the browser (path-form link -> cockpit under /audit-log#/dashboard; hash-form links were fine, so the shell was not at fault), pure translator + node tests, verified /audit-log, /transports?status=OPEN (filter applied), / and #/landscape/roles on 5283. The deployed approuter has no SPA fallback for such paths (I44, admin).
 - O15 done on test/fixture-convention: guard scans registration lines only (displayName + destinationName on one line), 342 server tests green; the other I41 (deep links open the Dashboard on a full-page load) is the next overview item. PR #57 opened; merged origin/main (S7 #55, T5 #56) and renumbered the idea again (I43) after a second collision.

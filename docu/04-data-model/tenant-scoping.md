@@ -62,6 +62,18 @@ runs once per boot (server.js, on `served`) and assigns them to `GLOBAL`;
 it is idempotent and skips entities whose `UPDATE` is refused (the audit
 log). Nothing else reads `NULL` as a tenant.
 
+## Subscription lifecycle (T2)
+
+`Tenants` (not scoped: the provider's registry, keyed by the tenant id) is
+written by the SaaS provisioning callbacks: `ACTIVE` on subscribe,
+`UNSUBSCRIBED` on unsubscribe, `PURGED` by the explicit Admin action
+`purgeTenant`. Unsubscribing deletes nothing. The purge walks the model for
+every persisted entity that carries the aspect (a new entity joins
+automatically) and deletes that tenant's rows, plus the tenant's row in
+`TenantSecrets`; `AuditEvents` and `AuditChainHeads` are retained and the
+purge appends its own `TENANT_PURGED` event (`srv/utils/subscription-lifecycle.js`,
+runbook in docu/05 section 7).
+
 ## Enterprise tier
 
 CAP MTX with HDI containers isolates physically; the aspect and the helper

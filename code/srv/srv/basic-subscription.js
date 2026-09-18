@@ -1,35 +1,9 @@
-const xsenv = require('@sap/xsenv');
 const cds = require('@sap/cds');
+const express = require('express');
 const { currentTier } = require('./utils/tier.js');
+const { recordSubscription, recordUnsubscription, saasDependencies, tenantUrl } = require('./utils/subscription-lifecycle.js');
 
 const LOG = cds.log('basic-subscription');
-
-function tenantUrl(subdomain) {
-  const separator = process.env.tenantSeparator || '-';
-  const appDomain = process.env.appDomain;
-  if (!subdomain || !appDomain) return process.env.approuterUrl || '';
-  return `https://${subdomain}${separator}${appDomain}`;
-}
-
-function readDependencyXsappnames() {
-  const dependencies = [];
-  try {
-    const services = xsenv.getServices({
-      html5Runtime: { tag: 'html5-apps-repo-rt' },
-      destination: { tag: 'destination' }
-    });
-
-    if (services.html5Runtime?.uaa?.xsappname) {
-      dependencies.push({ xsappname: services.html5Runtime.uaa.xsappname });
-    }
-    if (services.destination?.xsappname) {
-      dependencies.push({ xsappname: services.destination.xsappname });
-    }
-  } catch (error) {
-    LOG.warn(`Could not resolve optional SaaS dependencies: ${error.message}`);
-  }
-  return dependencies;
-}
 
 // The SaaS registry calls the callbacks with a token that carries the
 // mtcallback scope (xs-security.json grants it to sap-provisioning). Plain
@@ -43,30 +17,53 @@ function requireSaasCallbackScope(req, res, next) {
   return res.status(403).json({ error: { code: '403', message: 'The SaaS provisioning callbacks require the mtcallback scope.' } });
 }
 
+function failure(res, error, fallback) {
+  const status = Number(error?.status) || 500;
+  LOG.error(`${fallback}: ${error?.message || error}`);
+  return res.status(status).json({ error: { code: String(status), message: error?.message || fallback } });
+}
+
+// Subscription lifecycle (T2) for the shared-database tiers (basic and
+// standard share one PostgreSQL and one registry entry): SAP SaaS
+// Provisioning without CAP MTX tenant database deployment, Service Manager
+// or HANA. The URL path keeps its historical /-/basic prefix because the
+// saas-registry appUrls in mta.yaml point at it.
 function registerBasicSubscriptionRoutes(app) {
-  // These lightweight callbacks allow the Basic tier to be subscribed via SAP SaaS Provisioning
-  // without activating CAP MTX tenant database deployment, Service Manager, HANA, or PostgreSQL.
   // context() opens the request scope auth() writes the user into; without
   // it the auth middleware has nowhere to put req.user and the request hangs.
-  app.use('/-/basic/saas-provisioning', cds.middlewares.context(), cds.middlewares.auth(), requireSaasCallbackScope);
+  // Plain express routes get no body parser from CAP: without express.json()
+  // the registry's { subscribedSubdomain } payload arrives as undefined.
+  app.use('/-/basic/saas-provisioning', express.json({ limit: '64kb' }), cds.middlewares.context(), cds.middlewares.auth(), requireSaasCallbackScope);
 
   app.put('/-/basic/saas-provisioning/tenant/:tenantId', async (req, res) => {
     const tenantId = req.params.tenantId;
     const subdomain = req.body?.subscribedSubdomain || req.body?.subdomain;
-    LOG.info(`Basic SaaS subscription received for tenant ${tenantId}, subdomain ${subdomain || '<unknown>'}, tier ${currentTier()}.`);
-    return res.status(200).send(tenantUrl(subdomain));
+    const plan = req.body?.subscriptionParams?.plan || req.body?.plan || '';
+    LOG.info(`SaaS subscription received for tenant ${tenantId}, subdomain ${subdomain || '<unknown>'}, tier ${currentTier()}.`);
+    try {
+      const result = await recordSubscription({ tenantId, subdomain, plan });
+      // The registry expects the tenant URL as the plain response body.
+      return res.status(200).send(result.tenantUrl || tenantUrl(subdomain));
+    } catch (error) {
+      return failure(res, error, 'Subscription could not be recorded');
+    }
   });
 
   app.delete('/-/basic/saas-provisioning/tenant/:tenantId', async (req, res) => {
     const tenantId = req.params.tenantId;
     const subdomain = req.body?.subscribedSubdomain || req.body?.subdomain;
-    LOG.info(`Basic SaaS unsubscription received for tenant ${tenantId}, subdomain ${subdomain || '<unknown>'}, tier ${currentTier()}.`);
-    return res.status(200).send(tenantId);
+    LOG.info(`SaaS unsubscription received for tenant ${tenantId}, subdomain ${subdomain || '<unknown>'}, tier ${currentTier()}.`);
+    try {
+      await recordUnsubscription({ tenantId, subdomain });
+      return res.status(200).send(tenantId);
+    } catch (error) {
+      return failure(res, error, 'Unsubscription could not be recorded');
+    }
   });
 
   app.get('/-/basic/saas-provisioning/dependencies', async (_req, res) => {
-    const dependencies = readDependencyXsappnames();
-    LOG.debug(`Basic SaaS dependencies: ${JSON.stringify(dependencies)}`);
+    const dependencies = saasDependencies();
+    LOG.debug(`SaaS dependencies: ${JSON.stringify(dependencies)}`);
     return res.status(200).json(dependencies);
   });
 }
