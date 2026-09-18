@@ -81,7 +81,42 @@ registered systems: `OK` when `CatalogApps?$top=1` answers, `MISSING`
 (informational, the badge reads "Catalog not published") on 404, `SERVICE`
 on any other failure. It never changes the rollup verdict.
 
+## Probe findings, round 1 (RD1/400, 2026-09-18)
+
+Raw output: [probe-catalog-rd1-400-2026-09-18.txt](probe-catalog-rd1-400-2026-09-18.txt).
+Consequences for the readers:
+
+- **`/IAM/` is Issue and Activity Management, not the app repository.** The
+  contract's "IAM app repository" source is withdrawn. Fiori app ids reach
+  the backend through the launchpad content (`TADIR R3TR UIAD`, 18664
+  items; `/UI2/FLPRT*`) and through PFCG (`AGR_BUFFI.URL` =
+  `OTSERVICE <FioriId> TR`). Round 2 of the probe dumps both.
+- **Business catalogs and spaces in PFCG:** `AGR_HIER.REPORTTYPE = OT` with
+  `REPORT` = `CAT_PROVIDER` (URL `X-SAP-UI2-CATALOGPAGE:<catalog>`),
+  `GROUP_PROVIDER` (`sap-ui2-group:<group>`), `SPACE_PROVIDER` (space id).
+  `SAP_BR_INTERNAL_SALES_REP` has 242 nodes. This is the
+  `BusinessCatalogId` / `BusinessRoleId` source and the `LaunchpadContent`
+  role assignment.
+- **UI5 app inventory:** `TADIR WAPA` (4572) plus `O2APPL` /
+  `O2APPLT` (title, `APPLCLAS = /UI5/CL_UI5_BSP_APPLICATION`) →
+  `UiComponentState`, `AppTitle`, `BspApplication`.
+- **OData V2 state:** `/IWFND/I_MED_SRH.IS_ACTIVE` with `SERVICE_NAME`,
+  `SERVICE_VERSION`; V4 in `/IWBEP/I_V4_MSRV`. The client-dependent alias
+  assignment `/IWFND/C_MGDEAM` had 8 rows in client 400.
+- **ICF:** no `ICFSERVICE` row answered for the lower-case BSP name; the
+  storage form is checked in round 2 before `IcfNodeState` is trusted.
+- **Spaces / pages tables** (`/UI2/STHEAD(T)`, `/UI2/STPGA`, `/UI2/PGHEAD(T)`)
+  exist with the expected columns (`LANGU`, not `LANGUAGE`) and are empty
+  in client 400; `/UI2/CATALOG%`, `/UI2/TC%`, `/UI2/BC%` do not exist, the
+  CDM3 content sits under `/UI2/FLPRT*` / `/UI2/PB*` / `/UI2/CHIP*`
+  (round 2 dumps the field lists).
+
 ## Operator steps for part 2 (RD1 DEV/100)
+
+Round 2 of the probe (`ZADO_PROBE_CATALOG` section 7, `ZADO_PROBE_ACTIVATION`
+section 3b) must run in **client 100**; client 400 is the unit-test client
+without launchpad content.
+
 
 1. Run `ZADO_PROBE_CATALOG` (SE38) with a known BSP application and one
    `SAP_BR_*` role; attach the list output here as `probe-output-rd1.md`.

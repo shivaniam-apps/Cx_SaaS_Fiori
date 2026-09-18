@@ -5,6 +5,7 @@
 | 1 | A4H client 001, `vhcala4hci` | 2026-08-12 | ABAP Platform appliance (no S4CORE) — our lab box |
 | 2 | **RD1 client 100**, `aubls4hd01` | 2026-08-12 | **Customer DEV: S4CORE 108 SP03 = S/4HANA 2023 SP03**, SAP_UI 758 SP3, client role C (customizing) |
 | 3 | RD1 client 100 (probe **v2**) | 2026-08-12 | Adds field lists (4b), STC scenario inventory (4c), spaces/pages table scan, STC session-lifecycle FMs |
+| 4 | **RD1 client 400** (`ZADO_PROBE_ACTIVATION`, `ZADO_PROBE_CATALOG`) | 2026-09-18 | S3 part 2 and S9 part 2 inputs; raw output in [probe-activation-rd1-400-2026-09-18.txt](probe-activation-rd1-400-2026-09-18.txt) and [docu/08 probe-catalog-rd1-400-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-400-2026-09-18.txt). Client 400 = unit-test client: client-dependent content (spaces, pages, service assignments) came back empty and is re-probed in client 100 by round 2. |
 
 **Status after run 3: Phase 0 is complete.** Every API uncertainty the design
 flagged is now resolved with evidence from the customer's own S/4HANA 2023.
@@ -12,6 +13,62 @@ flagged is now resolved with evidence from the customer's own S/4HANA 2023.
 This document converts the design's marked UNCERTAINs into facts. Both
 systems agree on every function-module verdict, which strongly suggests the
 signatures are stable across the 758 basis line.
+
+## Run 4 findings (2026-09-18, RD1/400) - what changed in the design
+
+1. **`/IAM/` is NOT the Fiori app repository.** The 169 `/IAM/` tables are
+   Issue and Activity Management (`/IAM/I_APPL` holds two rows: Change
+   Record, Management of Change). Headline finding 2 of run 2 is withdrawn.
+   The app id lives elsewhere:
+   - PFCG references apps directly: `AGR_BUFFI.URL` = `OTSERVICE <FioriId> TR`
+     (e.g. `F1765`) on `AGR_HIER` nodes with `REPORTTYPE = OT`, catalogs as
+     `X-SAP-UI2-CATALOGPAGE:<catalog>?AUTH_DEFAULTS=X&DEST_FES=` with
+     `REPORT = CAT_PROVIDER`, groups as `sap-ui2-group:<group>` with
+     `GROUP_PROVIDER`, spaces as the plain space id with `SPACE_PROVIDER`.
+   - `TADIR` carries **18664 `R3TR UIAD`** entries (launchpad app descriptor
+     items) next to 4572 `WAPA` BSP applications; round 2 dumps the UIAD
+     names and the `/UI2/FLPRT*` tables behind them.
+2. **Task-list parameters are readable:** `STC_TM_SCENARIO_GET_PARAMETERS`
+   (`I_SCENARIO_ID`, `I_TEMPLATE_ID` → `ET_PARAM_DEF TYPE STCTM_TX_PARAMETER`,
+   `ET_PARAMETER TYPE STCTM_TX_VALUE`) and `STC_TM_SESSION_SET_PARAMETERS`
+   (`I_SESSION_ID`, `IT_PARAMETER TYPE STCTM_TX_VALUE`, `C_EXEC_ID`). The
+   `ACTIVATE_ODATA_SERVICE` recipe is therefore SESSION_BEGIN (init only) →
+   SESSION_SET_PARAMETERS → SESSION_EXECUTE → SESSION_GET_STATUS. The
+   `STCS_*` scenario tables do not exist on this release.
+3. **Direct gateway activation exists:** `/IWFND/FM_ACTIVATE_SERVICE`,
+   `/IWFND/CL_MGW_ACTIVATION_API`, `/IWFND/CL_MED_REM_ACTIVATION`
+   (signatures in round 2). `/IWFND/I_MED_SRH` carries `IS_ACTIVE`,
+   `SERVICE_NAME`, `SERVICE_VERSION`, `NAMESPACE` = the
+   `ServiceActivationState` source; the client-dependent system-alias
+   assignment is `/IWFND/C_MGDEAM` (8 rows in client 400). 876 services
+   registered. V4 services: `/IWBEP/I_V4_MSRV` and friends (no `/IWFND/V4%`).
+4. **Spaces / pages API surface:** `/UI2/CL_FDM_SPACE_API(_FACTORY,
+   _HANDLER)`, `/UI2/CL_FDM_PAGE_API(_FACTORY, _HANDLER)`,
+   `/UI2/CL_FDM_SPACE_CTS_ACCESS`, `/UI2/CL_FDM_PAGE_CTS_ACCESS`,
+   `/UI2/CL_FDM_SPACE_TRANS_OBJECT`; PFCG-side FMs `/UI2/SPACE_PFCG_CREATE /
+   _CHANGE`. Transport object types confirmed in `OBJH`: **`UIST`** (space),
+   **`UIPG`** (page), `UIAD` (app descriptor), `ACGR` (role); `UIPGC` is not
+   a TADIR type. Repository tables: `/UI2/STHEAD(T)` (`ID`, `TITLE`, `LANGU`),
+   `/UI2/STPGA` (`ID`, `PAGE_ID`, `IDX`), `/UI2/PGHEAD(T)`. Empty in 400.
+5. **Role deletion:** `PRGN_RFC_DELETE_AGR`, `PRGN_DELETE_AGR` and
+   `PRGN_RFC_DELETE_ACTIVITY_GROUP` are all MISSING on RD1 - the S5
+   `ROLLBACK_CREATE_PFCG_ROLE` executor therefore fails with its clear
+   message today. `PRGN_ACTIVITY_GROUP_DELETE` exists; round 2 records its
+   signature, then the executor switches to it.
+6. **Menu writer:** `PRGN_RFC_CREATE_ACTIVITY_GROUP` takes `HIERARCHY_NODES
+   TYPE SMENSAPNEW` + `HIERARCHY_TEXTS TYPE SMENCUST`; `SMENSAPNEW` has
+   `REPORTTYPE` / `REPORT` but **no URL column**, so how the `AGR_BUFFI` URL
+   of an OT node is passed is the open question round 2 answers
+   (`SMENCUST` field list, `PRGN_RFC%` inventory, any Z role with an OT node).
+   `PRGN_MENU_ADD_NODE` / `PRGN_MENU_ADD_SPACE` do not exist.
+7. **ICF name case:** `ICFSERVICE` answered no row for `sd_so_manages1` and
+   none for `ui5_ui5` - the node name is stored differently than assumed
+   (case or structure). `ZCL_ADO_ACT_ICF` and `ZCL_ADO_ACT_PROBE` read the
+   node by name, so this is verified in round 2 before the ICF executor is
+   trusted; `ICF_NOACT` remains the activation flag.
+8. **`O2APPL`** (`APPLNAME`, `APPLCLAS = /UI5/CL_UI5_BSP_APPLICATION`) and
+   `O2APPLT` (`TEXT`) give the UI5 app inventory with titles - the
+   `UiComponentState` source for the catalog readers.
 
 ## Headline findings
 

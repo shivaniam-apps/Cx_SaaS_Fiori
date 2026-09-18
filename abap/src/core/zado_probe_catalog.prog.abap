@@ -61,6 +61,9 @@ CLASS lcl_probe DEFINITION FINAL.
     METHODS list_tables IMPORTING iv_pattern TYPE string
                                   iv_max     TYPE i DEFAULT 60.
     METHODS field_list IMPORTING iv_table TYPE string.
+    METHODS class_methods IMPORTING iv_class TYPE string
+                                    iv_max   TYPE i DEFAULT 40.
+    METHODS probe_round_two.
     " Generic, dynamic row dump: table name and WHERE clause as strings,
     " so a wrong column or table name is reported, never a syntax error.
     METHODS dump_rows IMPORTING iv_table TYPE string
@@ -80,6 +83,7 @@ CLASS lcl_probe IMPLEMENTATION.
     probe_odata_registry( ).
     probe_launchpad_content( ).
     probe_role_catalog_link( ).
+    probe_round_two( ).
     manual_follow_ups( ).
     section( 'END OF PROBE' ).
   ENDMETHOD.
@@ -165,7 +169,7 @@ CLASS lcl_probe IMPLEMENTATION.
     field_list( '/UI2/PGHEADT' ).
     line( |Spaces: { count_rows( iv_table = '/UI2/STHEAD' iv_where = '' ) }, pages: { count_rows( iv_table = '/UI2/PGHEAD' iv_where = '' ) }, assignments: { count_rows( iv_table = '/UI2/STPGA' iv_where = '' ) }| ).
     dump_rows( iv_table = '/UI2/STHEAD'  iv_where = '' iv_max = p_rows ).
-    dump_rows( iv_table = '/UI2/STHEADT' iv_where = |LANGUAGE = '{ sy-langu }'| iv_max = p_rows ).
+    dump_rows( iv_table = '/UI2/STHEADT' iv_where = |LANGU = '{ sy-langu }'| iv_max = p_rows ).
     dump_rows( iv_table = '/UI2/STPGA'   iv_where = '' iv_max = p_rows ).
     dump_rows( iv_table = '/UI2/PGHEAD'  iv_where = '' iv_max = p_rows ).
     " Technical / business catalogs of the CDM3 repository.
@@ -186,6 +190,63 @@ CLASS lcl_probe IMPLEMENTATION.
     dump_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME = '{ p_brole }'| iv_max = p_rows ).
   ENDMETHOD.
 
+  METHOD probe_round_two.
+    " Round 2 (written from the RD1/400 output of 2026-09-18). Round 1 showed
+    " that /IAM/ is Issue and Activity Management, not the Fiori app
+    " repository; the app id (F1765) appears in AGR_BUFFI as an OTSERVICE
+    " node and TADIR holds 18664 UIAD app descriptor items. This section
+    " looks for the app-id tables behind UIAD, the CDM3/FLP content tables,
+    " the ICF name case, and the V4 service registry. Run in CLIENT 100.
+    section( '7. ROUND 2 - APP DESCRIPTORS, FLP CONTENT, ICF CASE, V4 SERVICES' ).
+    line( 'TADIR UIAD app descriptor items (the id is the OBJ_NAME):' ).
+    dump_rows( iv_table = 'TADIR' iv_where = |PGMID = 'R3TR' AND OBJECT = 'UIAD'| iv_max = p_rows ).
+    dump_rows( iv_table = 'TADIR' iv_where = |PGMID = 'R3TR' AND OBJECT = 'UIAD' AND OBJ_NAME LIKE '%F1765%'| iv_max = p_rows ).
+    dump_rows( iv_table = 'TADIR' iv_where = |PGMID = 'R3TR' AND OBJECT = 'UIAD' AND OBJ_NAME LIKE '%SD_SO%'| iv_max = p_rows ).
+    line( 'TADIR object types UI* (counts):' ).
+    SELECT object, COUNT(*) AS cnt FROM tadir
+      WHERE pgmid = 'R3TR' AND object LIKE 'UI%'
+      GROUP BY object ORDER BY object
+      INTO TABLE @DATA(lt_ui_objects).
+    LOOP AT lt_ui_objects INTO DATA(ls_ui).
+      line( |  TADIR R3TR { ls_ui-object }: { ls_ui-cnt } entries| ).
+    ENDLOOP.
+    dump_rows( iv_table = 'OBJT' iv_where = |OBJECTNAME LIKE 'UI%' AND LANGUAGE = 'E'| iv_max = 30 ).
+    line( 'FLP content tables (app descriptors, catalogs, target mappings):' ).
+    list_tables( '/UI2/FLPRT%' ).
+    field_list( '/UI2/FLPRT' ).
+    field_list( '/UI2/FLPRTC' ).
+    field_list( '/UI2/FLPRTSDEF' ).
+    dump_rows( iv_table = '/UI2/FLPRT' iv_where = '' iv_max = p_rows ).
+    list_tables( '/UI2/PB%' ).
+    list_tables( '/UI2/CHIP%' ).
+    field_list( '/UI2/CHIP_CHDR' ).
+    field_list( '/UI2/PB_C_PAGE' ).
+    field_list( '/UI2/PB_C_PAGET' ).
+    dump_rows( iv_table = '/UI2/PB_C_PAGE' iv_where = |PAGE_ID LIKE 'SAP_SD%'| iv_max = p_rows ).
+    list_tables( '/UI2/CDM3%' ).
+    field_list( '/UI2/CDM3_CCNSTA' ).
+    field_list( '/UI2/CDM3_CCNTGT' ).
+    dump_rows( iv_table = '/UI2/CDM3_CCNSTA' iv_where = '' iv_max = p_rows ).
+    line( 'Business catalog / app ids as PFCG references them, across all SAP_BR roles:' ).
+    line( |  OTSERVICE app nodes: { count_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME LIKE 'SAP_BR%' AND URL LIKE 'OTSERVICE%'| ) }| ).
+    line( |  X-SAP-UI2-CATALOGPAGE nodes: { count_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME LIKE 'SAP_BR%' AND URL LIKE 'X-SAP-UI2-CATALOGPAGE%'| ) }| ).
+    line( |  sap-ui2-group nodes: { count_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME LIKE 'SAP_BR%' AND URL LIKE 'sap-ui2-group%'| ) }| ).
+    line( |  SPACE_PROVIDER nodes: { count_rows( iv_table = 'AGR_HIER' iv_where = |AGR_NAME LIKE 'SAP_BR%' AND REPORT = 'SPACE_PROVIDER'| ) }| ).
+    dump_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME = '{ p_brole }' AND URL LIKE 'X-SAP-UI2-CATALOGPAGE%'| iv_max = p_rows ).
+    dump_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME = '{ p_brole }' AND URL LIKE 'OTSERVICE%'| iv_max = 3 ).
+    line( 'ICF node name case (round 1 found no row for the lower-case BSP name):' ).
+    dump_rows( iv_table = 'ICFSERVICE' iv_where = |ICF_NAME = '{ to_upper( p_bsp ) }'| iv_max = 3 ).
+    dump_rows( iv_table = 'ICFSERVICE' iv_where = |ICF_NAME LIKE '%UI5_UI5%' OR ICF_NAME LIKE '%ui5_ui5%'| iv_max = 3 ).
+    dump_rows( iv_table = 'ICFSERVICE' iv_where = |ICF_NAME LIKE '%BC%' AND ICF_NAME NOT LIKE '%_%'| iv_max = 3 ).
+    line( |  ICFSERVICE rows total: { count_rows( iv_table = 'ICFSERVICE' iv_where = '' ) }| ).
+    line( 'OData V4 service registry:' ).
+    field_list( '/IWBEP/I_V4_MSRV' ).
+    field_list( '/IWBEP/I_V4_MSGR' ).
+    dump_rows( iv_table = '/IWBEP/I_V4_MSRV' iv_where = |SERVICE_ID LIKE 'ZADO%'| iv_max = p_rows ).
+    line( |  V2 services active in this client (/IWFND/C_MGDEAM): { count_rows( iv_table = '/IWFND/C_MGDEAM' iv_where = '' ) } (8 in client 400)| ).
+    dump_rows( iv_table = '/IWFND/I_MED_SRH' iv_where = |SRV_IDENTIFIER LIKE 'SD_SO%' OR SRV_IDENTIFIER LIKE 'C_SALESORDER%'| iv_max = p_rows ).
+  ENDMETHOD.
+
   METHOD manual_follow_ups.
     section( '6. MANUAL FOLLOW-UPS (WRITE THE ANSWERS INTO docu/08)' ).
     line( '- From section 1: which /IAM/ column carries the Fiori ID (F1234), the' ).
@@ -197,6 +258,39 @@ CLASS lcl_probe IMPLEMENTATION.
     line( '- From section 4: the catalog tables that link a business catalog to' ).
     line( '  its apps (CDM3), and how spaces/pages reference catalogs.' ).
     line( '- From section 5: the AGR_HIER node type and the catalog id column.' ).
+  ENDMETHOD.
+
+
+  METHOD class_methods.
+    DATA lv_class TYPE seoclsname.
+    lv_class = iv_class.
+    SELECT SINGLE clsname FROM seoclass WHERE clsname = @lv_class INTO @DATA(lv_found).
+    IF sy-subrc <> 0.
+      line( |  { iv_class }: MISSING| ).
+      RETURN.
+    ENDIF.
+    " CMPTYPE 1 = method; EXPOSURE 2 = public (SEOCOMPODF).
+    SELECT c~cmpname, d~exposure
+      FROM seocompo AS c
+      INNER JOIN seocompodf AS d ON d~clsname = c~clsname AND d~cmpname = c~cmpname
+      WHERE c~clsname = @lv_class AND c~cmptype = 1
+      ORDER BY d~exposure DESCENDING, c~cmpname
+      INTO TABLE @DATA(lt_methods)
+      UP TO @iv_max ROWS.
+    line( |  { iv_class }: { lines( lt_methods ) } method(s) listed| ).
+    LOOP AT lt_methods INTO DATA(ls_method).
+      SELECT sconame, pardecltyp, typtype, type
+        FROM seosubcodf
+        WHERE clsname = @lv_class AND cmpname = @ls_method-cmpname
+        ORDER BY sconame
+        INTO TABLE @DATA(lt_params).
+      DATA lv_text TYPE string.
+      CLEAR lv_text.
+      LOOP AT lt_params INTO DATA(ls_param).
+        lv_text = |{ lv_text } { ls_param-sconame }:{ ls_param-pardecltyp }:{ ls_param-type }|.
+      ENDLOOP.
+      line( |     { COND #( WHEN ls_method-exposure = 2 THEN 'PUBLIC ' ELSE 'other  ' ) }{ ls_method-cmpname }{ lv_text }| ).
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD list_tables.

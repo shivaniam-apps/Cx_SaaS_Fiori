@@ -65,6 +65,9 @@ CLASS lcl_probe DEFINITION FINAL.
     METHODS list_classes IMPORTING iv_pattern TYPE string
                                    iv_max     TYPE i DEFAULT 40.
     METHODS field_list IMPORTING iv_table TYPE string.
+    METHODS class_methods IMPORTING iv_class TYPE string
+                                    iv_max   TYPE i DEFAULT 40.
+    METHODS probe_round_two.
     " Generic, dynamic row dump: table name and WHERE clause as strings,
     " so a wrong column or table name is reported, never a syntax error.
     METHODS dump_rows IMPORTING iv_table TYPE string
@@ -83,6 +86,7 @@ CLASS lcl_probe IMPLEMENTATION.
     probe_gateway_activation( ).
     probe_spaces_pages( ).
     probe_role_menu_nodes( ).
+    probe_round_two( ).
     manual_follow_ups( ).
     section( 'END OF PROBE' ).
   ENDMETHOD.
@@ -215,8 +219,60 @@ CLASS lcl_probe IMPLEMENTATION.
     fm_signature( 'PRGN_RFC_DELETE_AGR' ).
     fm_signature( 'PRGN_DELETE_AGR' ).
     fm_signature( 'PRGN_RFC_DELETE_ACTIVITY_GROUP' ).
+    " Round 1 (RD1/400, 2026-09-18): the three above are MISSING; this one exists.
+    fm_signature( 'PRGN_ACTIVITY_GROUP_DELETE' ).
     list_functions( 'PRGN%DELETE%' ).
     list_functions( '/UI2/%ROLE%' ).
+  ENDMETHOD.
+
+  METHOD probe_round_two.
+    " Round 2 (written from the RD1/400 output of 2026-09-18): the direct
+    " gateway activation API, the FDM space/page API surface, the transport
+    " object types of launchpad content, and the role-deletion FM signature.
+    " Run in CLIENT 100: spaces, pages and service assignments are
+    " client-dependent and were empty in 400.
+    section( '3b. ROUND 2 - SIGNATURES BEHIND THE ROUND-1 FINDINGS' ).
+    line( 'Direct gateway activation (replaces the task list when usable):' ).
+    fm_signature( '/IWFND/FM_ACTIVATE_SERVICE' ).
+    class_methods( '/IWFND/CL_MGW_ACTIVATION_API' ).
+    class_methods( '/IWFND/CL_MED_REM_ACTIVATION' ).
+    line( 'Space / page API surface (public methods and parameters):' ).
+    class_methods( '/UI2/CL_FDM_SPACE_API' ).
+    class_methods( '/UI2/CL_FDM_SPACE_API_FACTORY' ).
+    class_methods( '/UI2/CL_FDM_PAGE_API' ).
+    class_methods( '/UI2/CL_FDM_PAGE_API_FACTORY' ).
+    class_methods( '/UI2/CL_FDM_SPACE_CTS_ACCESS' ).
+    class_methods( '/UI2/CL_FDM_PAGE_CTS_ACCESS' ).
+    class_methods( '/UI2/CL_FDM_SPACE_TRANS_OBJECT' ).
+    line( 'Role deletion (round 1: PRGN_RFC_DELETE_AGR / PRGN_DELETE_AGR / PRGN_RFC_DELETE_ACTIVITY_GROUP are MISSING):' ).
+    fm_signature( 'PRGN_ACTIVITY_GROUP_DELETE' ).
+    fm_signature( 'PRGN_RFC_DELETE_DERIVATION' ).
+    line( 'Transport object types of launchpad content (TADIR counts per UI* object type):' ).
+    SELECT object, COUNT(*) AS cnt FROM tadir
+      WHERE pgmid = 'R3TR' AND object LIKE 'UI%'
+      GROUP BY object ORDER BY object
+      INTO TABLE @DATA(lt_ui_objects).
+    LOOP AT lt_ui_objects INTO DATA(ls_ui).
+      line( |  TADIR R3TR { ls_ui-object }: { ls_ui-cnt } entries| ).
+    ENDLOOP.
+    dump_rows( iv_table = 'OBJH' iv_where = |OBJECTNAME LIKE 'UI%'| iv_max = 30 ).
+    dump_rows( iv_table = 'OBJT' iv_where = |OBJECTNAME LIKE 'UI%' AND LANGUAGE = 'E'| iv_max = 30 ).
+    line( |Spaces in THIS client: { count_rows( iv_table = '/UI2/STHEAD' iv_where = '' ) } (0 in client 400 - re-run in 100)| ).
+    dump_rows( iv_table = '/UI2/STHEAD'  iv_where = '' iv_max = p_rows ).
+    dump_rows( iv_table = '/UI2/STHEADT' iv_where = |LANGU = '{ sy-langu }'| iv_max = p_rows ).
+    dump_rows( iv_table = '/UI2/STPGA'   iv_where = '' iv_max = p_rows ).
+    dump_rows( iv_table = '/UI2/PGHEAD'  iv_where = '' iv_max = p_rows ).
+    dump_rows( iv_table = '/UI2/PGHEADT' iv_where = |LANGU = '{ sy-langu }'| iv_max = p_rows ).
+    " Round 1 answered the node shape: REPORTTYPE OT with REPORT = CAT_PROVIDER /
+    " GROUP_PROVIDER / SPACE_PROVIDER and the id in AGR_BUFFI-URL. How PRGN
+    " receives that URL is the remaining question: SMENSAPNEW has no URL field.
+    line( 'Menu URL carrier candidates (SMENSAPNEW has no URL column):' ).
+    field_list( 'SMENCUST' ).
+    field_list( 'AGR_BUFFI' ).
+    list_functions( 'PRGN_RFC%' ).
+    line( 'Any Z role that already carries a space or catalog node (learn the write result):' ).
+    dump_rows( iv_table = 'AGR_HIER'  iv_where = |AGR_NAME LIKE 'Z%' AND REPORTTYPE = 'OT'| iv_max = p_rows ).
+    dump_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME LIKE 'Z%'| iv_max = p_rows ).
   ENDMETHOD.
 
   METHOD manual_follow_ups.
@@ -233,6 +289,39 @@ CLASS lcl_probe IMPLEMENTATION.
     line( '- Section 3: the AGR_HIER rows show the node type/id columns that' ).
     line( '  ADD_SPACE_TO_ROLE and ADD_CATALOG_TO_ROLE must write (HIERARCHY_NODES).' ).
     line( '- Attach the full output to docu/06-s4-integration/api-matrix.md.' ).
+  ENDMETHOD.
+
+
+  METHOD class_methods.
+    DATA lv_class TYPE seoclsname.
+    lv_class = iv_class.
+    SELECT SINGLE clsname FROM seoclass WHERE clsname = @lv_class INTO @DATA(lv_found).
+    IF sy-subrc <> 0.
+      line( |  { iv_class }: MISSING| ).
+      RETURN.
+    ENDIF.
+    " CMPTYPE 1 = method; EXPOSURE 2 = public (SEOCOMPODF).
+    SELECT c~cmpname, d~exposure
+      FROM seocompo AS c
+      INNER JOIN seocompodf AS d ON d~clsname = c~clsname AND d~cmpname = c~cmpname
+      WHERE c~clsname = @lv_class AND c~cmptype = 1
+      ORDER BY d~exposure DESCENDING, c~cmpname
+      INTO TABLE @DATA(lt_methods)
+      UP TO @iv_max ROWS.
+    line( |  { iv_class }: { lines( lt_methods ) } method(s) listed| ).
+    LOOP AT lt_methods INTO DATA(ls_method).
+      SELECT sconame, pardecltyp, typtype, type
+        FROM seosubcodf
+        WHERE clsname = @lv_class AND cmpname = @ls_method-cmpname
+        ORDER BY sconame
+        INTO TABLE @DATA(lt_params).
+      DATA lv_text TYPE string.
+      CLEAR lv_text.
+      LOOP AT lt_params INTO DATA(ls_param).
+        lv_text = |{ lv_text } { ls_param-sconame }:{ ls_param-pardecltyp }:{ ls_param-type }|.
+      ENDLOOP.
+      line( |     { COND #( WHEN ls_method-exposure = 2 THEN 'PUBLIC ' ELSE 'other  ' ) }{ ls_method-cmpname }{ lv_text }| ).
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD fm_signature.
