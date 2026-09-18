@@ -10,6 +10,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## To-do (milestone order)
 
+- [ ] O18 Usage Insight drill-down scoped to the run and deep links behind the approuter (promoted I44, I52): queryTransactionUsers must filter UserTransactionUsage by the extraction run's snapshots as the comment claims (a tcode used in two runs currently mixes rows); the path-form deep link translation of O16 needs the approuter route for /audit-log, /transports etc. to serve index.html (xs-app.json) or the deployed app 404s where the dev server rewrites
 
 ## Accomplished
 
