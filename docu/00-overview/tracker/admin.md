@@ -9,6 +9,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## To-do (milestone order)
 
+- [ ] A14 Hardening follow-ups from the security review and T4 (promoted I45, I35, I36, I42): row-level tenant checks in the PublicService handlers that address rows by ID (security finding 1); safeResponseData redaction must mask whole values, not up to the first space; lockfile for the PostgreSQL deployer package so staging cannot drift from the runtime; AdoptOps alert events for verifyAuditChain BROKEN, readiness failures and EXPOSED activation verdicts in addition to failed tasks
 - [ ] T3 BTP Audit Log service binding (after PO-2)
 
 ## Accomplished
@@ -42,6 +43,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 ## Daily log
 
 ### 2026-09-18
+- Fourth parallel round merged: #45-#65 (21 PRs, ~7.3k lines: S11, O9-O17, A13, T4-T7, S7, S9 part 1, I46 indexes, RD1 message fixes, T2 lifecycle) with every gate green on main (387 server, 142 client, both lints, rolldown lock, no dependency additions besides scripts); ABAP mirror in sync with a4h_2023_zado #28. Housekeeping PR #66: S7 marked accomplished (the scheduling session's tracker branches docs/tracker-s7-done and docs/tracker-s9-part1 were folded in and deleted), duplicate idea IDs I34/I35/I44 renumbered to I50-I52, promotions S12 / A14 / O18, I37 obsolete. Nine stale remote branches deleted after a dry-run merge showed each adds nothing to main. Worktrees re-pointed: admin A14, scheduling S12, overview O18.
 - T2 landed from the overview worktree (branch feat/subscription-lifecycle): srv/utils/subscription-lifecycle.js + test/subscription-lifecycle.test.mjs (7 HTTP tests), 384 server tests green. Open: I9 export-then-purge vs legal hold for retained audit rows, I34 route mapping from the callback. PR #65 opened; merged origin/main (#63 indexes, #64 ABAP mirror) after the tracker conflicted with the parallel admin session.
 - I46 landed on feat/postgres-indexes. One index list, three consumers; the deployer start script became `cds-deploy && node create-indexes.js` and the build copies both files into gen/pg. Measured effect: keyed lookups into the 120k-200k row tables drop 6-7x; sorts and groupbys over one run of 50,000 users do not change (an index on the run id cannot shorten a sort by transaction count). Lesson: the sqlite refresh script defines `require` after its imports, so a module-level require must sit below that line.
 - T7 landed on feat/load-test. The load suite is a mocha test, not a separate tool, so it runs in CI at scale 1 and at the enterprise reference on demand. Findings: cds.test captures console output (the table goes to stdout and an optional report file); typed action payloads carry Items at the top level while LargeString ones carry a JSON string in value; fioriService.queryTransactionUsers filters by transaction only (I44); CAP creates no secondary indexes, so the volume reads are sequential scans on PostgreSQL (I46). Also fixed the unused import that #58 had left red in the server lint. Idea numbering collided again (two I43 on main); the security-review finding is I45 now.
