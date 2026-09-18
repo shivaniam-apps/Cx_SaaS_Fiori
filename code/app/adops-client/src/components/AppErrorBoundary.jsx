@@ -4,8 +4,9 @@ import { Button } from '@ui5/webcomponents-react/Button';
 import { Text } from '@ui5/webcomponents-react/Text';
 import { reportRenderError } from '../services/telemetryService.js';
 
-// Keyed on the route pathname by the caller so a crash on one page never
-// strands the whole app: navigating remounts a fresh boundary.
+// Keyed on the page (first path segment) by the caller so a crash on one
+// page never strands the whole app: navigating to another page remounts a
+// fresh boundary, while tab / detail routes inside a page keep its state.
 //
 // Every render crash is reported once (recordClientError -> ClientErrorReports)
 // with the correlation id of the last request, and that reference is shown

@@ -11,6 +11,8 @@ import { Tag } from '@ui5/webcomponents-react/Tag';
 import { BusyIndicator } from '@ui5/webcomponents-react/BusyIndicator';
 import { IllustratedMessage } from '@ui5/webcomponents-react/IllustratedMessage';
 import { MessageStrip } from '@ui5/webcomponents-react/MessageStrip';
+import AdopsToast from '../components/AdopsToast.jsx';
+import { useFeedback } from '../hooks/useFeedback.js';
 import { Dialog } from '@ui5/webcomponents-react/Dialog';
 import { Input } from '@ui5/webcomponents-react/Input';
 import { Select } from '@ui5/webcomponents-react/Select';
@@ -62,7 +64,7 @@ export function AccessRequestsPage() {
   const [list, setList] = useState(null);          // { items, count }
   const [summary, setSummary] = useState(null);    // { Total, Pending, Approved, Declined, Other }
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState(null);      // { design, text }
+  const { notice, toast, notify: setNotice, clearNotice, clearToast } = useFeedback();
   const [reloadToken, setReloadToken] = useState(0);
 
   // Filter bar contract: controls edit a DRAFT; Go commits it to the applied
@@ -182,8 +184,9 @@ export function AccessRequestsPage() {
       {error ? (
         <MessageStrip design="Negative" style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setError('')}>{error}</MessageStrip>
       ) : null}
+      <AdopsToast message={toast} onClose={clearToast} />
       {notice ? (
-        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={() => setNotice(null)}>{notice.text}</MessageStrip>
+        <MessageStrip design={notice.design} style={{ marginTop: 'var(--adops-space-sm)' }} onClose={clearNotice}>{notice.text}</MessageStrip>
       ) : null}
 
       <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--adops-space-sm)', marginTop: 'var(--adops-space-md)' }}>
