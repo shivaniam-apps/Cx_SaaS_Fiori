@@ -289,7 +289,9 @@ CLASS lcl_probe IMPLEMENTATION.
       LOOP AT lt_params INTO DATA(ls_param).
         lv_text = |{ lv_text } { ls_param-sconame }:{ ls_param-pardecltyp }:{ ls_param-type }|.
       ENDLOOP.
-      line( |     { COND #( WHEN ls_method-exposure = 2 THEN 'PUBLIC ' ELSE 'other  ' ) }{ ls_method-cmpname }{ lv_text }| ).
+      " No COND # inside a string template: there is no type to infer from.
+      DATA(lv_exposure) = COND string( WHEN ls_method-exposure = 2 THEN `PUBLIC ` ELSE `other  ` ).
+      line( |     { lv_exposure }{ ls_method-cmpname }{ lv_text }| ).
     ENDLOOP.
   ENDMETHOD.
 

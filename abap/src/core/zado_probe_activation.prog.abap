@@ -246,12 +246,15 @@ CLASS lcl_probe IMPLEMENTATION.
     DATA lt_param_def TYPE stctm_tx_parameter.
     DATA lt_param_val TYPE stctm_tx_value.
     DATA lt_return    TYPE bapirettab.
+    " Passed initial: its components are recorded by the field list above,
+    " not assumed. The language goes in as its declared type (RD1 rejects
+    " untyped literals on function-module parameters).
     DATA ls_caller    TYPE stc_ext_caller_info.
-    ls_caller-caller_name = 'ZADO_PROBE_ACTIVATION'.
+    DATA lv_langu     TYPE laiso VALUE 'EN'.
     CALL FUNCTION 'STC_TM_SCENARIO_GET_PARAMETERS'
       EXPORTING
         i_scenario_id  = p_scen
-        i_language     = 'E'
+        i_language     = lv_langu
         is_caller_info = ls_caller
       IMPORTING
         et_param_def   = lt_param_def
@@ -368,7 +371,9 @@ CLASS lcl_probe IMPLEMENTATION.
       LOOP AT lt_params INTO DATA(ls_param).
         lv_text = |{ lv_text } { ls_param-sconame }:{ ls_param-pardecltyp }:{ ls_param-type }|.
       ENDLOOP.
-      line( |     { COND #( WHEN ls_method-exposure = 2 THEN 'PUBLIC ' ELSE 'other  ' ) }{ ls_method-cmpname }{ lv_text }| ).
+      " No COND # inside a string template: there is no type to infer from.
+      DATA(lv_exposure) = COND string( WHEN ls_method-exposure = 2 THEN `PUBLIC ` ELSE `other  ` ).
+      line( |     { lv_exposure }{ ls_method-cmpname }{ lv_text }| ).
     ENDLOOP.
   ENDMETHOD.
 
