@@ -297,6 +297,23 @@ export async function releaseTransport(transportId, simulate) {
   return parseJsonActionResult(response.data);
 }
 
+// S10: verification on a follow-on system (read-only towards S/4) and the
+// operator's record of the runbook outcome.
+export async function verifyTransportImport(transportId, targetSystemId) {
+  const response = await http.post('/fiori/verifyTransportImport', { transportId, targetSystemId });
+  return parseJsonActionResult(response.data);
+}
+
+export async function recordTransportImport(transportId, targetSystemId, status, note) {
+  const response = await http.post('/fiori/recordTransportImport', { transportId, targetSystemId, status, note: note || '' });
+  return parseJsonActionResult(response.data);
+}
+
+export async function readTransportImport(transportId, targetSystemId) {
+  const response = await http.get(`/fiori/readTransportImport(transportId=${transportId},targetSystemId=${targetSystemId})`);
+  return parseJsonActionResult(response.data);
+}
+
 export async function readActivationManifest(planId) {
   const response = await http.get(`/fiori/readActivationManifest(planId=${planId})`);
   return parseJsonActionResult(response.data);
