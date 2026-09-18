@@ -225,6 +225,13 @@ progress and messages are on the page ([docu/13](../13-operations-observability/
 section 3 explains the states). No periods found means the workload
 collector is not running or the ST03N retention does not cover the window.
 
+**Snapshot collector (S7).** Run `ZADO_COLLECT_USAGE` (SE38) once by
+hand to backfill, then schedule it monthly in SM36 (job `ZADO_COLLECT_USAGE`,
+variant with the defaults). Extractions whose window the snapshots cover are
+served from the `ZADO_SNAP_*` tables instead of live SWNC calls; the run log
+reports the data source per read. Details and the RD1 acceptance steps:
+[docu/07 snapshot-collector](../07-usage-extraction/snapshot-collector.md).
+
 **Offline bridge.** While the Cloud Connector path is not open yet, run
 `ZADO_EXPORT_USAGE` (SE38) on the S/4 system, download the JSON file and
 use "Import Extract" on the Extractions page. The file is pseudonymised
@@ -262,6 +269,7 @@ opt-in.
   output of a second `ZADO_CFG_INIT` run is the confirmation.
 - The confirmed authorization object list for the technical user is
   written with T6 (docu/10).
-- Catalog derivation (`ZADO_CATALOG`) and the ABAP snapshot collector are
-  roadmap S9 and S7; today an extraction reads ST03N live through the
-  bounded readers.
+- Catalog derivation (`ZADO_CATALOG`) is roadmap S9. The snapshot
+  collector (S7) exists: without a scheduled `ZADO_COLLECT_USAGE` an
+  extraction still reads ST03N live through the bounded readers and its run
+  log says so (WARN "Data source: live ST03N").

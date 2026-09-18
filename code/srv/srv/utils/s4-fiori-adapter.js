@@ -16,6 +16,7 @@ const { isActivationTargetEnvironment } = require('./activation-plan.js');
 // an unused logger from this file, so main referenced LOG without defining it.
 const LOG = require('@sap/cds').log('s4-fiori-adapter');
 const { noDestinationMessage } = require('./config-hardening.js');
+const { normalizeDataSource } = require('./snapshot-coverage.js');
 
 
 // ---------------------------------------------------------------------------
@@ -229,6 +230,13 @@ async function getBackendCapabilities({ targetSystem, req }) {
       SapUi5Version: '1.120',
       CollectorRunning: true,
       AddOnVersion: '0.1.0-mock',
+      // S7: the mock system has a year of snapshots and the job scheduled.
+      SnapshotFrom: '2026-01-01',
+      SnapshotTo: '2026-12-31',
+      SnapshotMonths: 12,
+      SnapshotCollectedOn: '2026-09-18',
+      SnapshotCollectedAt: '02:15:00',
+      CollectorJobScheduled: 'X',
       ActivationEndpoint
     };
   }
@@ -314,7 +322,9 @@ function mapTransactionUsage(row) {
     AvgResponseTimeMs: Number(row.AvgResponseTimeMs ?? 0),
     TotalCpuTimeMs: Number(row.TotalCpuTimeMs ?? 0),
     TotalDbTimeMs: Number(row.TotalDbTimeMs ?? 0),
-    LastUsedOn: row.LastUsedOn || null
+    LastUsedOn: row.LastUsedOn || null,
+    // S7: what served the read; an add-on older than S7 sends no field -> LIVE.
+    DataSource: normalizeDataSource(row.DataSource)
   };
 }
 
@@ -326,7 +336,8 @@ function mapUserTransactionUsage(row) {
     PeriodTo: row.PeriodTo,
     ExecutionCount: Number(row.ExecutionCount ?? row.StepCount ?? 0),
     DialogStepCount: Number(row.DialogStepCount ?? 0),
-    LastUsedOn: row.LastUsedOn || null
+    LastUsedOn: row.LastUsedOn || null,
+    DataSource: normalizeDataSource(row.DataSource)
   };
 }
 
@@ -415,10 +426,18 @@ async function fetchUsagePeriods({ targetSystem, req }) {
   return rows.map(mapUsagePeriod);
 }
 
-async function fetchTransactionUsagePage({ targetSystem, periodFrom, periodTo, top = 500, skip = 0, req }) {
+// dataSource (S7): 'SNAPSHOT' | 'LIVE' forces the add-on's source; unset
+// lets it choose (snapshots when the window is covered).
+function dataSourceFilter(dataSource) {
+  const upper = String(dataSource || '').trim().toUpperCase();
+  return upper === 'SNAPSHOT' || upper === 'LIVE' ? `DataSource eq '${upper}'` : null;
+}
+
+async function fetchTransactionUsagePage({ targetSystem, periodFrom, periodTo, dataSource, top = 500, skip = 0, req }) {
   const filters = [];
   if (periodFrom) filters.push(`PeriodFrom ge ${periodFrom}`);
   if (periodTo) filters.push(`PeriodTo le ${periodTo}`);
+  if (dataSourceFilter(dataSource)) filters.push(dataSourceFilter(dataSource));
   const page = await fetchPagedEntity({
     targetSystem,
     entitySet: 'TransactionUsage',
@@ -511,10 +530,11 @@ async function usageEntityParameters({ targetSystem, entitySet, req }) {
   return names;
 }
 
-async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, tenantId, top = 1000, skip = 0, req }) {
+async function fetchUserTransactionUsagePage({ targetSystem, periodFrom, periodTo, topUsersPerTcode, minExecutions, tenantId, dataSource, top = 1000, skip = 0, req }) {
   const filters = [];
   if (periodFrom) filters.push(`PeriodFrom ge ${periodFrom}`);
   if (periodTo) filters.push(`PeriodTo le ${periodTo}`);
+  if (dataSourceFilter(dataSource)) filters.push(dataSourceFilter(dataSource));
   const page = {
     filter: filters.join(' and ') || undefined,
     orderBy: 'TransactionCode asc,UserKey asc',
@@ -626,6 +646,7 @@ module.exports = {
   fetchUsagePeriods,
   fetchTransactionUsagePage,
   fetchUserTransactionUsagePage,
+  dataSourceFilter,
   INVENTORY_PAGE_SIZE,
   fetchUserInventoryPage,
   fetchRoleInventoryPage,

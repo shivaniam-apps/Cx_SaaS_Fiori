@@ -13,6 +13,12 @@ CLASS zcl_ado_st03_reader DEFINITION
     " requested window, aggregates, and caches the result per window
     " for the lifetime of the session so OData paging does not refetch.
     "
+    " S7: READ_MONTH_RAW (one month, aggregated by user x 20-char
+    " tcode) and ROLLUP (raw -> window rows) are public so the snapshot
+    " collector (ZCL_ADO_COLLECTOR) reuses the same SWNC call and the
+    " same rollup semantics; GET_WINDOW is the LIVE path the query
+    " providers fall back to when the window is not snapshotted.
+    "
     " NOTE (matrix follow-up 7): the exact semantics of COUNT vs DCOUNT
     " must be validated against the ST03N UI for one known period. Until
     " then COUNT is treated as executions and dialog steps are COUNT
@@ -43,6 +49,21 @@ CLASS zcl_ado_st03_reader DEFINITION
            END OF ty_user_tx,
            ty_user_tx_t TYPE STANDARD TABLE OF ty_user_tx WITH EMPTY KEY.
 
+    " Raw accumulation: real user id x 20-char transaction code. Distinct
+    " 72-char ENTRY_IDs (batch job variants) collapse to the same code, so
+    " a user never leaves the system once per variant.
+    TYPES: BEGIN OF ty_raw,
+             account  TYPE c LENGTH 64,
+             entry_id TYPE c LENGTH 20,
+             count    TYPE int8,
+             respti   TYPE p LENGTH 16 DECIMALS 2,
+             cputi    TYPE p LENGTH 16 DECIMALS 2,
+             dbti     TYPE p LENGTH 16 DECIMALS 2,
+           END OF ty_raw,
+           ty_raw_t TYPE HASHED TABLE OF ty_raw WITH UNIQUE KEY account entry_id.
+
+    TYPES ty_date_t TYPE STANDARD TABLE OF d WITH EMPTY KEY.
+
     " iv_top_users: top-N users per transaction (<= 0 = all).
     " iv_min_executions: user x tcode rows below this count are dropped
     " BEFORE the top-N cut, so the N are always the meaningful users.
@@ -58,22 +79,39 @@ CLASS zcl_ado_st03_reader DEFINITION
       EXPORTING et_tx_usage       TYPE ty_tx_usage_t
                 et_user_tx        TYPE ty_user_tx_t.
 
-  PRIVATE SECTION.
-    " Named table type: RETURNING parameters cannot use inline/generic
-    " table declarations.
-    TYPES ty_date_t TYPE STANDARD TABLE OF d WITH EMPTY KEY.
+    " One ST03N month (component TOTAL, period type M) accumulated into
+    " ct_raw. A missing month is normal (retention, young systems) and
+    " leaves ct_raw untouched.
+    CLASS-METHODS read_month_raw
+      IMPORTING iv_month TYPE d
+      CHANGING  ct_raw   TYPE ty_raw_t.
 
+    " Raw rows -> window rows: per-tcode rollup with distinct users, then
+    " user x tcode rows thresholded, top-N per tcode, pseudonymised.
+    CLASS-METHODS rollup
+      IMPORTING it_raw            TYPE ty_raw_t
+                iv_from           TYPE d
+                iv_to             TYPE d
+                iv_pseudonymise   TYPE abap_bool DEFAULT abap_true
+                iv_top_users      TYPE i DEFAULT 20
+                iv_min_executions TYPE i DEFAULT 1
+                iv_tenant         TYPE string OPTIONAL
+      EXPORTING et_tx_usage       TYPE ty_tx_usage_t
+                et_user_tx        TYPE ty_user_tx_t.
+
+    " First days of the months touching the window (hard cap 36).
+    CLASS-METHODS month_starts
+      IMPORTING iv_from          TYPE d
+                iv_to            TYPE d
+      RETURNING VALUE(rt_months) TYPE ty_date_t.
+
+  PRIVATE SECTION.
     TYPES: BEGIN OF ty_cache,
              cache_key TYPE string,
              tx_usage  TYPE ty_tx_usage_t,
              user_tx   TYPE ty_user_tx_t,
            END OF ty_cache.
     CLASS-DATA gt_cache TYPE STANDARD TABLE OF ty_cache WITH EMPTY KEY.
-
-    CLASS-METHODS month_starts
-      IMPORTING iv_from          TYPE d
-                iv_to            TYPE d
-      RETURNING VALUE(rt_months) TYPE ty_date_t.
 ENDCLASS.
 
 
@@ -90,18 +128,32 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " Raw accumulation across the monthly periods of the window.
-    TYPES: BEGIN OF ty_raw,
-             account  TYPE c LENGTH 64,
-             entry_id TYPE c LENGTH 72,
-             count    TYPE int8,
-             respti   TYPE p LENGTH 16 DECIMALS 2,
-             cputi    TYPE p LENGTH 16 DECIMALS 2,
-             dbti     TYPE p LENGTH 16 DECIMALS 2,
-           END OF ty_raw.
-    DATA lt_raw TYPE HASHED TABLE OF ty_raw
-      WITH UNIQUE KEY account entry_id.
+    DATA lt_raw TYPE ty_raw_t.
+    LOOP AT month_starts( iv_from = iv_from iv_to = iv_to ) INTO DATA(lv_month).
+      read_month_raw( EXPORTING iv_month = lv_month CHANGING ct_raw = lt_raw ).
+    ENDLOOP.
 
+    rollup(
+      EXPORTING it_raw            = lt_raw
+                iv_from           = iv_from
+                iv_to             = iv_to
+                iv_pseudonymise   = iv_pseudonymise
+                iv_top_users      = iv_top_users
+                iv_min_executions = iv_min_executions
+                iv_tenant         = iv_tenant
+      IMPORTING et_tx_usage       = et_tx_usage
+                et_user_tx        = et_user_tx ).
+
+    " Session cache (one window per extraction; OData pages re-enter here).
+    IF lines( gt_cache ) >= 4.
+      DELETE gt_cache INDEX 1.
+    ENDIF.
+    APPEND VALUE ty_cache( cache_key = lv_cache_key
+                           tx_usage  = et_tx_usage
+                           user_tx   = et_user_tx ) TO gt_cache.
+  ENDMETHOD.
+
+  METHOD read_month_raw.
     " Typed on the row structure the probe confirmed, not on a table type
     " whose row we have not verified.
     DATA lt_usertcode TYPE STANDARD TABLE OF swncaggusertcode WITH EMPTY KEY.
@@ -116,61 +168,62 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
     lv_component  = 'TOTAL'.
     lv_sysid      = sy-sysid.
     lv_periodtype = 'M'.
+    lv_periodstrt = iv_month.
 
-    LOOP AT month_starts( iv_from = iv_from iv_to = iv_to ) INTO DATA(lv_month).
-      CLEAR lt_usertcode.
-      lv_periodstrt = lv_month.
-      CALL FUNCTION 'SWNC_COLLECTOR_GET_AGGREGATES'
-        EXPORTING
-          component     = lv_component
-          assigndsys    = lv_sysid
-          periodtype    = lv_periodtype
-          periodstrt    = lv_periodstrt
-        TABLES
-          usertcode     = lt_usertcode
-        EXCEPTIONS
-          no_data_found = 1
-          OTHERS        = 2.
-      IF sy-subrc <> 0.
-        CONTINUE. "Missing months are normal (retention, young systems).
+    CALL FUNCTION 'SWNC_COLLECTOR_GET_AGGREGATES'
+      EXPORTING
+        component     = lv_component
+        assigndsys    = lv_sysid
+        periodtype    = lv_periodtype
+        periodstrt    = lv_periodstrt
+      TABLES
+        usertcode     = lt_usertcode
+      EXCEPTIONS
+        no_data_found = 1
+        OTHERS        = 2.
+    IF sy-subrc <> 0.
+      RETURN. "Missing months are normal (retention, young systems).
+    ENDIF.
+
+    DATA lv_tcode20 TYPE ty_raw-entry_id.
+    LOOP AT lt_usertcode ASSIGNING FIELD-SYMBOL(<ls_agg>).
+      lv_tcode20 = condense( CONV string( <ls_agg>-entry_id ) ).
+      IF lv_tcode20 IS INITIAL.
+        CONTINUE.
       ENDIF.
-
-      LOOP AT lt_usertcode ASSIGNING FIELD-SYMBOL(<ls_agg>).
-        DATA(lv_tcode) = condense( CONV string( <ls_agg>-entry_id ) ).
-        IF lv_tcode IS INITIAL.
-          CONTINUE.
-        ENDIF.
-        READ TABLE lt_raw ASSIGNING FIELD-SYMBOL(<ls_raw>)
-          WITH TABLE KEY account = <ls_agg>-account entry_id = lv_tcode.
-        IF sy-subrc <> 0.
-          INSERT VALUE ty_raw( account = <ls_agg>-account entry_id = lv_tcode )
-            INTO TABLE lt_raw ASSIGNING <ls_raw>.
-        ENDIF.
-        <ls_raw>-count  = <ls_raw>-count  + <ls_agg>-count.
-        <ls_raw>-respti = <ls_raw>-respti + <ls_agg>-respti.
-        <ls_raw>-cputi  = <ls_raw>-cputi  + <ls_agg>-cputi.
-        " DB time = direct + sequential reads + changes (verified columns).
-        <ls_raw>-dbti   = <ls_raw>-dbti
-                        + <ls_agg>-readdirti + <ls_agg>-readseqti + <ls_agg>-chngti.
-      ENDLOOP.
+      READ TABLE ct_raw ASSIGNING FIELD-SYMBOL(<ls_raw>)
+        WITH TABLE KEY account = <ls_agg>-account entry_id = lv_tcode20.
+      IF sy-subrc <> 0.
+        INSERT VALUE ty_raw( account = <ls_agg>-account entry_id = lv_tcode20 )
+          INTO TABLE ct_raw ASSIGNING <ls_raw>.
+      ENDIF.
+      <ls_raw>-count  = <ls_raw>-count  + <ls_agg>-count.
+      <ls_raw>-respti = <ls_raw>-respti + <ls_agg>-respti.
+      <ls_raw>-cputi  = <ls_raw>-cputi  + <ls_agg>-cputi.
+      " DB time = direct + sequential reads + changes (verified columns).
+      <ls_raw>-dbti   = <ls_raw>-dbti
+                      + <ls_agg>-readdirti + <ls_agg>-readseqti + <ls_agg>-chngti.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD rollup.
+    CLEAR: et_tx_usage, et_user_tx.
 
     " --- per-tcode rollup with distinct users --------------------------------
     TYPES: BEGIN OF ty_tx_build,
-             entry_id TYPE c LENGTH 20,
+             entry_id TYPE ty_raw-entry_id,
              row      TYPE ty_tx_usage,
              users    TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line,
            END OF ty_tx_build.
     DATA lt_build TYPE HASHED TABLE OF ty_tx_build WITH UNIQUE KEY entry_id.
 
-    LOOP AT lt_raw ASSIGNING <ls_raw>.
-      DATA(lv_tc) = CONV ty_tx_build-entry_id( <ls_raw>-entry_id ).
+    LOOP AT it_raw ASSIGNING FIELD-SYMBOL(<ls_raw>).
       READ TABLE lt_build ASSIGNING FIELD-SYMBOL(<ls_build>)
-        WITH TABLE KEY entry_id = lv_tc.
+        WITH TABLE KEY entry_id = <ls_raw>-entry_id.
       IF sy-subrc <> 0.
         INSERT VALUE ty_tx_build(
-            entry_id = lv_tc
-            row = VALUE #( transaction_code = lv_tc
+            entry_id = <ls_raw>-entry_id
+            row = VALUE #( transaction_code = <ls_raw>-entry_id
                            period_from = iv_from
                            period_to   = iv_to ) )
           INTO TABLE lt_build ASSIGNING <ls_build>.
@@ -193,47 +246,30 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
     ENDLOOP.
     SORT et_tx_usage BY execution_count DESCENDING transaction_code ASCENDING.
 
-    " --- user x tcode rows, top-N per tcode, pseudonymised -------------------
-    " Aggregated by (user, 20-char tcode): distinct 72-char ENTRY_IDs (batch
-    " job variants) collapse to the same truncated code, matching the
-    " per-tcode rollup above - without this merge the same user leaves the
-    " system once per variant, i.e. duplicate (user, tcode) rows.
-    DATA lt_user_agg TYPE HASHED TABLE OF ty_user_tx
-      WITH UNIQUE KEY user_key transaction_code.
-    DATA lv_user_key TYPE ty_user_tx-user_key.
-    DATA lv_tcode20  TYPE ty_user_tx-transaction_code.
-    LOOP AT lt_raw ASSIGNING <ls_raw>.
-      lv_user_key = COND string(
-        WHEN iv_pseudonymise = abap_true
-        THEN zcl_ado_pseudonym=>hash( iv_value = CONV string( <ls_raw>-account ) iv_tenant = iv_tenant )
-        ELSE <ls_raw>-account ).
-      lv_tcode20 = <ls_raw>-entry_id.
-      READ TABLE lt_user_agg ASSIGNING FIELD-SYMBOL(<ls_uagg>)
-        WITH TABLE KEY user_key = lv_user_key transaction_code = lv_tcode20.
-      IF sy-subrc <> 0.
-        INSERT VALUE ty_user_tx( user_key         = lv_user_key
-                                 transaction_code = lv_tcode20
-                                 period_from      = iv_from
-                                 period_to        = iv_to )
-          INTO TABLE lt_user_agg ASSIGNING <ls_uagg>.
-      ENDIF.
-      <ls_uagg>-execution_count   = <ls_uagg>-execution_count   + <ls_raw>-count.
-      <ls_uagg>-dialog_step_count = <ls_uagg>-dialog_step_count + <ls_raw>-count.
-    ENDLOOP.
+    " --- user x tcode rows, threshold first, top-N per tcode, pseudonymised --
     DATA lt_user_all TYPE ty_user_tx_t.
-    lt_user_all = lt_user_agg.
-    " Threshold first (S6): occasional users never compete for a top-N slot.
-    IF iv_min_executions > 1.
-      DELETE lt_user_all WHERE execution_count < iv_min_executions.
-    ENDIF.
-    SORT lt_user_all BY transaction_code ASCENDING execution_count DESCENDING.
+    LOOP AT it_raw ASSIGNING <ls_raw>.
+      IF iv_min_executions > 1 AND <ls_raw>-count < iv_min_executions.
+        CONTINUE. "Threshold first (S6): occasional users never compete for a slot.
+      ENDIF.
+      APPEND VALUE ty_user_tx(
+        user_key          = COND string(
+                              WHEN iv_pseudonymise = abap_true
+                              THEN zcl_ado_pseudonym=>hash( iv_value = CONV string( <ls_raw>-account ) iv_tenant = iv_tenant )
+                              ELSE <ls_raw>-account )
+        transaction_code  = <ls_raw>-entry_id
+        period_from       = iv_from
+        period_to         = iv_to
+        execution_count   = <ls_raw>-count
+        dialog_step_count = <ls_raw>-count ) TO lt_user_all.
+    ENDLOOP.
+    SORT lt_user_all BY transaction_code ASCENDING execution_count DESCENDING user_key ASCENDING.
 
     " Volume bound at the source: only the top-N users per transaction leave
     " the system (the SaaS proposal engine UNIONs user sets, it does not need
-    " the long tail). iv_top_users <= 0 means no limit - it used to export
-    " zero user rows, which silently broke proposal scoring downstream.
-    DATA lv_current  TYPE ty_user_tx-transaction_code.
-    DATA lv_taken    TYPE i.
+    " the long tail). iv_top_users <= 0 means no limit.
+    DATA lv_current TYPE ty_user_tx-transaction_code.
+    DATA lv_taken   TYPE i.
     LOOP AT lt_user_all ASSIGNING FIELD-SYMBOL(<ls_user>).
       IF <ls_user>-transaction_code <> lv_current.
         lv_current = <ls_user>-transaction_code.
@@ -245,14 +281,6 @@ CLASS zcl_ado_st03_reader IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
     SORT et_user_tx BY transaction_code ASCENDING user_key ASCENDING.
-
-    " Session cache (one window per extraction; OData pages re-enter here).
-    IF lines( gt_cache ) >= 4.
-      DELETE gt_cache INDEX 1.
-    ENDIF.
-    APPEND VALUE ty_cache( cache_key = lv_cache_key
-                           tx_usage  = et_tx_usage
-                           user_tx   = et_user_tx ) TO gt_cache.
   ENDMETHOD.
 
   METHOD month_starts.

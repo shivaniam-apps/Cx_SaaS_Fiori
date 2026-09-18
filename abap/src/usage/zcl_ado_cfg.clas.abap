@@ -15,6 +15,10 @@ CLASS zcl_ado_cfg DEFINITION
     " it changes every pseudonym, so historic snapshots no longer join.
     "---------------------------------------------------------------
     CONSTANTS gc_key_pseudonym_secret TYPE zado_cfg-cfg_key VALUE 'PSEUDONYM_SECRET'.
+    " S7 collector: months backfilled by ZADO_COLLECT_USAGE by default and
+    " snapshot months kept (0 = keep all). Absent rows -> 13 / report default.
+    CONSTANTS gc_key_collect_months TYPE zado_cfg-cfg_key VALUE 'COLLECT_MONTHS'.
+    CONSTANTS gc_key_retention_months TYPE zado_cfg-cfg_key VALUE 'SNAPSHOT_RETENTION_MONTHS'.
 
     CLASS-METHODS get
       IMPORTING iv_key          TYPE zado_cfg-cfg_key
@@ -27,6 +31,13 @@ CLASS zcl_ado_cfg DEFINITION
     " Empty when no secret is configured (callers fall back safely).
     CLASS-METHODS pseudonym_secret
       RETURNING VALUE(rv_secret) TYPE string.
+
+    CLASS-METHODS collect_months
+      RETURNING VALUE(rv_months) TYPE i.
+
+    " -1 when unset (the collector report keeps its own default).
+    CLASS-METHODS snapshot_retention_months
+      RETURNING VALUE(rv_months) TYPE i.
 
     " Creates the secret when absent; iv_force rotates an existing one.
     " Returns abap_true when a new secret was written.
@@ -64,6 +75,25 @@ CLASS zcl_ado_cfg IMPLEMENTATION.
     MODIFY zado_cfg FROM @ls_row.
     IF iv_key = gc_key_pseudonym_secret.
       CLEAR: gv_secret, gv_secret_loaded.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD collect_months.
+    DATA(lv_value) = get( gc_key_collect_months ).
+    rv_months = 13.
+    IF lv_value IS NOT INITIAL AND lv_value CO '0123456789 '.
+      rv_months = lv_value.
+    ENDIF.
+    IF rv_months < 1.
+      rv_months = 13.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD snapshot_retention_months.
+    DATA(lv_value) = get( gc_key_retention_months ).
+    rv_months = -1.
+    IF lv_value IS NOT INITIAL AND lv_value CO '0123456789 '.
+      rv_months = lv_value.
     ENDIF.
   ENDMETHOD.
 

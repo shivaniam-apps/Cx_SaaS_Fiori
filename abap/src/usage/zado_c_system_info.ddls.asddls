@@ -19,4 +19,23 @@ define custom entity ZADO_C_SYSTEM_INFO
 
       @EndUserText.label: 'Add-On Version'
       AddOnVersion     : abap.char(20);
+
+      // S7: usage snapshot coverage written by ZADO_COLLECT_USAGE
+      @EndUserText.label: 'Snapshots From'
+      SnapshotFrom     : abap.dats;
+
+      @EndUserText.label: 'Snapshots To'
+      SnapshotTo       : abap.dats;
+
+      @EndUserText.label: 'Snapshot Months'
+      SnapshotMonths   : abap.int4;
+
+      @EndUserText.label: 'Last Collected On'
+      SnapshotCollectedOn : abap.dats;
+
+      @EndUserText.label: 'Last Collected At'
+      SnapshotCollectedAt : abap.tims;
+
+      @EndUserText.label: 'Collector Job Scheduled'
+      CollectorJobScheduled : abap.char(1);
 }

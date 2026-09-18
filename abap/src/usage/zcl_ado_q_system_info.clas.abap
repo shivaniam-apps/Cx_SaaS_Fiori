@@ -20,6 +20,12 @@ CLASS zcl_ado_q_system_info IMPLEMENTATION.
              sapui5version    TYPE c LENGTH 10,
              collectorrunning TYPE c LENGTH 1,
              addonversion     TYPE c LENGTH 20,
+             snapshotfrom     TYPE d,
+             snapshotto       TYPE d,
+             snapshotmonths   TYPE i,
+             snapshotcollectedon TYPE d,
+             snapshotcollectedat TYPE t,
+             collectorjobscheduled TYPE c LENGTH 1,
            END OF ty_result.
     DATA lt_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -45,6 +51,23 @@ CLASS zcl_ado_q_system_info IMPLEMENTATION.
         AND status IN ( 'S', 'R', 'F' )
       INTO @DATA(lv_jobs).
     ls_row-collectorrunning = COND #( WHEN lv_jobs > 0 THEN 'X' ELSE '' ).
+
+    " S7: snapshot coverage and whether ZADO_COLLECT_USAGE is scheduled
+    " (a released or scheduled job step running that report).
+    DATA(ls_coverage) = zcl_ado_snap_reader=>coverage( ).
+    ls_row-snapshotfrom   = ls_coverage-period_from.
+    ls_row-snapshotto     = ls_coverage-period_to.
+    ls_row-snapshotmonths = ls_coverage-months.
+    IF ls_coverage-collected_at IS NOT INITIAL.
+      CONVERT TIME STAMP ls_coverage-collected_at TIME ZONE 'UTC'
+        INTO DATE ls_row-snapshotcollectedon TIME ls_row-snapshotcollectedat.
+    ENDIF.
+    SELECT COUNT(*) FROM tbtcp AS p
+      INNER JOIN tbtco AS o ON o~jobname = p~jobname AND o~jobcount = p~jobcount
+      WHERE p~progname = 'ZADO_COLLECT_USAGE'
+        AND o~status IN ( 'S', 'P', 'R', 'Y' )
+      INTO @DATA(lv_collect_jobs).
+    ls_row-collectorjobscheduled = COND #( WHEN lv_collect_jobs > 0 THEN 'X' ELSE '' ).
 
     APPEND ls_row TO lt_result.
 

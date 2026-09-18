@@ -87,6 +87,7 @@ context adops.db {
             CollectedAt         : Timestamp;
             RowCount            : Integer;
             Truncated           : Boolean;
+            DataSource          : String(10);   // S7: SNAPSHOT (ZADO collector) | LIVE (SWNC) | MOCK
       }
 
       // THE fact table for scoring. One row per tcode per period per snapshot.

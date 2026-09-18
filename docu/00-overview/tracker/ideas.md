@@ -56,6 +56,7 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 - I41 (2026-09-18) A full-page load of a deep link (for example /audit-log, /transports) renders the Dashboard although location.pathname is the deep link; the page appears only after a side-navigation click. Bookmarks and shared links therefore open the cockpit. Seen on the Vite dev server with mocked auth while verifying A13; check AdopsShell's initial navigation / route guard (overview workstream).
 
 - I41 (2026-09-18) The HTTP test suites share one in-memory db per mocha process (cds-http-test.mjs), so fixtures collide across suites: audit-chain and public-service-auth both registered destination RD1_DEV and the O11 uniqueness rule exposed it; dashboard-summary asserts deltas against a baseline for the same reason. Give each suite a distinct fixture prefix (or a per-suite tenant via the tenant-scope middleware pattern) as a convention in the helper comment, and consider a shared fixture module.
+- I34 (2026-09-18) S7 snapshots cover the ST03N USERTCODE aggregate (component TOTAL, monthly). Follow-ups: per-instance components and the STAD sample source in the snapshot tables; a DB-side rollup for the LIVE path too (today it aggregates in ABAP memory like before S7); a small config report for ZADO_CFG COLLECT_MONTHS / SNAPSHOT_RETENTION_MONTHS instead of SM30; SystemInfo snapshot coverage on the Target Systems page (no client consumer yet).
 
 ## Parked
 
