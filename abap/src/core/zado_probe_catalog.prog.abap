@@ -276,7 +276,11 @@ CLASS lcl_probe IMPLEMENTATION.
     field_list( '/UI2/PB_C_TM' ).
     field_list( '/UI2/PB_C_TMM' ).
     field_list( '/UI2/PB_C_PROPM' ).
-    line( |  /UI2/PB_C_PAGEM { count_rows( iv_table = '/UI2/PB_C_PAGEM' iv_where = '' ) }, /UI2/PB_C_CHIPM { count_rows( iv_table = '/UI2/PB_C_CHIPM' iv_where = '' ) }, /UI2/PB_C_TMM { count_rows( iv_table = '/UI2/PB_C_TMM' iv_where = '' ) }, /UI2/PB_C_TM { count_rows( iv_table = '/UI2/PB_C_TM' iv_where = '' ) }| ).
+    " One count per line: ABAP source lines end at 255 characters.
+    line( |  /UI2/PB_C_PAGEM rows: { count_rows( iv_table = '/UI2/PB_C_PAGEM' iv_where = '' ) }| ).
+    line( |  /UI2/PB_C_CHIPM rows: { count_rows( iv_table = '/UI2/PB_C_CHIPM' iv_where = '' ) }| ).
+    line( |  /UI2/PB_C_TMM rows: { count_rows( iv_table = '/UI2/PB_C_TMM' iv_where = '' ) }| ).
+    line( |  /UI2/PB_C_TM rows: { count_rows( iv_table = '/UI2/PB_C_TM' iv_where = '' ) }| ).
     dump_rows( iv_table = '/UI2/PB_C_PAGEM' iv_where = |ID LIKE '%SAP_SD_BC_SO_DISPL%'| iv_max = 3 ).
     dump_rows( iv_table = '/UI2/PB_C_PAGEM' iv_where = |ID LIKE '%SAP_TC_SD%'| iv_max = 3 ).
     dump_rows( iv_table = '/UI2/PB_C_CHIPM' iv_where = |PAGE_ID LIKE '%SAP_SD_BC_SO_DISPL%'| iv_max = 3 ).
