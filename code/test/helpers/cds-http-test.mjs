@@ -45,3 +45,23 @@ export const json = (user) => ({ ...as(user), headers: { 'content-type': 'applic
 // @readonly answers 405 (method not allowed) in CAP 8; a role-based @restrict
 // denial answers 403. Both mean "the write did not happen".
 export const REFUSED = [403, 405];
+
+// Fixture convention (O15): every HTTP suite shares this ONE in-memory db,
+// so fixtures collide across suites unless their identities are suite-
+// specific. Rules, guarded by test/fixture-convention.test.mjs:
+// - destination names (unique per tenant since O11) carry a suite tag:
+//   `fixtures('AUD').destination('DEV')` -> 'AUD_DEV'; never a bare RD1_DEV.
+// - never assert absolute counts on an unscoped read (other suites' rows
+//   are in the same tables): scope by your own ids, or diff against a
+//   baseline read taken in before() (see dashboard-summary.test.mjs).
+// - a suite that needs true isolation runs under its own tenant through
+//   the tenant-scope middleware pattern in tenant-scope.test.mjs.
+export function fixtures(suiteTag) {
+  const tag = String(suiteTag || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+  if (!tag) throw new Error('fixtures(suiteTag): a suite tag is required');
+  return {
+    tag,
+    destination: (name) => `${tag}_${String(name).toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`,
+    name: (label) => `${label} (${tag})`
+  };
+}

@@ -237,12 +237,12 @@ describe('transport verification: service actions', () => {
   before(async () => {
     expectInMemoryDb();
     const dev = await test.axios.post('/fiori/TargetSystems', {
-      displayName: 'RD1 Development (S10)', destinationName: 'RD1_DEV_S10', systemId: 'RD1', client: '100', environment: 'DEV'
+      displayName: 'RD1 Development (S10)', destinationName: 'S10_DEV_100', systemId: 'RD1', client: '100', environment: 'DEV'
     }, json('alice'));
     expect(dev.status, JSON.stringify(dev.data)).to.equal(201);
     devId = dev.data.ID;
     const qas = await test.axios.post('/fiori/TargetSystems', {
-      displayName: 'RD1 Quality (S10)', destinationName: 'RD1_QAS_S10', systemId: 'RD1', client: '200', environment: 'QAS'
+      displayName: 'RD1 Quality (S10)', destinationName: 'S10_QAS_200', systemId: 'RD1', client: '200', environment: 'QAS'
     }, json('alice'));
     expect(qas.status, JSON.stringify(qas.data)).to.equal(201);
     qasId = qas.data.ID;

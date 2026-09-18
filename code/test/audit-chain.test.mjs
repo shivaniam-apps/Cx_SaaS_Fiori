@@ -49,7 +49,7 @@ describe('append-only hash-chained audit log', function () {
     expectInMemoryDb();
 
     const created = await test.axios.post('/fiori/TargetSystems', {
-      displayName: 'RD1 Development', destinationName: 'RD1_DEV', systemId: 'RD1', client: '100', environment: 'DEV'
+      displayName: 'RD1 Development', destinationName: 'AUD_DEV_100', systemId: 'RD1', client: '100', environment: 'DEV'
     }, json('alice'));
     expect(created.status, JSON.stringify(created.data)).to.equal(201);
     systemId = created.data.ID;
@@ -102,7 +102,7 @@ describe('append-only hash-chained audit log', function () {
 
     it('audits a system that is registered with the opt-in already set', async () => {
       const created = await test.axios.post('/fiori/TargetSystems', {
-        displayName: 'RD1 Production', destinationName: 'RD1_PRD', systemId: 'RD1', client: '300', environment: 'PRD',
+        displayName: 'RD1 Production', destinationName: 'AUD_PRD_300', systemId: 'RD1', client: '300', environment: 'PRD',
         identifiedUsageAllowed: true
       }, json('alice'));
       expect(created.status, JSON.stringify(created.data)).to.equal(201);
