@@ -109,6 +109,18 @@ function prepareDbDeployer() {
   }
   writeJson(csnPath, csn);
 
+  // Pin the deployer to the exact compiler stack this build ran with (idea
+  // I36): runtime and deployer must render the same DDL, and a caret range
+  // resolved at staging can drift from the version that produced csn.json.
+  const deployerPackage = readJson(packagePath);
+  const pinned = {};
+  for (const [name, range] of Object.entries(deployerPackage.dependencies || {})) {
+    const installed = join(projectRoot, 'node_modules', ...name.split('/'), 'package.json');
+    pinned[name] = existsSync(installed) ? readJson(installed).version : range;
+  }
+  writeJson(packagePath, { ...deployerPackage, dependencies: pinned });
+  console.log(`Pinned the PostgreSQL deployer to ${Object.entries(pinned).map(([name, version]) => `${name}@${version}`).join(', ')}.`);
+
   const runtimeCsnPath = join(projectRoot, 'gen', 'srv', 'srv', 'csn.json');
   if (existsSync(runtimeCsnPath)) {
     const runtimeDefs = readJson(runtimeCsnPath).definitions || {};

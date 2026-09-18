@@ -1,6 +1,6 @@
 {
   "name": "adops-cf",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "description": "Cloud Foundry deployment for the AdoptOps SaaS CAP app",
   "scripts": {
