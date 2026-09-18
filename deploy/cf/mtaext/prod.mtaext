@@ -29,6 +29,6 @@ resources:
   - name: adops-basic-postgres
     parameters:
       service-plan: standard
-  - name: adops-basic-logging
+  - name: adops-basic-cloud-logging
     parameters:
       service-plan: standard

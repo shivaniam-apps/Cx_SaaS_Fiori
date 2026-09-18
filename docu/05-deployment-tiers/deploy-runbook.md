@@ -15,7 +15,7 @@ day-two operation is [docu/13](../13-operations-observability/operations-runbook
 | Area | Requirement |
 |---|---|
 | Subaccount | Cloud Foundry environment enabled; one space per stage (`dev`, `qa`, `prod`); the person deploying is Space Developer |
-| Entitlements | `xsuaa` (application), `postgresql-db` (`development` for dev, `standard` for qa/prod), `connectivity` (lite), `destination` (lite), `html5-apps-repo` (app-host and app-runtime), `saas-registry` (application), `application-logs` (lite for dev/qa, standard for prod) |
+| Entitlements | `xsuaa` (application), `postgresql-db` (`development` for dev, `standard` for qa/prod), `connectivity` (lite), `destination` (lite), `html5-apps-repo` (app-host and app-runtime), `saas-registry` (application), `cloud-logging` (`dev` for dev, `standard` for qa/prod), `alert-notification` (standard) |
 | Identity | The subaccount's trust to an identity provider (default SAP ID service is enough for the pilot) |
 | Workstation | Node 22, npm, `cf` CLI v8 with the `multiapps` plugin, `mbt` |
 | Checkout | The **primary** checkout on `main` (a worktree with junctioned `node_modules` cannot run `mbt build`, see environments.md) |
@@ -230,5 +230,6 @@ on first use. The secret rotation runbook is T6.
 
 - No blue-green deployment, no release checklist (T5).
 - Only the `basic` tier registers subscription callbacks (I27, T2).
-- Logging is the `application-logs` service; Cloud Logging and alerts arrive
-  with T4. Until then, operators look, nobody is paged (docu/13).
+- Alert subscriptions (who is notified of `AdoptOpsTaskFailed`) are not
+  part of the deployment: create them once per space on the Alert
+  Notification instance (docu/13, section 3).

@@ -21,9 +21,9 @@ descriptor under `deploy/cf/mtaext/` and is applied at deploy time.
 
 | File | Space | What it overrides |
 |---|---|---|
-| `mtaext/dev.mtaext` | `dev` | `CORS_ORIGINS` adds the local client ports (5273 primary, 5283/5293/5303/5313 worktrees) so a local client can call the dev srv; one srv instance; task concurrency 1; PostgreSQL plan `development` |
+| `mtaext/dev.mtaext` | `dev` | `CORS_ORIGINS` adds the local client ports (5273 primary, 5283/5293/5303/5313 worktrees) so a local client can call the dev srv; one srv instance; task concurrency 1; PostgreSQL plan `development`; Cloud Logging plan `dev` |
 | `mtaext/qa.mtaext` | `qa` | one srv instance, task concurrency 2, PostgreSQL plan `standard` |
-| `mtaext/prod.mtaext` | `prod` | two srv instances at 1 GB, task concurrency 2, telemetry cleanup every 12 h, approuter 256 MB, PostgreSQL and application-logs plan `standard` |
+| `mtaext/prod.mtaext` | `prod` | two srv instances at 1 GB, task concurrency 2, telemetry cleanup every 12 h, approuter 256 MB, PostgreSQL and Cloud Logging plan `standard` |
 
 Every descriptor `extends: adops-basic` and carries the same `version`.
 Placeholders (`${space}`, `~{provided/property}`) work in extension files

@@ -1,6 +1,7 @@
 const cds = require('@sap/cds');
 const { randomUUID } = require('node:crypto');
 const { envNumber } = require('./env.js');
+const { alertTaskFailure } = require('./alert-notification.js');
 
 // Explicit ql import so the module also works under mocha (the SELECT/...
 // globals only exist when the cds server injects them).
@@ -167,11 +168,17 @@ async function reclaimStaleTasks() {
                 : { Status: 'QUEUED', Phase: 'Requeued after stale heartbeat' })
             .where({ ID: task.ID, Status: task.Status, HeartbeatAt: task.HeartbeatAt });
         Logger.warn(`Task ${task.ID} (${task.TaskType}) stale heartbeat -> ${exhausted ? 'FAILED' : 'requeued'}`);
+        if (exhausted) await notifyTaskFailure(task.ID);
     }
 
+    // Deadline overruns: collect first so each one can be alerted after the
+    // bulk update (the update itself stays one statement).
+    const overdue = await SELECT.from('adops.db.BackgroundTasks').columns('ID')
+        .where({ Status: { in: ['QUEUED', 'CLAIMED', 'RUNNING'] }, DeadlineAt: { '<': nowIso } });
     await UPDATE('adops.db.BackgroundTasks')
         .set({ Status: 'TIMED_OUT', CompletedAt: nowIso, ErrorText: 'Task deadline exceeded.' })
         .where({ Status: { in: ['QUEUED', 'CLAIMED', 'RUNNING'] }, DeadlineAt: { '<': nowIso } });
+    for (const task of overdue) await notifyTaskFailure(task.ID);
 }
 
 async function runTask(taskId) {
@@ -259,6 +266,19 @@ async function finishTask(taskId, status, { result, errorText } = {}) {
     };
     for (const key of Object.keys(patch)) if (patch[key] === undefined) delete patch[key];
     await UPDATE('adops.db.BackgroundTasks').set(patch).where({ ID: taskId });
+    if (status === 'FAILED' || status === 'TIMED_OUT') await notifyTaskFailure(taskId);
+}
+
+// Operators are paged for every terminal failure (roadmap T4). The alert
+// client degrades to a log line without a binding and never throws; a
+// failure to alert must not change the task's outcome.
+async function notifyTaskFailure(taskId) {
+    try {
+        const task = await SELECT.one.from('adops.db.BackgroundTasks').where({ ID: taskId });
+        if (task) await alertTaskFailure(task);
+    } catch (error) {
+        Logger.warn(`Task ${taskId}: failure alert not sent - ${error.message}`);
+    }
 }
 
 // Started from cds.on('served'). unref'd so tests and one-shot CLIs exit.

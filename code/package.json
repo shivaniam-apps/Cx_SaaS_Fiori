@@ -256,6 +256,11 @@
           }
         }
       }
+    },
+    "[production]": {
+      "log": {
+        "format": "json"
+      }
     }
   },
   "sapux": [

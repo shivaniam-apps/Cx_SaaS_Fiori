@@ -150,7 +150,8 @@ modules:
       appName: ~{adops-basic-router-api/application}
     requires:
       - name: adops-basic-uaa
-      - name: adops-basic-logging
+      - name: adops-basic-cloud-logging
+      - name: adops-basic-alert-notification
       - name: adops-basic-postgres
       - name: adops-basic-db-deployer
       - name: adops-basic-registry
@@ -203,12 +204,29 @@ resources:
       xsuaa-app: ${xsuaa-app}
       XSAPPNAME: ${xsuaa-app}
 
-  - name: adops-basic-logging
+  # SAP Cloud Logging ingests the server's JSON log lines (cds.log format
+  # json under the production profile) and Cloud Foundry metrics through
+  # the binding; dashboards and retention live in the service instance.
+  # Plan "dev" in the dev space via mtaext, "standard" elsewhere. docu/13.
+  - name: adops-basic-cloud-logging
     type: org.cloudfoundry.managed-service
     parameters:
-      service: application-logs
-      service-name: ${space}-adops-basic-logging
-      service-plan: lite
+      service: cloud-logging
+      service-name: ${space}-adops-basic-cloud-logging
+      service-plan: standard
+      config:
+        retentionPeriod: 14
+
+  # SAP Alert Notification: the server raises AdoptOpsTaskFailed events for
+  # failed and timed-out background tasks (utils/alert-notification.js).
+  # Who is notified is configured on the instance (conditions, actions,
+  # subscriptions); without a binding the alerts are logged only.
+  - name: adops-basic-alert-notification
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: alert-notification
+      service-name: ${space}-adops-basic-alert-notification
+      service-plan: standard
 
   - name: adops-basic-postgres
     type: org.cloudfoundry.managed-service
