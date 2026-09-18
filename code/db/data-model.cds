@@ -27,6 +27,7 @@ context adops.db {
             frontendServerType      : String(20);    // EMBEDDED | HUB
             serviceRootPath         : String(300);   // override for the ZADO usage service root
             activationRootPath      : String(300);   // override for the ZADO activation service root
+            catalogRootPath         : String(300);   // override for the ZADO catalog read service root (S9)
             addOnVersion            : String(20);
             active                  : Boolean default true;
             isDefault               : Boolean default false;

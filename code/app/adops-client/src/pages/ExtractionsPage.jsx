@@ -22,6 +22,7 @@ import {
   listExtractionRuns,
   runUsageExtraction,
   importUsageExtract,
+  deriveBackendCatalog,
   getTaskStatus,
   getServiceErrorMessage,
   TERMINAL_TASK_STATES
@@ -37,6 +38,16 @@ const RUN_TAG_DESIGN = {
   CANCELLED: 'Neutral'
 };
 
+// S9: a catalog derivation is an ExtractionRuns row with the single source CATALOG.
+function isCatalogRun(run) {
+  try {
+    const sources = JSON.parse(run?.SourcesJson || '[]');
+    return Array.isArray(sources) && sources.length === 1 && sources[0] === 'CATALOG';
+  } catch {
+    return false;
+  }
+}
+
 function isoDaysAgo(days) {
   const date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   return date.toISOString().slice(0, 10);
@@ -48,6 +59,7 @@ export function ExtractionsPage() {
   const [runs, setRuns] = useState(null);
   const [error, setError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -115,6 +127,21 @@ export function ExtractionsPage() {
     }
   };
 
+  // S9: the backend catalog of the selected system, as its own run.
+  const startCatalogDerivation = async () => {
+    setStarting(true);
+    try {
+      const handle = await deriveBackendCatalog(draft.targetSystemId);
+      setActiveTaskId(handle.taskId);
+      setCatalogDialogOpen(false);
+      setReloadToken((t) => t + 1);
+    } catch (e) {
+      setError(getServiceErrorMessage(e, 'Could not start the catalog derivation.'));
+    } finally {
+      setStarting(false);
+    }
+  };
+
   const live = polling.status;
 
   return (
@@ -151,6 +178,9 @@ export function ExtractionsPage() {
               }
             }}
           />
+          <Button icon="course-book" disabled={!systems.length} onClick={() => setCatalogDialogOpen(true)}>
+            Derive Catalog
+          </Button>
           <Button design="Emphasized" icon="database" disabled={!systems.length} onClick={() => setDialogOpen(true)}>
             New Extraction
           </Button>
@@ -205,24 +235,46 @@ export function ExtractionsPage() {
             <TableRow key={run.ID}>
               <TableCell><span style={{ fontWeight: 600 }}>{run.Title}</span></TableCell>
               <TableCell><span>{systemNames[run.targetSystem_ID] || '—'}</span></TableCell>
-              <TableCell><span>{run.PeriodFrom} → {run.PeriodTo}</span></TableCell>
+              <TableCell><span>{isCatalogRun(run) ? 'Backend catalog' : `${run.PeriodFrom} → ${run.PeriodTo}`}</span></TableCell>
               <TableCell><Tag design={RUN_TAG_DESIGN[run.Status] || 'Neutral'}>{run.Status}</Tag></TableCell>
-              <TableCell><span>{run.TransactionRowCount ?? '—'}</span></TableCell>
-              <TableCell><span>{run.UserRowCount ?? '—'}</span></TableCell>
+              <TableCell><span>{isCatalogRun(run) ? `${run.FioriRowCount ?? 0} apps` : (run.TransactionRowCount ?? '—')}</span></TableCell>
+              <TableCell><span>{isCatalogRun(run) ? '—' : (run.UserRowCount ?? '—')}</span></TableCell>
               <TableCell>
-                <Button
-                  design="Transparent"
-                  icon="bar-chart"
-                  disabled={run.Status !== 'COMPLETED' && run.Status !== 'PARTIAL'}
-                  onClick={() => navigate(`/usage/transactions?run=${run.ID}`)}
-                >
-                  Open Usage Insight
-                </Button>
+                {isCatalogRun(run) ? null : (
+                  <Button
+                    design="Transparent"
+                    icon="bar-chart"
+                    disabled={run.Status !== 'COMPLETED' && run.Status !== 'PARTIAL'}
+                    onClick={() => navigate(`/usage/transactions?run=${run.ID}`)}
+                  >
+                    Open Usage Insight
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           ))}
         </Table>
       )}
+
+      <Dialog open={catalogDialogOpen} headerText="Derive Backend Catalog" onClose={() => setCatalogDialogOpen(false)}>
+        <div style={{ display: 'grid', gap: 'var(--adops-space-sm)', padding: 'var(--adops-space-sm)', minWidth: '22rem' }}>
+          <Label for="cat-system" required>Target system</Label>
+          <Select id="cat-system" onChange={(e) => setDraft({ ...draft, targetSystemId: e.detail.selectedOption.dataset.value })}>
+            {systems.map((system) => (
+              <Option key={system.ID} data-value={system.ID} selected={draft.targetSystemId === system.ID}>
+                {system.displayName}
+              </Option>
+            ))}
+          </Select>
+          <MessageStrip design="Information" hideCloseButton>
+            Reads the installed Fiori apps, their activation state and the launchpad content from the system and replaces its previous catalog.
+          </MessageStrip>
+        </div>
+        <div slot="footer" style={{ display: 'flex', gap: 'var(--adops-space-xs)', justifyContent: 'flex-end', width: '100%' }}>
+          <Button design="Transparent" onClick={() => setCatalogDialogOpen(false)}>Cancel</Button>
+          <Button design="Emphasized" disabled={starting || !draft.targetSystemId} onClick={startCatalogDerivation}>Derive</Button>
+        </div>
+      </Dialog>
 
       <Dialog open={dialogOpen} headerText="New Usage Extraction" onClose={() => setDialogOpen(false)}>
         <div style={{ display: 'grid', gap: 'var(--adops-space-sm)', padding: 'var(--adops-space-sm)', minWidth: '22rem' }}>

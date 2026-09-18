@@ -41,6 +41,16 @@ test('an exposed write unit on QA/PROD and a failed endpoint get distinct design
   assert.deepEqual(badges.map((b) => [b.label, b.design]), [['Usage failed', 'Negative'], ['Activation exposed', 'Critical']]);
 });
 
+test('the optional catalog endpoint reads as a neutral badge when not published (S9)', () => {
+  const badges = endpointBadges({}, { Endpoints: [
+    { Endpoint: 'USAGE', Ok: true, Stage: 'OK' },
+    { Endpoint: 'ACTIVATE', Ok: true, Stage: 'OK' },
+    { Endpoint: 'CATALOG', Ok: true, Stage: 'MISSING', Message: 'not published' }
+  ] });
+  assert.deepEqual(badges.map((b) => [b.label, b.design]), [['Usage ok', 'Positive'], ['Activation ok', 'Positive'], ['Catalog not published', 'Neutral']]);
+  assert.deepEqual(endpointBadges({}, { Endpoints: [{ Endpoint: 'CATALOG', Ok: true, Stage: 'OK' }] }).map((b) => b.label), ['Catalog ok']);
+});
+
 test('broken or missing persisted JSON yields no badges', () => {
   assert.deepEqual(endpointBadges({ lastCheckEndpointsJson: 'not json' }, null), []);
   assert.deepEqual(endpointBadges({}, null), []);

@@ -46,6 +46,7 @@ import '@ui5/webcomponents-icons/dist/stop.js';
 import '@ui5/webcomponents-icons/dist/cargo-train.js';
 import '@ui5/webcomponents-icons/dist/edit.js';
 import '@ui5/webcomponents-icons/dist/synchronize.js';
+import '@ui5/webcomponents-icons/dist/course-book.js';
 
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 import '@ui5/webcomponents-fiori/dist/illustrations/UnableToLoad.js';

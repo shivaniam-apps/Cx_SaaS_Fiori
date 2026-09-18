@@ -22,12 +22,14 @@ const SUMMARY_LABELS = {
   ACTIVATION: 'Activation check failed'
 };
 
-const ENDPOINT_LABELS = { USAGE: 'Usage', ACTIVATE: 'Activation' };
+const ENDPOINT_LABELS = { USAGE: 'Usage', ACTIVATE: 'Activation', CATALOG: 'Catalog' };
 
 const ENDPOINT_STAGES = {
   OK: { suffix: 'ok', design: 'Positive' },
   UNPUBLISHED: { suffix: 'unpublished', design: 'Information' },
   EXPOSED: { suffix: 'exposed', design: 'Critical' },
+  // S9: the catalog read unit is optional until part 2 ships it.
+  MISSING: { suffix: 'not published', design: 'Neutral' },
   SERVICE: { suffix: 'failed', design: 'Negative' }
 };
 
@@ -54,7 +56,7 @@ export function connectionSummary(system, liveVerdict) {
   };
 }
 
-// One badge per endpoint verdict, in server order (USAGE, ACTIVATE).
+// One badge per endpoint verdict, in server order (USAGE, ACTIVATE, CATALOG).
 export function endpointBadges(system, liveVerdict) {
   const endpoints = liveVerdict ? (liveVerdict.Endpoints || []) : parseEndpoints(system?.lastCheckEndpointsJson);
   return endpoints

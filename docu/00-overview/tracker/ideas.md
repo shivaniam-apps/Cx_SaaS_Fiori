@@ -58,6 +58,7 @@ and a To-do line in the owning workstream's tracker; the entry here gets a
 
 - I41 (2026-09-18) The HTTP test suites share one in-memory db per mocha process (cds-http-test.mjs), so fixtures collide across suites: audit-chain and public-service-auth both registered destination RD1_DEV and the O11 uniqueness rule exposed it; dashboard-summary asserts deltas against a baseline for the same reason. Give each suite a distinct fixture prefix (or a per-suite tenant via the tenant-scope middleware pattern) as a convention in the helper comment, and consider a shared fixture module.
 - I34 (2026-09-18) S7 snapshots cover the ST03N USERTCODE aggregate (component TOTAL, monthly). Follow-ups: per-instance components and the STAD sample source in the snapshot tables; a DB-side rollup for the LIVE path too (today it aggregates in ABAP memory like before S7); a small config report for ZADO_CFG COLLECT_MONTHS / SNAPSHOT_RETENTION_MONTHS instead of SM30; SystemInfo snapshot coverage on the Target Systems page (no client consumer yet).
+- I35 (2026-09-18) S9 part 2 inputs: the ZADO_PROBE_CATALOG output from RD1 DEV/100 (IAM column names, ICF node naming, /IWFND/ activation state, CDM3 catalog link, AGR_HIER node type). Until then every live derivation ends PARTIAL and availability stays UNKNOWN; the connection check shows "Catalog not published". The FIORI usage source (launchpad usage -> FioriUsage / UsesFioriToday, I27) can ride on the same read unit.
 
 ## Parked
 

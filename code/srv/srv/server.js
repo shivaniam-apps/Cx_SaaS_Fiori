@@ -125,9 +125,11 @@ cds.on('served', () => {
     // Async S/4 work: register handlers, then start the claim/heartbeat poller.
     const { registerTaskHandler, startTaskRunner } = require('./utils/task-runner.js');
     const { runUsageExtraction } = require('./utils/usage-extraction.js');
+    const { runCatalogDerivation } = require('./utils/catalog-derivation.js');
     const { runAnalysis } = require('./utils/analysis-run.js');
     const { runActivationExecution } = require('./utils/activation-execution.js');
     registerTaskHandler('USAGE_EXTRACTION', runUsageExtraction);
+    registerTaskHandler('CATALOG_DERIVATION', runCatalogDerivation);
     registerTaskHandler('ANALYSIS', runAnalysis);
     registerTaskHandler('ACTIVATION_EXECUTION', runActivationExecution);
     startTaskRunner();

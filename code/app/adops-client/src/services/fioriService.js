@@ -105,6 +105,12 @@ export async function runUsageExtraction(request) {
   return postAction('runUsageExtraction', request);
 }
 
+// S9: backend catalog derivation (installed apps, BSP / ICF / OData state,
+// spaces, pages) as a background task on an ExtractionRuns row.
+export async function deriveBackendCatalog(targetSystemId) {
+  return postAction('deriveBackendCatalog', { targetSystemId });
+}
+
 export async function importUsageExtract(targetSystemId, payload) {
   const response = await http.post('/fiori/importUsageExtract', { targetSystemId, payload });
   const value = response.data?.value ?? response.data;
