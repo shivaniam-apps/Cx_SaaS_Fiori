@@ -35,6 +35,12 @@ const DEFAULT_S4_SERVICE_ROOT = envValue(
   'S4_SERVICE_ROOT',
   '/sap/opu/odata4/sap/zado_usage_o4/srvd/sap/zado_usage_srv/0001'
 );
+// S9: the ZADO catalog read unit (ZADO_CATALOG_SRV); a target system may
+// override it with catalogRootPath.
+const DEFAULT_S4_CATALOG_ROOT = envValue(
+  'S4_CATALOG_ROOT',
+  '/sap/opu/odata4/sap/zado_catalog_o4/srvd/sap/zado_catalog_srv/0001'
+);
 
 function connectivityResponseText(data) {
   if (typeof data === 'string') return data;
@@ -1285,6 +1291,7 @@ async function boundActionNameCandidates({ destinationName, servicePath, actionN
 module.exports = {
   DEFAULT_DESTINATION,
   DEFAULT_S4_SERVICE_ROOT,
+  DEFAULT_S4_CATALOG_ROOT,
   addODataTop,
   appendQuery,
   authorizationHeaders,

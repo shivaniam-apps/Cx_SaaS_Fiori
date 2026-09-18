@@ -270,7 +270,9 @@ opt-in.
   output of a second `ZADO_CFG_INIT` run is the confirmation.
 - The confirmed authorization object list for the technical user is
   written with T6 (docu/10).
-- Catalog derivation (`ZADO_CATALOG`) is roadmap S9. The snapshot
-  collector (S7) exists: without a scheduled `ZADO_COLLECT_USAGE` an
+- Catalog derivation: the SaaS side exists (Extractions page, "Derive
+  Catalog"); the ZADO catalog read unit is S9 part 2, so a derivation ends
+  PARTIAL with "no catalog service" and the connection check shows "Catalog
+  not published" until it ships (docu/08). The snapshot collector (S7) exists: without a scheduled `ZADO_COLLECT_USAGE` an
   extraction still reads ST03N live through the bounded readers and its run
   log says so (WARN "Data source: live ST03N").

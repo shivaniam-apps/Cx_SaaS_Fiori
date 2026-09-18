@@ -231,6 +231,40 @@ module.exports = cds.service.impl(async function () {
 
     // --- Offline file bridge ------------------------------------------------
 
+    // S9: backend catalog derivation as a CATALOG_DERIVATION task on an
+    // ExtractionRuns row (source CATALOG) so it shows on the Extractions page.
+    this.on('deriveBackendCatalog', async (req) => {
+        const { targetSystemId } = req.data;
+        const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });
+        if (!targetSystem) return req.reject(404, 'Target system not found.');
+        const runId = randomUUID();
+        const today = new Date().toISOString().slice(0, 10);
+        await INSERT.into('adops.db.ExtractionRuns').entries({
+            ID: runId,
+            targetSystem_ID: targetSystemId,
+            TenantId: currentTenant(),
+            Title: `Catalog ${targetSystem.displayName || targetSystem.systemId || 'System'} ${today}`,
+            Status: 'QUEUED',
+            SourcesJson: JSON.stringify(['CATALOG']),
+            PeriodFrom: today,
+            PeriodTo: today,
+            PeriodGranularity: 'MONTH',
+            Pseudonymised: true,
+            RequestedBy: req.user?.id || null,
+            CorrelationId: cds.context?.id || null
+        });
+        const task = await enqueueTask({
+            taskType: 'CATALOG_DERIVATION',
+            targetSystemId,
+            objectType: 'ExtractionRuns',
+            objectId: runId,
+            requestedBy: req.user?.id,
+            correlationId: cds.context?.id,
+            payload: { targetSystemId, runId }
+        });
+        return { taskId: task.ID, objectId: runId, status: task.Status, pollAfterMs: 2000 };
+    });
+
     this.on('importUsageExtract', async (req) => {
         const { targetSystemId, payload } = req.data;
         const targetSystem = await SELECT.one.from('adops.db.TargetSystems').where({ ID: targetSystemId });

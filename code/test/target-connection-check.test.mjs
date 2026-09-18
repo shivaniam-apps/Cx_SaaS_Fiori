@@ -57,7 +57,7 @@ describe('checkTargetSystemConnection reports per-endpoint verdicts (mock transp
       targetSystem: { ID: 't1', destinationName: 'S4H_2023', environment: 'DEV', systemId: 'RD1', client: '100' }
     });
     expect(verdict).to.include({ Ok: true, Stage: 'OK' });
-    expect(verdict.Endpoints.map((e) => [e.Endpoint, e.Stage])).to.deep.equal([['USAGE', 'OK'], ['ACTIVATE', 'OK']]);
+    expect(verdict.Endpoints.map((e) => [e.Endpoint, e.Stage])).to.deep.equal([['USAGE', 'OK'], ['ACTIVATE', 'OK'], ['CATALOG', 'OK']]);
     expect(verdict.Message).to.match(/write unit reachable/);
   });
 

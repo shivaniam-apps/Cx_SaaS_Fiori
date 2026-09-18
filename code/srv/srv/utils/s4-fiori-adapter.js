@@ -1,6 +1,7 @@
 const {
   DEFAULT_DESTINATION,
   DEFAULT_S4_SERVICE_ROOT,
+  DEFAULT_S4_CATALOG_ROOT,
   appendQuery,
   callS4Destination,
   cloudConnectorLocationId,
@@ -34,6 +35,15 @@ function serviceRoot(targetSystem) {
 // The destination of a target system, or the operator's ADOPTOPS_S4_DESTINATION
 // for a single-system lab. Nothing else: a system without a destination fails
 // here, before any S/4 call, with a message naming the system (S11).
+function catalogRoot(targetSystem) {
+  const root = String(targetSystem?.catalogRootPath || DEFAULT_S4_CATALOG_ROOT).trim();
+  return root.replace(/\/+$/, '');
+}
+
+function catalogEntityPath(targetSystem, entitySet) {
+  return `${catalogRoot(targetSystem)}/${entitySet}`;
+}
+
 function destinationNameOf(targetSystem) {
   const name = String(targetSystem?.destinationName || DEFAULT_DESTINATION).trim();
   if (!name) throw Object.assign(new Error(noDestinationMessage(targetSystem)), { status: 400, code: 'NO_DESTINATION' });
@@ -56,6 +66,7 @@ function trimConnectionCheckMessage(value) {
 // on the environment: reachable on DEV/SANDBOX, unpublished on QA/PROD.
 // ---------------------------------------------------------------------------
 
+const ENDPOINT_CATALOG = 'CATALOG';
 const ENDPOINT_USAGE = 'USAGE';
 const ENDPOINT_ACTIVATE = 'ACTIVATE';
 const PROBE_TIMEOUT_MS = 15000; // the user is waiting; a dead tunnel must answer fast
@@ -89,6 +100,28 @@ function activationEndpointVerdict({ environment, probe, error }) {
   return expected
     ? { ...base, Message: `Activation service at ${base.Path} answered ${base.HttpStatus || 'nothing'} - publish the DEV-only node (ZCL_ADO_ACT_HTTP) or correct activationRootPath.` }
     : { ...base, Ok: true, Stage: 'UNPUBLISHED', Message: `Activation service not published on this ${env} system (status ${base.HttpStatus || 'none'}), as required outside DEV.` };
+}
+
+// S9: the catalog read unit is optional until part 2 ships it; 404 is
+// reported as MISSING (Ok, informational), never as a connection failure.
+async function probeCatalogEndpoint({ targetSystem, req }) {
+  const path = `${catalogRoot(targetSystem)}/CatalogApps`;
+  const base = { Endpoint: ENDPOINT_CATALOG, Ok: true, Stage: 'MISSING', HttpStatus: 0, Path: path, Transport: 'odata', Message: '' };
+  if (shouldMockSap()) {
+    return { ...base, Ok: true, Stage: 'OK', HttpStatus: 200, Message: 'Mock mode: catalog service check simulated as successful.' };
+  }
+  try {
+    const result = await callS4Destination({
+      destinationName: destinationNameOf(targetSystem), path: appendQuery(path, { '$top': 1, '$count': 'true' }),
+      req, timeoutMs: PROBE_TIMEOUT_MS, maxAttempts: 1
+    });
+    const status = Number(result.status) || 0;
+    if (result.ok) return { ...base, Stage: 'OK', HttpStatus: status || 200, Message: 'Catalog service path and authorization verified.' };
+    if (status === 404) return { ...base, HttpStatus: 404, Message: 'Catalog service not published on this system (ZADO_CATALOG_SRV, S9 part 2) - availability stays UNKNOWN.' };
+    return { ...base, Ok: false, Stage: 'SERVICE', HttpStatus: status, Message: trimConnectionCheckMessage(safeResponseData(result.data) || `S/4 responded with status ${status}.`) };
+  } catch (error) {
+    return { ...base, Ok: false, Stage: 'SERVICE', Message: trimConnectionCheckMessage(error.message) };
+  }
 }
 
 async function probeActivationEndpoint({ targetSystem }) {
@@ -146,8 +179,8 @@ async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATI
   // Rollup over the endpoint verdicts: usage failure is a SERVICE stage, an
   // activation finding is its own ACTIVATION stage (the usage path is fine,
   // the write unit is missing on DEV or exposed on QA/PROD).
-  const rollup = (usage, activate, extra) => {
-    const endpoints = activate ? [usage, activate] : [usage];
+  const rollup = (usage, activate, extra, catalog) => {
+    const endpoints = [usage, ...(activate ? [activate] : []), ...(catalog ? [catalog] : [])];
     if (!usage.Ok) {
       return finish({ ...extra, Stage: 'SERVICE', HttpStatus: usage.HttpStatus, Message: usage.Message, Endpoints: endpoints });
     }
@@ -172,7 +205,8 @@ async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATI
       Message: 'Mock mode: usage service check simulated as successful.'
     };
     const activate = targetSystem ? await probeActivationEndpoint({ targetSystem }) : null;
-    return rollup(usage, activate, { Path: readPath });
+    const catalog = targetSystem ? await probeCatalogEndpoint({ targetSystem }) : null;
+    return rollup(usage, activate, { Path: readPath }, catalog);
   }
 
   let config = {};
@@ -212,7 +246,10 @@ async function checkTargetSystemConnection({ destinationName = DEFAULT_DESTINATI
   // runs only for a registered system (an ad-hoc destination test stays a
   // usage-only check).
   const activate = targetSystem ? await probeActivationEndpoint({ targetSystem: { ...targetSystem, destinationName } }) : null;
-  return rollup(usage, activate, { Path: readPath, ResolvedLocationId: resolvedLocationId });
+  // The catalog read unit is optional (S9 part 2): its verdict is listed,
+  // never part of the rollup, and only when the usage path is alive.
+  const catalog = targetSystem && usage.Ok ? await probeCatalogEndpoint({ targetSystem: { ...targetSystem, destinationName }, req }) : null;
+  return rollup(usage, activate, { Path: readPath, ResolvedLocationId: resolvedLocationId }, catalog);
 }
 
 // System identity + data-source availability from the add-on's
@@ -633,8 +670,91 @@ async function fetchRolesByName({ targetSystem, roleNames, req }) {
   return rows;
 }
 
+// S9: the ZADO catalog read unit. Contract (S9 part 2 implements the ABAP
+// side): CatalogApps = one row per installed Fiori app with its BSP
+// application and the three backend states; LaunchpadContent = spaces,
+// pages and catalogs with their parent. An add-on without the service
+// answers 404 -> { supported: false } so the derivation ends PARTIAL and
+// keeps the last good catalog.
+function mapCatalogApp(row) {
+  return {
+    FioriId: row.FioriId ?? row.ApplId ?? '',
+    AppTitle: row.AppTitle ?? row.Title ?? '',
+    AppSubtitle: row.AppSubtitle ?? '',
+    AppType: row.AppType || 'SAPUI5',
+    AppCategory: row.AppCategory || '',
+    SemanticObject: row.SemanticObject ?? '',
+    SemanticAction: row.SemanticAction ?? '',
+    IamAppId: row.IamAppId ?? '',
+    UI5ComponentName: row.UI5ComponentName ?? row.Ui5ComponentName ?? '',
+    BspApplication: row.BspApplication ?? '',
+    TechnicalCatalogId: row.TechnicalCatalogId ?? '',
+    BusinessCatalogId: row.BusinessCatalogId ?? '',
+    BusinessGroupId: row.BusinessGroupId ?? '',
+    BusinessRoleId: row.BusinessRoleId ?? '',
+    ODataServicesJson: row.ODataServicesJson ?? '[]',
+    ServiceActivationState: row.ServiceActivationState ?? '',
+    IcfNodeState: row.IcfNodeState ?? '',
+    UiComponentState: row.UiComponentState ?? '',
+    Availability: row.Availability ?? '',
+    RelatedTcodesJson: row.RelatedTcodesJson ?? '[]',
+    MinS4Release: row.MinS4Release ?? ''
+  };
+}
+
+function mapLaunchpadContent(row) {
+  return {
+    ContentType: row.ContentType ?? '',
+    ContentId: row.ContentId ?? '',
+    Title: row.Title ?? '',
+    ParentId: row.ParentId ?? '',
+    AssignedRolesJson: row.AssignedRolesJson ?? '[]',
+    ItemCount: Number(row.ItemCount ?? 0),
+    IsSapDelivered: row.IsSapDelivered === true || row.IsSapDelivered === 'X'
+  };
+}
+
+async function fetchCatalogPage({ targetSystem, entitySet, orderBy, mapRow, top = 500, skip = 0, req }) {
+  const path = appendQuery(catalogEntityPath(targetSystem, entitySet), {
+    '$orderby': orderBy || undefined, '$top': top, '$skip': skip || undefined, '$count': 'true'
+  });
+  const result = await callS4Destination({ destinationName: destinationNameOf(targetSystem), path, req, timeoutMs: 120000 });
+  if (!result.ok) {
+    if (Number(result.status) === 404) {
+      LOG.warn(`${entitySet} not exposed by ${targetSystem?.displayName || targetSystem?.destinationName || 'target'} (404) - no ZADO catalog service (S9 part 2).`);
+      return { rows: [], totalCount: 0, hasMore: false, supported: false };
+    }
+    throw Object.assign(
+      new Error(`${entitySet} read failed with status ${result.status}: ${safeResponseData(result.data)}`),
+      { status: 502, remoteStatus: Number(result.status) || 0 }
+    );
+  }
+  const rows = unwrapODataPayload(result.data).map(mapRow);
+  const count = Number(result.data?.['@odata.count']);
+  return {
+    rows,
+    totalCount: Number.isFinite(count) ? count : null,
+    hasMore: Number.isFinite(count) ? skip + rows.length < count : rows.length === top,
+    supported: true
+  };
+}
+
+async function fetchCatalogAppsPage({ targetSystem, top, skip, req }) {
+  return fetchCatalogPage({ targetSystem, entitySet: 'CatalogApps', orderBy: 'FioriId asc', mapRow: mapCatalogApp, top, skip, req });
+}
+
+async function fetchLaunchpadContentPage({ targetSystem, top, skip, req }) {
+  return fetchCatalogPage({ targetSystem, entitySet: 'LaunchpadContent', orderBy: 'ContentType asc,ContentId asc', mapRow: mapLaunchpadContent, top, skip, req });
+}
+
 module.exports = {
   checkTargetSystemConnection,
+  probeCatalogEndpoint,
+  catalogRoot,
+  fetchCatalogAppsPage,
+  fetchLaunchpadContentPage,
+  mapCatalogApp,
+  mapLaunchpadContent,
   activationEndpointVerdict,
   getBackendCapabilities,
   fetchPagedEntity,

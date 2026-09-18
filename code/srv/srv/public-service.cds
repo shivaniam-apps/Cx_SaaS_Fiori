@@ -156,6 +156,13 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
     minExecutions: Integer
   ) returns TaskHandle;
 
+  // S9: backend catalog derivation - what the target system itself knows
+  // about its Fiori content (installed apps, BSP / ICF / OData state,
+  // catalogs, roles, spaces, pages) through the ZADO catalog read unit.
+  // Runs as a CATALOG_DERIVATION task on an ExtractionRuns row with source
+  // CATALOG; replaces the system's previous catalog only when complete.
+  action deriveBackendCatalog(targetSystemId: UUID) returns TaskHandle;
+
   // Offline bridge: ingest a ZADO_EXPORT_USAGE JSON file as an extraction
   // run - for landscapes where the Cloud Connector path is not open yet.
   action importUsageExtract(targetSystemId: UUID, payload: LargeString) returns LargeString;
