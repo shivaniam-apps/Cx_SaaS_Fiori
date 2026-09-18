@@ -69,6 +69,7 @@ export function TargetSystemsPage() {
   const [systems, setSystems] = useState(null);
   const [error, setError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogError, setDialogError] = useState('');    // save failure, shown next to the fields
   const [dialogMode, setDialogMode] = useState('create'); // 'create' | 'edit'
   const [editingId, setEditingId] = useState(null);
   const [editingOriginalDest, setEditingOriginalDest] = useState('');
@@ -154,6 +155,7 @@ export function TargetSystemsPage() {
 
   const closeDialog = () => {
     setDialogOpen(false);
+    setDialogError('');
     setEditingId(null);
     setEditingOriginalDest('');
     setDraft(EMPTY_DRAFT);
@@ -208,7 +210,9 @@ export function TargetSystemsPage() {
       closeDialog();
       setReloadToken((t) => t + 1);
     } catch (e) {
-      setError(getServiceErrorMessage(
+      // Contextual: the verdict (e.g. a destination already registered for
+      // another system) stays in the dialog next to the fields to correct.
+      setDialogError(getServiceErrorMessage(
         e,
         dialogMode === 'edit' ? 'Could not update the target system.' : 'Could not create the target system.'
       ));
@@ -390,6 +394,9 @@ export function TargetSystemsPage() {
         onClose={closeDialog}
       >
         <div style={{ display: 'grid', gap: 'var(--adops-space-sm)', padding: 'var(--adops-space-sm)', minWidth: '22rem' }}>
+          {dialogError ? (
+            <MessageStrip design="Negative" onClose={() => setDialogError('')}>{dialogError}</MessageStrip>
+          ) : null}
           <Label for="ts-name" required>Display name</Label>
           <Input id="ts-name" value={draft.displayName} onInput={(e) => setDraft({ ...draft, displayName: e.target.value })} placeholder="RD1 Development" />
           <Label for="ts-dest" required>BTP destination name</Label>

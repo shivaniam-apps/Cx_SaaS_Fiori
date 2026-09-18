@@ -6,6 +6,7 @@ const { registerTelemetryAdminHandlers } = require('./utils/telemetry-admin-hand
 const { registerAccessRequestAdminHandlers } = require('./utils/access-request-handlers.js');
 const { registerTenantScope, tenantFilter } = require('./utils/tenant-scope.js');
 const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
+const { registerTargetSystemValidation } = require('./utils/target-system-validation.js');
 const { verifyAuditChain } = require('./utils/audit-chain.js');
 const { listDestinations, getBtpAccountInfo, callS4Destination } = require('./utils/s4-http-client.js');
 const { checkTargetSystemConnection } = require('./utils/s4-fiori-adapter.js');
@@ -20,6 +21,7 @@ module.exports = cds.service.impl(async function () {
     registerTelemetryAdminHandlers(this);
     registerAccessRequestAdminHandlers(this);
     registerIdentifiedUsageAudit(this);
+    registerTargetSystemValidation(this);
 
     // --- Audit chain ---------------------------------------------------------
 
