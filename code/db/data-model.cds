@@ -648,11 +648,12 @@ context adops.db {
       // compliance traceability, these are product-improvement diagnostics.
       // ------------------------------------------------------------------
 
-      entity PilotFeedback : cuid, managed {
+      // tenantScoped like every other business row (O14): TenantId defaults
+      // to GLOBAL and the scope hook stamps / filters it uniformly.
+      entity PilotFeedback : cuid, managed, tenantScoped {
             SubmittedAt     : Timestamp;
             SubmittedBy     : String(120);
             SubmittedByName : String(160);
-            TenantId        : String(60);
             Category        : String(40);
             Title           : String(160);
             Description     : String(2000);
