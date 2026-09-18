@@ -106,7 +106,9 @@ changes nothing on the step and returns the messages.
   system and Fiori ID at planning time; re-create the plan after a catalog
   derivation to pick it up.
 - **Changing a shape** means changing the planner builder, the fixture, the
-  ABAP type (in `a4h_2023_zado` first, then the mirror) and, when the smoke
+  ABAP type (in `a4h_2023_zado`; copy `zcl_ado_activate.clas.abap` and
+  `zado_activate_smoke.prog.abap` into `abap/src/activate` in the same product PR,
+  the contract test reads exactly those two) and, when the smoke
   program covers the step, its literal — the two test suites enforce this.
 - **Persisted plans keep their keys.** `ObjectKeyJson` is stored per step;
   plans created before a contract change carry the old shape. Recreate such

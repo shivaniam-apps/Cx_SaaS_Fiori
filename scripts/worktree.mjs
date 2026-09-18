@@ -152,7 +152,7 @@ ${itemLines}
   \`docu/00-overview/tracker/ideas.md\` immediately.
 - Shared contracts (CDS shapes, ObjectKeyJson, shared React components, fioriService.js) land on \`main\` first;
   pick up others' changes with \`git merge --no-edit origin/main\`.
-- ABAP changes start in \`../../a4h_2023_zado\`, are smoke-tested on RD1 DEV/100, then mirrored wholesale into \`abap/src\`.
+- ABAP changes start and are merged in \`../../a4h_2023_zado\` and are smoke-tested on RD1 DEV/100. \`abap/src\` is a reference copy: update the two contract-test files (dispatcher class, smoke report) only in a PR that changes a step type or key shape; wholesale re-sync at milestones.
 - \`node_modules\` may be junction-linked to the primary checkout: run \`npm ci\` here the moment this branch changes
   dependencies.
 

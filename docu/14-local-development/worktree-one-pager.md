@@ -46,7 +46,7 @@ at all ("continue") - the brief tells the session to report which item it is on 
 - Each worktree has its own `code/db.sqlite`; never point two servers at one file.
 - `node_modules` is junction-linked to the main checkout: run `npm ci` in the worktree
   the moment the branch changes dependencies.
-- ABAP: change `../a4h_2023_zado` first, smoke on RD1 DEV/100, mirror into `abap/src`.
+- ABAP: change and merge in `../a4h_2023_zado`, smoke on RD1 DEV/100. `abap/src` is a reference copy: update the two contract-test files only with a step-type / key-shape change, re-sync wholesale at milestones.
 - Do not write to `.claude/rules/` or `CLAUDE.md` unprompted; propose a diff.
 
 ## Commands

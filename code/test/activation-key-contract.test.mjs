@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 // ObjectKeyJson contract: planner <-> ABAP dispatcher <-> smoke program.
 //
 // The fixture is the contract. This suite parses the ABAP MIRROR in
-// abap/src/activate (kept identical to a4h_2023_zado) and fails when the
+// abap/src/activate (the two files below are copied from a4h_2023_zado in the
+// PR that changes a step type or key shape) and fails when the
 // dispatcher's key types or the smoke program's literals drift from it -
 // the only cross-language check we can run without an ABAP system.
 // ---------------------------------------------------------------------------
