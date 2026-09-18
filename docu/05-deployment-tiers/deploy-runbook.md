@@ -85,17 +85,21 @@ cf tasks adops-basic-db-deployer-<space>
 The latest `deploy-to-postgresql` task must show `SUCCEEDED`.
 
 ```bash
-curl -s https://adops-basic-srv-<space>.<default-domain>/healthz
+curl -s https://adops-basic-srv-<space>.<default-domain>/readyz
 ```
 
-Expected: `OK`. `/healthz` proves the process is up, not that the database
-answers; a readiness probe with a database check is roadmap item A11.
+Expected: HTTP 200 with `{"status":"ok","checks":{"db":{"ok":true,"ms":...}}}`.
+`/readyz` runs a trivial query against the database with a five-second
+deadline and answers 503 with `"status":"unavailable"` and the error text
+when it fails. `/healthz` (plain `OK`) stays the Cloud Foundry health
+check: it proves the process is up, and a database outage must not make
+the platform restart the instance in a loop.
 
 ```bash
 cf logs adops-basic-srv-<space> --recent | grep -E "startup|connectivity|listening"
 ```
 
-The line `[startup] Connectivity proxy effective host=... port=...`
+The line `[startup] - Connectivity proxy effective host=... port=...`
 confirms the connectivity binding. Then open the approuter URL
 (`cf app adops-basic-<space>` prints it): the identity provider login must
 appear, and a user without a role collection lands on the "Request Access"
@@ -217,7 +221,6 @@ on first use. The secret rotation runbook is T6.
 
 ## Known limits
 
-- `/healthz` does not check the database (A11).
 - No blue-green deployment, no release checklist (T5).
 - Only the `basic` tier registers subscription callbacks (I27, T2).
 - Logging is the `application-logs` service; Cloud Logging and alerts arrive

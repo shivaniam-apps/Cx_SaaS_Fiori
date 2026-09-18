@@ -5,6 +5,9 @@ const { effectiveConnectivityProxyDetails } = require('./utils/s4-http-client.js
 const { scheduleTelemetryRetentionCleanup } = require('./utils/telemetry-retention.js');
 const { registerBasicSubscriptionRoutes } = require('./basic-subscription.js');
 const { currentTier } = require('./utils/tier.js');
+const { checkReadiness } = require('./utils/readiness.js');
+
+const STARTUP_LOG = cds.log('startup');
 
 // Keep in sync with the client contract in
 // app/adops-client/src/features/telemetry/correlation.js.
@@ -30,14 +33,14 @@ cds.on('bootstrap', async (app) => {
             const profileList = Array.isArray(cds.env?.profiles) ? cds.env.profiles.join(',') : '';
 
             if (proxy.bound) {
-                console.log(
-                    `[startup] Connectivity proxy effective host=${proxy.host || '<empty>'} port=${proxy.port || '<empty>'} rawHost=${proxy.rawHost || '<empty>'} rawHttpPort=${proxy.rawHttpPort || '<empty>'} profiles=${profileList || '<none>'}`
+                STARTUP_LOG.info(
+                    `Connectivity proxy effective host=${proxy.host || '<empty>'} port=${proxy.port || '<empty>'} rawHost=${proxy.rawHost || '<empty>'} rawHttpPort=${proxy.rawHttpPort || '<empty>'} profiles=${profileList || '<none>'}`
                 );
             } else {
-                console.log(`[startup] Connectivity service binding not available. profiles=${profileList || '<none>'}`);
+                STARTUP_LOG.info(`Connectivity service binding not available. profiles=${profileList || '<none>'}`);
             }
         } catch (error) {
-            console.warn(`[startup] Unable to resolve Connectivity proxy details: ${error.message}`);
+            STARTUP_LOG.warn(`Unable to resolve Connectivity proxy details: ${error.message}`);
         }
     }
 
@@ -74,7 +77,13 @@ cds.on('bootstrap', async (app) => {
         next();
     });
 
+    // Liveness (process up) for the Cloud Foundry health check; readiness
+    // (database answers) for operators and monitors. See utils/readiness.js.
     app.get('/healthz', (_, res) => res.status(200).send('OK'));
+    app.get('/readyz', async (_, res) => {
+        const readiness = await checkReadiness();
+        res.status(readiness.status === 'ok' ? 200 : 503).json(readiness);
+    });
 
     // Basic tier subscribes via SAP SaaS Provisioning without CAP MTX; the
     // callbacks only resolve the tenant URL. Enterprise (MTX) wiring returns

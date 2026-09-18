@@ -11,7 +11,7 @@ is what stands in for it until Cloud Logging and Alert Notification land
 
 ## 1. Daily routine
 
-1. `/healthz` of `adops-basic-srv-<space>` answers `OK` and `cf apps` shows
+1. `/readyz` of `adops-basic-srv-<space>` answers 200 and `cf apps` shows
    the expected instance count (two in prod).
 2. Product Insights > Crash reports: new fingerprints since yesterday.
 3. Extractions and Activation Runs: no task older than a few minutes still
@@ -25,7 +25,8 @@ is what stands in for it until Cloud Logging and Alert Notification land
 
 | What | Where |
 |---|---|
-| Process health | `GET /healthz` on the server route; the Cloud Foundry health check uses the same endpoint (database readiness is A11) |
+| Liveness | `GET /healthz` on the server route answers `OK` while the process is up; the Cloud Foundry health check uses it |
+| Readiness | `GET /readyz` answers 200 with `{"status":"ok","checks":{"db":{"ok":true,"ms":n}}}`; 503 with `"status":"unavailable"` and the error text when the database does not answer within five seconds |
 | Recent server log | `cf logs adops-basic-srv-<space> --recent` |
 | Persistent log | the `application-logs` service instance bound to the server (BTP cockpit > the space > Services > `<space>-adops-basic-logging` > open the Logs viewer) |
 | Client-side failures | Product Insights > Crash reports (render errors, window errors, unhandled rejections, API failures) |
@@ -36,8 +37,7 @@ server and echoed on the response. A crash report or feedback row shows the
 id of the request it belongs to; search the server log for that id to find
 the matching backend lines. Log components are named after the module
 (`destination`, `user-management`, `basic-subscription`, `task-runner`, the
-adapters); the `[startup]` lines still go to the console and move to
-`cds.log` with A11.
+adapters, `startup` for the boot lines).
 
 Two server instances (prod) are safe: task claims are atomic and the audit
 chain locks its per-tenant head row, so instances never write over each
@@ -191,6 +191,7 @@ assigned in the BTP cockpit. Both outcomes are audited.
 | S/4 answers 401 or 403 | technical user in the destination: locked, expired password, missing authorization | SU53 on the S/4 system under that user |
 | Test Connection `EXPOSED` on QAS or PRD | | remove the SICF node / unpublish the binding (section 4) |
 | Health check red after a deployment | `cf tasks adops-basic-db-deployer-<space>`, `cf logs ... --recent` | deploy runbook section 5 |
+| `/readyz` answers 503 | the error text in its body; `cf service <space>-adops-basic-postgres` | PostgreSQL instance state in the cockpit; the server recovers on its own once the database answers again |
 | Extraction returns no periods | SAP workload collector (`SAP_COLLECTOR_FOR_PERFMONITOR`) not running or ST03N retention too short | basis on the S/4 system; `SystemInfo.CollectorRunning` shows the flag |
 | Database growing | retention settings, old extraction runs | section 7 and 9 |
 
@@ -198,7 +199,6 @@ assigned in the BTP cockpit. Both outcomes are audited.
 
 | Item | Roadmap |
 |---|---|
-| Readiness probe with a database check | A11 |
 | BTP Audit Log service binding (external anchor for the chain) | T3 |
 | Cloud Logging, Alert Notification, task-failure alerts | T4 |
 | Release process, blue-green | T5 |
