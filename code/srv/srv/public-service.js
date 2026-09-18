@@ -7,6 +7,7 @@ const { shouldMockSap } = require('./utils/s4-http-client.js');
 const { enqueueTask } = require('./utils/task-runner.js');
 const { appendAuditEvent } = require('./utils/audit-chain.js');
 const { registerIdentifiedUsageAudit } = require('./utils/target-system-audit.js');
+const { shapeDashboardSummary, bucketStatuses } = require('./utils/dashboard-summary.js');
 
 module.exports = cds.service.impl(async function () {
     registerTenantScope(this);
@@ -298,7 +299,10 @@ module.exports = cds.service.impl(async function () {
         if (!analysisRunId) return req.reject(400, 'analysisRunId is required.');
 
         const where = { analysisRun_ID: analysisRunId };
-        if (reviewStatus) where.ReviewStatus = reviewStatus;
+        // A dashboard bucket (OPEN, APPROVED, ...) expands to its statuses so
+        // the card and this slice share one expression; a raw status still
+        // matches exactly.
+        if (reviewStatus) where.ReviewStatus = bucketStatuses('proposals', reviewStatus) ? { in: bucketStatuses('proposals', reviewStatus) } : reviewStatus;
         if (confidence) where.Confidence = confidence;
         if (lineOfBusiness) where.LineOfBusiness = lineOfBusiness;
         if (search) where.AppTitle = { like: `%${search}%` };
@@ -807,8 +811,15 @@ module.exports = cds.service.impl(async function () {
     // --- Transports (Phase 3) ------------------------------------------------
 
     this.on('queryTransportRequests', async (req) => {
-        const { targetSystemId } = req.data;
+        const { targetSystemId, status } = req.data;
         const where = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
+        // Optional dashboard bucket (OPEN | RELEASED | FAILED): the same
+        // expression the cockpit counted with.
+        if (status) {
+            const statuses = bucketStatuses('transports', status);
+            if (!statuses) return req.reject(400, `Unknown transport status bucket: ${status}`);
+            where.Status = { in: statuses };
+        }
         const rows = await SELECT.from('adops.db.TransportRequests').where(where)
             .orderBy('createdAt desc').limit(200);
 
@@ -938,7 +949,7 @@ module.exports = cds.service.impl(async function () {
 
     // --- Activation runs (monitor) ---------------------------------------------
 
-    const { decorateRun, summarizeRunStatuses } = require('./utils/activation-runs.js');
+    const { decorateRun, summarizeRunStatuses, statusesForRunBucket } = require('./utils/activation-runs.js');
 
     // Task columns the monitor needs - ResultJson is projected to Outcome by
     // decorateRun, never returned raw (it also carries the enqueue payload).
@@ -990,15 +1001,20 @@ module.exports = cds.service.impl(async function () {
     };
 
     this.on('queryActivationRuns', async (req) => {
-        const { targetSystemId } = req.data;
+        const { targetSystemId, status } = req.data;
         const where = { TaskType: 'ACTIVATION_EXECUTION' };
         if (targetSystemId) where.targetSystem_ID = targetSystemId;
+        // Optional status bucket for the list; the summary stays the partition
+        // over the system scope, so the card that was clicked equals the slice.
+        const bucket = status ? statusesForRunBucket(status) : null;
+        if (status && !bucket) return req.reject(400, `Unknown run status bucket: ${status}`);
 
         // Rows are bounded; the summary is a grouped count over the SAME
         // scope so the KPI cards never disagree with the list.
         const [tasks, grouped] = await Promise.all([
             SELECT.from('adops.db.BackgroundTasks').columns(...RUN_TASK_COLUMNS)
-                .where(where).orderBy('QueuedAt desc', 'createdAt desc').limit(200),
+                .where(bucket ? { ...where, Status: { in: bucket } } : where)
+                .orderBy('QueuedAt desc', 'createdAt desc').limit(200),
             SELECT.from('adops.db.BackgroundTasks').columns('Status', 'count(*) as cnt')
                 .where(where).groupBy('Status')
         ]);
@@ -1082,5 +1098,48 @@ module.exports = cds.service.impl(async function () {
             roleRowCount: run.RoleRowCount,
             truncated: run.Truncated
         });
+    });
+
+    // --- Adoption Cockpit (O8) ------------------------------------------------
+    // One read, eight grouped counts at the database (tenant scope is added
+    // by registerTenantScope), nothing row-level leaves the server.
+    this.on('queryDashboardSummary', async (req) => {
+        const { targetSystemId } = req.data;
+        const scoped = targetSystemId ? { targetSystem_ID: targetSystemId } : {};
+        const grouped = (entity, field, where) => {
+            const query = SELECT.from(entity).columns(field, 'count(*) as cnt');
+            return (where && Object.keys(where).length ? query.where(where) : query).groupBy(field);
+        };
+
+        // Proposals: the current analysis run per target system in scope
+        // (latest COMPLETED), so the figures match what the Proposals page
+        // opens by default instead of summing every historical run.
+        const completedRuns = await SELECT.from('adops.db.AnalysisRuns')
+            .columns('ID', 'targetSystem_ID', 'CompletedAt', 'createdAt')
+            .where({ ...scoped, Status: 'COMPLETED' })
+            .orderBy('CompletedAt desc', 'createdAt desc');
+        const currentRunBySystem = new Map();
+        for (const run of completedRuns) {
+            const key = run.targetSystem_ID || '';
+            if (!currentRunBySystem.has(key)) currentRunBySystem.set(key, run.ID);
+        }
+        const analysisRunIds = [...currentRunBySystem.values()];
+
+        const [systems, extractions, analyses, proposals, waves, plans, runs, transports] = await Promise.all([
+            grouped('adops.db.TargetSystems', 'lastCheckStatus', targetSystemId ? { ID: targetSystemId } : {}),
+            grouped('adops.db.ExtractionRuns', 'Status', scoped),
+            grouped('adops.db.AnalysisRuns', 'Status', scoped),
+            analysisRunIds.length
+                ? grouped('adops.db.AppProposals', 'ReviewStatus', { analysisRun_ID: { in: analysisRunIds } })
+                : [],
+            grouped('adops.db.AdoptionWaves', 'Status', scoped),
+            grouped('adops.db.ActivationPlans', 'Status', scoped),
+            grouped('adops.db.BackgroundTasks', 'Status', { ...scoped, TaskType: 'ACTIVATION_EXECUTION' }),
+            grouped('adops.db.TransportRequests', 'Status', scoped)
+        ]);
+        return JSON.stringify(shapeDashboardSummary(
+            { systems, extractions, analyses, proposals, waves, plans, runs, transports },
+            { targetSystemId: targetSystemId || null, analysisRunIds }
+        ));
     });
 });

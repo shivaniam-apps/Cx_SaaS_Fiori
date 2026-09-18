@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Title } from '@ui5/webcomponents-react/Title';
 import { Text } from '@ui5/webcomponents-react/Text';
 import { Button } from '@ui5/webcomponents-react/Button';
@@ -83,8 +83,15 @@ export function ActivationRunsPage() {
 
   // Filter bar contract: the Select edits a DRAFT, Go commits it, Clear
   // resets and applies, Refresh re-reads at unchanged scope.
-  const [draftSystemId, setDraftSystemId] = useState('');
-  const [appliedSystemId, setAppliedSystemId] = useState('');
+  // Navigation intent from the cockpit (`system`, `status` = KPI bucket)
+  // pre-applies the bar so the page opens on the slice that was clicked.
+  const [searchParams] = useSearchParams();
+  const systemFromUrl = searchParams.get('system') || '';
+  const statusFromUrl = (searchParams.get('status') || '').toUpperCase();
+  const [draftSystemId, setDraftSystemId] = useState(systemFromUrl);
+  const [appliedSystemId, setAppliedSystemId] = useState(systemFromUrl);
+  const [draftStatus, setDraftStatus] = useState(statusFromUrl);
+  const [appliedStatus, setAppliedStatus] = useState(statusFromUrl);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,11 +103,11 @@ export function ActivationRunsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    queryActivationRuns(appliedSystemId || undefined)
+    queryActivationRuns(appliedSystemId || undefined, appliedStatus || undefined)
       .then((result) => { if (!cancelled) { setList(result); setError(''); } })
       .catch((e) => { if (!cancelled) setError(getServiceErrorMessage(e)); });
     return () => { cancelled = true; };
-  }, [appliedSystemId, reloadToken]);
+  }, [appliedSystemId, appliedStatus, reloadToken]);
 
   // ONE poll drives the detail: readActivationRun returns task status, plan,
   // steps and task logs together; the hook stops itself once the run is
@@ -246,8 +253,17 @@ export function ActivationRunsPage() {
             ))}
           </Select>
         </div>
-        <Button design="Emphasized" onClick={() => setAppliedSystemId(draftSystemId)}>Go</Button>
-        <Button design="Transparent" onClick={() => { setDraftSystemId(''); setAppliedSystemId(''); }}>Clear</Button>
+        <div style={{ display: 'grid', gap: 'var(--adops-space-xs)', minWidth: '12rem' }}>
+          <Label>Status</Label>
+          <Select onChange={(e) => setDraftStatus(e.detail.selectedOption.dataset.value || '')}>
+            <Option data-value="" selected={draftStatus === ''}>All statuses</Option>
+            {summaryCards(null).map((card) => (
+              <Option key={card.key} data-value={card.key} selected={draftStatus === card.key}>{card.label}</Option>
+            ))}
+          </Select>
+        </div>
+        <Button design="Emphasized" onClick={() => { setAppliedSystemId(draftSystemId); setAppliedStatus(draftStatus); }}>Go</Button>
+        <Button design="Transparent" onClick={() => { setDraftSystemId(''); setAppliedSystemId(''); setDraftStatus(''); setAppliedStatus(''); }}>Clear</Button>
       </div>
 
       {list ? (

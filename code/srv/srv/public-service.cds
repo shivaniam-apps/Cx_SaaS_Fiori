@@ -180,6 +180,16 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
 
   function queryUsageOverview(extractionRunId: UUID) returns LargeString;
 
+  // --- Adoption Cockpit (O8) ------------------------------------------------
+  // One purpose-built read for the dashboard: grouped status counts per
+  // journey stage, computed at the database over the tenant (optionally one
+  // target system). Proposal figures cover the current (latest completed)
+  // analysis run per system in scope. Bucket names are the same the list
+  // reads accept as `status` (queryProposals reviewStatus, queryActivationRuns
+  // and queryTransportRequests status), so a card and its click-through
+  // slice share one expression.
+  function queryDashboardSummary(targetSystemId: UUID) returns LargeString;
+
   // --- Proposals (Phase 2) --------------------------------------------------
   // Composite reads return JSON LargeStrings: the shapes are page-specific
   // view models (typed contracts live in the services layer of the client);
@@ -293,7 +303,9 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   // a single response (performance.md, activation run monitor).
   // Resume and cancel reuse executeActivationPlan and cancelTask.
 
-  function queryActivationRuns(targetSystemId: UUID) returns LargeString;
+  // `status` is a KPI bucket (ACTIVE | SUCCEEDED | FAILED | CANCELLED), the
+  // same partition the Summary and the dashboard count with.
+  function queryActivationRuns(targetSystemId: UUID, status: String) returns LargeString;
   function readActivationRun(runId: UUID) returns LargeString;
 
   // --- Transports (Phase 3) -------------------------------------------------
@@ -301,7 +313,8 @@ service PublicService @(path : '/fiori', impl: 'srv/public-service', requires: [
   // release goes through the write unit's CTS step (simulate = release
   // checks only, never releases). Releasing is IRREVERSIBLE.
 
-  function queryTransportRequests(targetSystemId: UUID) returns LargeString;
+  // `status` is a dashboard bucket (OPEN | RELEASED | FAILED).
+  function queryTransportRequests(targetSystemId: UUID, status: String) returns LargeString;
   @(requires: 'Activator')
   action releaseTransport(transportId: UUID, simulate: Boolean) returns LargeString;
 
