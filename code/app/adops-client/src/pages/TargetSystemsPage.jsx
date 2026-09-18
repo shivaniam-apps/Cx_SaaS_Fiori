@@ -20,6 +20,7 @@ import {
   createTargetSystem,
   updateTargetSystem,
   checkConnection,
+  getBackendCapabilities,
   getServiceErrorMessage
 } from '../services/fioriService.js';
 import { listBtpDestinations, getBtpAccountInfo, isForbidden } from '../services/adminService.js';
@@ -27,6 +28,7 @@ import { fetchUserInfo } from '../services/coreService.js';
 import { hasAdminAccess } from '../features/auth/memberAccess.js';
 import { buildDestinationCatalog, draftFromDestination, DESTINATION_STATUS } from '../features/systems/destinationCatalog.js';
 import { connectionSummary, endpointBadges } from '../features/systems/connectionVerdict.js';
+import { snapshotCoverageFrom, coverageBadge } from '../features/systems/snapshotCoverage.js';
 
 const ENVIRONMENTS = ['DEV', 'QAS', 'PRD', 'SANDBOX'];
 
@@ -48,18 +50,22 @@ const EMPTY_DRAFT = {
 
 // Rollup tag plus one badge per ZADO endpoint (usage read service,
 // activation write unit); the model decides labels and designs.
-function connectionCell(system, liveVerdicts) {
+function connectionCell(system, liveVerdicts, coverageBySystem) {
   const verdict = liveVerdicts[system.destinationName];
   const summary = connectionSummary(system, verdict);
   const badges = endpointBadges(system, verdict);
+  // Snapshot coverage (O17) is only known after a Test Connection in this
+  // session; before that the badge says so instead of guessing.
+  const snapshots = verdict ? coverageBadge(coverageBySystem[system.ID] || null) : null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--adops-space-xs)', alignItems: 'flex-start' }}>
       <Tag design={summary.design}>{summary.label}</Tag>
-      {badges.length ? (
+      {badges.length || snapshots ? (
         <div style={{ display: 'flex', gap: 'var(--adops-space-xs)', flexWrap: 'wrap' }}>
           {badges.map((badge) => (
             <Tag key={badge.endpoint} design={badge.design} title={badge.message}>{badge.label}</Tag>
           ))}
+          {snapshots ? <Tag design={snapshots.design} title={snapshots.detail}>{snapshots.label}</Tag> : null}
         </div>
       ) : null}
     </div>
@@ -78,6 +84,7 @@ export function TargetSystemsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState({});
   const [verdicts, setVerdicts] = useState({});
+  const [coverage, setCoverage] = useState({});   // system ID -> snapshot coverage (read with Test Connection)
   const [reloadToken, setReloadToken] = useState(0);
   const [destinations, setDestinations] = useState(null); // null = not loaded / unavailable
   const [accountInfo, setAccountInfo] = useState(null);
@@ -230,6 +237,16 @@ export function TargetSystemsPage() {
     try {
       const verdict = await checkConnection(system.destinationName, system.serviceRootPath || null, system.ID);
       setVerdicts((v) => ({ ...v, [system.destinationName]: verdict }));
+      // S7 snapshot coverage rides on the same explicit test: one SystemInfo
+      // read once the usage service answered, never on page load.
+      if (verdict?.Ok) {
+        try {
+          const capabilities = await getBackendCapabilities(system.ID);
+          setCoverage((c) => ({ ...c, [system.ID]: snapshotCoverageFrom(capabilities) }));
+        } catch {
+          setCoverage((c) => ({ ...c, [system.ID]: snapshotCoverageFrom(null) }));
+        }
+      }
     } catch (e) {
       setVerdicts((v) => ({
         ...v,
@@ -289,7 +306,7 @@ export function TargetSystemsPage() {
               <TableCell><span>{system.systemId || '—'} / {system.client || '—'}</span></TableCell>
               <TableCell><span>{system.s4Release || '—'}</span></TableCell>
               <TableCell><span>{systems.find((s) => s.ID === system.followOnSystem_ID)?.displayName || '—'}</span></TableCell>
-              <TableCell>{connectionCell(system, verdicts)}</TableCell>
+              <TableCell>{connectionCell(system, verdicts, coverage)}</TableCell>
               <TableCell>
                 <div style={{ display: 'flex', gap: 'var(--adops-space-xs)' }}>
                   {admin ? (

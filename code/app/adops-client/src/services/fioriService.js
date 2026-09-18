@@ -85,6 +85,13 @@ export async function checkConnection(destinationName, path, targetSystemId) {
   return postAction('checkTargetSystemConnection', { destinationName, path: path || null, targetSystemId: targetSystemId || null });
 }
 
+// SystemInfo of the ZADO add-on (versions, collector state, S7 snapshot
+// coverage). One S/4 round trip: read on an explicit Test Connection only.
+export async function getBackendCapabilities(targetSystemId) {
+  const response = await http.get(`/fiori/getBackendCapabilities(${functionArgs({ targetSystemId })})`);
+  return parseJsonActionResult(response.data);
+}
+
 // Bounded, server-filtered read of the identified-usage audit trail for the
 // Settings page (AuditEvents is read-only on PublicService).
 export async function listIdentifiedUsageAuditEvents(top = 20) {

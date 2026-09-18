@@ -13,6 +13,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## Accomplished
 
+- [x] O17 Snapshot coverage on the Target Systems page (client part of I34): Test Connection also reads getBackendCapabilities once the usage service answered and shows a snapshot badge (Snapshots n mo / pending / none / live reads for a pre-S7 add-on) with window, last run and job state in the tooltip; features/systems/snapshotCoverage.js mirrors srv/utils/snapshot-coverage.js (node --test); nothing read on page load; docu/07 — this PR, 2026-09-18
 - [x] O16 Path-form deep links open their page (promoted I41): features/app/deepLink.js translates /audit-log or /transports?status=OPEN into the hash route once at boot (main.jsx, before the HashRouter mounts), query kept, base-path aware; previously such links rendered the Dashboard under /audit-log#/dashboard — this PR, 2026-09-18
 - [x] O15 HTTP test fixture convention (promoted I43, ex-I41/I42): fixtures(tag) helper + convention comment in cds-http-test.mjs, suite-tagged destinations in audit-chain / public-service-auth / dashboard-summary / transport-verification, and test/fixture-convention.test.mjs that fails when two HTTP suites register the same destination or one uses a bare landscape name — PR #57, 2026-09-18
 - [x] O14 PilotFeedback on the tenantScoped aspect (promoted I23): the entity declares the shared aspect instead of a plain TenantId column (same column, now with the GLOBAL default; the scope hook already stamped and filtered it), so every business entity carries the aspect — this PR, 2026-09-18
@@ -37,6 +38,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 ## Daily log
 
 ### 2026-09-18
+- O17 done on feat/snapshot-coverage-ui: getBackendCapabilities client wrapper, coverage model + badge, verified on 5283 (Test Connection -> "Snapshots 12 mo" with tooltip, one capabilities read). The ABAP halves of I34 and the S10 follow-ups I31 / I32 need RD1 and stay with scheduling.
 - O16 done on fix/deep-link-initial-route: reproduced in the browser (path-form link -> cockpit under /audit-log#/dashboard; hash-form links were fine, so the shell was not at fault), pure translator + node tests, verified /audit-log, /transports?status=OPEN (filter applied), / and #/landscape/roles on 5283. The deployed approuter has no SPA fallback for such paths (I44, admin).
 - O15 done on test/fixture-convention: guard scans registration lines only (displayName + destinationName on one line), 342 server tests green; the other I41 (deep links open the Dashboard on a full-page load) is the next overview item. PR #57 opened; merged origin/main (S7 #55, T5 #56) and renumbered the idea again (I43) after a second collision.
 - O14 done on feat/feedback-tenant-aspect: one-line model change, compiled table keeps the column with DEFAULT GLOBAL, sqlite views refreshed, 339 server tests green (tenant-scope suite covers PilotFeedback); no client change.

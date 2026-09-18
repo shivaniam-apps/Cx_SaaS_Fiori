@@ -68,6 +68,12 @@ history.
   with the scheduling hint) and stores the source on `UsageSnapshots.DataSource`.
 - `utils/snapshot-coverage.js` (pure): coverage from a `SystemInfo` row,
   window-covered check, the log and label texts.
+- Target Systems page (O17): **Test Connection** also reads
+  `getBackendCapabilities` once the usage service answered and shows a
+  snapshot badge next to the endpoint badges ("Snapshots 12 mo", "Snapshots
+  pending", "No snapshots", "Live usage reads" for an add-on older than S7;
+  hover for the window, the last run and the job state). Nothing is read on
+  page load; the mirror model is `features/systems/snapshotCoverage.js`.
 
 ## RD1 acceptance
 
