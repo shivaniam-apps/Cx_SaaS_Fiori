@@ -5,11 +5,10 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 
 ## In progress
 
-(none)
+- [~] A11 /readyz with DB check; startup console.log -> cds.log — branch feat/readyz, started 2026-09-18
 
 ## To-do (milestone order)
 
-- [ ] A11 /readyz with DB check; startup console.log -> cds.log
 - [ ] A12 cds.test API coverage: public-service handlers, s4-http-client, admin-service, access-request handlers
 - [ ] A13 Telemetry rate limiting; accessibility pass on pages
 - [ ] T2 Subscription lifecycle: tenant row on subscribe, purge on unsubscribe, dependencies callback (after PO-3)
@@ -22,7 +21,7 @@ Worktree `Cx_SaaS_Fiori.worktrees/admin` · CAP 4134 · client 5303 · owns A an
 ## Accomplished
 
 - [x] ABAP mirror re-synced wholesale to a4h_2023_zado main df3db96: usage package now carries the S6 extraction parameters, the A9 ZADO_CFG per-tenant secret (table, class, init report) and the S8 inventory reader changes that landed there after the CAP-side PRs — PR #37, 2026-09-17
-- [x] A10 Pilot documentation: docu/05 deploy-runbook.md (prerequisites, build, deploy, verify, deployer task log, role collections, consumer subscription, redeploy, rollback, runtime configuration reference), docu/13 operations-runbook.md (daily routine, health and logs, background-task states, connection verdicts, activation and transport duties, audit chain, telemetry, access requests, incident quick reference), docu/15 onboarding-a-target-system.md (add-on install, ZADO_CFG_INIT per client, DEV-only SICF node, technical user, Cloud Connector, consumer-subaccount destination, Target Systems fields, Test Connection verdicts, first extraction, per-environment checklist, RD1 values) — this PR, 2026-09-18
+- [x] A10 Pilot documentation: docu/05 deploy-runbook.md (prerequisites, build, deploy, verify, deployer task log, role collections, consumer subscription, redeploy, rollback, runtime configuration reference), docu/13 operations-runbook.md (daily routine, health and logs, background-task states, connection verdicts, activation and transport duties, audit chain, telemetry, access requests, incident quick reference), docu/15 onboarding-a-target-system.md (add-on install, ZADO_CFG_INIT per client, DEV-only SICF node, technical user, Cloud Connector, consumer-subaccount destination, Target Systems fields, Test Connection verdicts, first extraction, per-environment checklist, RD1 values) — PR #38, 2026-09-18
 - [x] A9 Per-tenant pseudonymisation salt: ABAP ZADO_CFG + ZCL_ADO_CFG + ZADO_CFG_INIT (secret per client, never transported), ZCL_ADO_PSEUDONYM hashes secret + tenant + user, P_TenantId on ZADO_C_USER_TX_USAGE threaded through reader and export; CAP TenantSecrets random salt replaces the tenant-id salt, usage read passes P_TopUsers/P_MinExecutions/P_TenantId when $metadata declares them; docu/11 GDPR / works-council note for PO sign-off — PR #35 (ABAP: a4h_2023_zado #23, mirror #37), 2026-09-17
 - [x] A8 Dead provisioning path removed: provisioning.js, utils/alert-notification.js, utils/cloud-foundry.js (undeclared cfenv / alert-notification-client, missing tenant-automator.js), orphaned isTenantAutomationEnabled and ADOPTOPS_TENANT_AUTOMATION dropped, basic-subscription.js confirmed as the only subscription path, module-load test requires every srv module and checks declared packages — PR #32, 2026-09-17
 - [x] A7 Safety defaults: direct S/4 HTTPS calls verify certificates by default (S4_DIRECT_INSECURE_TLS is an explicit, logged opt-in), directTlsOptions unit tests, OData-branch tests proving a payload without ResultJson yields FAILED / SIMULATED_BLOCKED instead of a thrown error, docu/06 direct-access chapter — PR #31, 2026-09-17
