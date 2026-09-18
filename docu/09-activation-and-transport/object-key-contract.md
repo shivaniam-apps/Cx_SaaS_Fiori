@@ -22,13 +22,14 @@ ICF handler (`objectKeyJson`) and the RAP action (`ObjectKeyJson`).
 | StepType | Key | Values come from | ABAP executor | Status |
 |---|---|---|---|---|
 | `RUN_TASK_LIST` | `{ scenario }` | constant `SAP_FIORI_FOUNDATION_S4` | `zcl_ado_act_tasklist=>begin` | executable |
-| `ACTIVATE_ODATA_SERVICE` | `{ fioriId, scenario }` | proposal; constant `SAP_GATEWAY_ACTIVATE_ODATA_SERV` | — | S3 (`not_implemented`) |
+| `ACTIVATE_ODATA_SERVICE` | `{ fioriId, scenario, serviceName, serviceVersion, systemAlias }` | proposal; constant scenario (kept for compatibility); service name / version from the catalog derivation (the `HT` nodes of the app's catalog folder) - empty until S9 part 2 delivers them; `systemAlias` empty = `ZADO_CFG ODATA_SYSTEM_ALIAS`, else `LOCAL` | `zcl_ado_act_odata=>execute` (`/IWFND/CL_MGW_ACTIVATION_API=>ACTIVATE_SERVICE`, verify via `/IWFND/I_MED_SRH`), dynamic call | executable; empty `serviceName` → FAILED before the API |
 | `ACTIVATE_ICF_NODE` | `{ fioriId, url, icfName }` | proposal; `BackendCatalogApps.BspApplication` → `/sap/bc/ui5_ui5/sap/<bsp>` and `<bsp>` (lower case) | `zcl_ado_act_icf=>activate` (`HTTP_ACTIVATE_NODE`, verify via `ICFSERVICE.ICF_NOACT`) | executable; empty `url`/`icfName` → FAILED before the FM |
-| `CREATE_SPACE` | `{ spaceId, title }` | `ZADO_<wave key>`, wave name | — | S3 |
-| `CREATE_PAGE` | `{ pageId, apps[] }` | `ZADO_<wave key>_P1`, approved Fiori IDs | — | S3 |
-| `ASSIGN_PAGE_TO_SPACE` | `{ spaceId, pageId }` | as above | — | S3 |
+| `CREATE_SPACE` | `{ spaceId, title, trkorr }` | `ZADO_<wave key>`, wave name; `trkorr` injected at dispatch | `zcl_ado_act_space=>execute` (`/UI2/IF_FDM_SPACE_API`, customizing scope, verify `EXISTS_SPACE`), dynamic call | executable |
+| `CREATE_PAGE` | `{ pageId, title, apps[], trkorr }` | `ZADO_<wave key>_P1`, wave name, approved Fiori IDs; `trkorr` injected | `zcl_ado_act_space=>execute` (`/UI2/IF_FDM_PAGE_API`, verify `EXISTS_PAGE`) | executable; answers WARNING while `apps` cannot be written as tiles (section / tile API = probe round 5) |
+| `ASSIGN_PAGE_TO_SPACE` | `{ spaceId, pageId, trkorr }` | as above; `trkorr` injected | `zcl_ado_act_space=>execute` (`/UI2/IF_FDM_SPACE->ASSIGN_PAGE`, verify `/UI2/STPGAC`) | executable |
 | `CREATE_PFCG_ROLE` | `{ role, text, referenceRoles[], trkorr }` | `Z_ADO_<wave key>`, `AdoptOps <wave>` (≤ 80), distinct `BusinessRoleId`s; `trkorr` empty in the row, injected at dispatch | `zcl_ado_act_role=>create_role` (`PRGN_RFC_CREATE_ACTIVITY_GROUP` with `REQUEST`); `referenceRoles` reserved for menu derivation | executable |
-| `ADD_SPACE_TO_ROLE` | `{ role, spaceId }` | as above | — | S3 |
+| `ADD_CATALOG_TO_ROLE` | `{ role, catalogId }` | one step per distinct `BusinessCatalogId` of the wave's proposals (none → no step) | `zcl_ado_act_menu=>execute` (`CL_PFCG_MENU_MODIFY`, node `CAT_PROVIDER`, `IV_CALCULATE_APPS`; verify `AGR_BUFFI`), dynamic call | executable; `ASSIGN_BUSINESS_CATALOG` is an alias with the same key |
+| `ADD_SPACE_TO_ROLE` | `{ role, spaceId }` | as above | `zcl_ado_act_menu=>execute` (node `SPACE_PROVIDER`; verify `AGR_BUFFI`) | executable |
 | `GENERATE_PROFILE` | `{ role }` | as above | `zcl_ado_act_role=>generate_profile` | executable |
 | `ASSIGN_ROLE_TO_USERS` | `{ role, users[] }` | plan with `AssignUsers` (not emitted by the planner yet) | `zcl_ado_act_role=>assign_users` | executable |
 | `ADD_TO_TRANSPORT` | `{ text }` — create<br>`{ trkorr, simulation }` — release | `AdoptOps <wave>` (≤ 60);<br>`releaseTransport` action | `zcl_ado_act_cts=>create_request` / `release_request` (`TRINT_RELEASE_REQUEST IV_SIMULATION`) | executable; a set `trkorr` selects release |
@@ -36,11 +37,20 @@ ICF handler (`objectKeyJson`) and the RAP action (`ObjectKeyJson`).
 
 `<wave key>` is `waveTechnicalKey(waveName)` (`Wave 1` → `W1`).
 
+**Portability.** The executors on release-dependent SAP APIs (gateway
+activation API, FDM space / page API, `CL_PFCG_MENU_MODIFY`) are separate
+classes that the dispatcher calls dynamically. Where such an API is missing,
+that class stays inactive after the abapGit pull and its step types answer
+FAILED "not available on this system - perform the step manually"; every
+other step type keeps working. Nothing in them names a system, client, role
+or catalog: values come from the key or from `ZADO_CFG` (`ODATA_SYSTEM_ALIAS`,
+`ODATA_PACKAGE`, `ODATA_PREFIX`, `TRANSPORT_KIND`).
+
 ## Sequence and the plan's transport request
 
 The planner orders a wave as FOUNDATION → SERVICE (OData, ICF per app) →
 **`ADD_TO_TRANSPORT` (create)** → CONTENT (space, page, assignment) → ROLE
-(create, add space, profile) → **`APPEND_TO_TRANSPORT`**. The request is
+(create, add catalogs, add space, profile) → **`APPEND_TO_TRANSPORT`**. The request is
 created before the first transportable write because PFCG and the launchpad
 repositories record objects on a request at write time; the space and role
 steps depend on it.
@@ -49,7 +59,10 @@ The TRKORR does not exist when the plan is derived, so the rows keep
 `trkorr: ""`. At dispatch the execution engine merges the plan's request into
 the keys listed in `TRKORR_STEP_TYPES` (`withPlanTrkorr` in
 `activation-plan.js`): the persisted row stays as planned, only the executor
-sees the completed key. A resumed plan reads the request back from
+sees the completed key. Since S3 part 2 the list also holds `CREATE_SPACE`,
+`CREATE_PAGE` and `ASSIGN_PAGE_TO_SPACE`, and the request is a **customizing**
+request (`ZADO_CFG TRANSPORT_KIND`, default `W`): a wave records a role and
+client-dependent launchpad content (`UISC` / `UIPC`), both customizing. A resumed plan reads the request back from
 `TransportRequests`. Release remains the operator's `releaseTransport` action.
 
 ## Simulation: the read-side state probe

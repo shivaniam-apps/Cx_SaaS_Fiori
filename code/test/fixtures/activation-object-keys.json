@@ -3,18 +3,19 @@
   "input": {
     "waveName": "Wave 1",
     "proposals": [
-      { "ID": "p1", "FioriId": "F3893", "BusinessRoleId": "SAP_BR_INTERNAL_SALES_REP", "BspApplication": "SD_SO_MANV2" },
+      { "ID": "p1", "FioriId": "F3893", "BusinessRoleId": "SAP_BR_INTERNAL_SALES_REP", "BusinessCatalogId": "SAP_SD_BC_SO_PROC", "BspApplication": "SD_SO_MANV2" },
       { "ID": "p2", "FioriId": "F0842A", "BusinessRoleId": "SAP_BR_PURCHASER" }
     ]
   },
   "planned": {
     "RUN_TASK_LIST": { "scenario": "SAP_FIORI_FOUNDATION_S4" },
-    "ACTIVATE_ODATA_SERVICE": { "fioriId": "F3893", "scenario": "SAP_GATEWAY_ACTIVATE_ODATA_SERV" },
+    "ACTIVATE_ODATA_SERVICE": { "fioriId": "F3893", "scenario": "SAP_GATEWAY_ACTIVATE_ODATA_SERV", "serviceName": "", "serviceVersion": "", "systemAlias": "" },
     "ACTIVATE_ICF_NODE": { "fioriId": "F3893", "url": "/sap/bc/ui5_ui5/sap/sd_so_manv2", "icfName": "sd_so_manv2" },
-    "CREATE_SPACE": { "spaceId": "ZADO_W1", "title": "Wave 1" },
-    "CREATE_PAGE": { "pageId": "ZADO_W1_P1", "apps": ["F3893", "F0842A"] },
-    "ASSIGN_PAGE_TO_SPACE": { "spaceId": "ZADO_W1", "pageId": "ZADO_W1_P1" },
+    "CREATE_SPACE": { "spaceId": "ZADO_W1", "title": "Wave 1", "trkorr": "" },
+    "CREATE_PAGE": { "pageId": "ZADO_W1_P1", "title": "Wave 1", "apps": ["F3893", "F0842A"], "trkorr": "" },
+    "ASSIGN_PAGE_TO_SPACE": { "spaceId": "ZADO_W1", "pageId": "ZADO_W1_P1", "trkorr": "" },
     "CREATE_PFCG_ROLE": { "role": "Z_ADO_W1", "text": "AdoptOps Wave 1", "referenceRoles": ["SAP_BR_INTERNAL_SALES_REP", "SAP_BR_PURCHASER"], "trkorr": "" },
+    "ADD_CATALOG_TO_ROLE": { "role": "Z_ADO_W1", "catalogId": "SAP_SD_BC_SO_PROC" },
     "ADD_SPACE_TO_ROLE": { "role": "Z_ADO_W1", "spaceId": "ZADO_W1" },
     "GENERATE_PROFILE": { "role": "Z_ADO_W1" },
     "ADD_TO_TRANSPORT": { "text": "AdoptOps Wave 1" },
@@ -50,6 +51,18 @@
       "stepType": "ADD_TO_TRANSPORT",
       "params": { "trkorr": "RD1K900042", "simulation": true },
       "key": { "trkorr": "RD1K900042", "simulation": true }
+    },
+    "odataServiceOfCatalog": {
+      "note": "Target shape once catalog derivation carries services (S9 part 2): one step per distinct service of the wave's catalogs. The gateway API activates by service name + version; systemAlias empty = ZADO_CFG ODATA_SYSTEM_ALIAS, else LOCAL.",
+      "stepType": "ACTIVATE_ODATA_SERVICE",
+      "params": { "fioriId": "F1873", "serviceName": "SD_F1873_SO_WL_SRV", "serviceVersion": "0001" },
+      "key": { "fioriId": "F1873", "scenario": "SAP_GATEWAY_ACTIVATE_ODATA_SERV", "serviceName": "SD_F1873_SO_WL_SRV", "serviceVersion": "0001", "systemAlias": "" }
+    },
+    "assignBusinessCatalog": {
+      "note": "Alias of ADD_CATALOG_TO_ROLE kept for the step type the data model already lists; same key, same executor.",
+      "stepType": "ASSIGN_BUSINESS_CATALOG",
+      "params": { "role": "Z_ADO_W1", "catalogId": "SAP_SD_BC_SO_PROC" },
+      "key": { "role": "Z_ADO_W1", "catalogId": "SAP_SD_BC_SO_PROC" }
     },
     "assignRoleToUsers": {
       "note": "Emitted when a plan has AssignUsers (client-local, never transported).",

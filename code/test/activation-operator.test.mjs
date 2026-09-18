@@ -85,7 +85,7 @@ describe('operator predicates (pure)', () => {
     expect(JSON.parse(role.ObjectKeyJson)).to.deep.equal({ role: 'Z_ADO_WO' });
     const space = rollbackStepFor(byType(steps, 'CREATE_SPACE'));
     expect(space.StepType).to.equal('ROLLBACK_CREATE_SPACE');
-    expect(JSON.parse(space.ObjectKeyJson)).to.deep.equal({ spaceId: 'ZADO_WO', title: 'Wave O' });
+    expect(JSON.parse(space.ObjectKeyJson)).to.deep.equal({ spaceId: 'ZADO_WO', title: 'Wave O', trkorr: '' });
   });
 });
 

@@ -68,11 +68,26 @@ function icfNodeFor(bspApplication) {
 
 const OBJECT_KEY_BUILDERS = {
   RUN_TASK_LIST: ({ scenario }) => ({ scenario }),
-  ACTIVATE_ODATA_SERVICE: ({ fioriId }) => ({ fioriId, scenario: 'SAP_GATEWAY_ACTIVATE_ODATA_SERV' }),
+  // The gateway API activates by SERVICE, not by app (RD1 probe rounds 2-4):
+  // serviceName / serviceVersion come from the catalog derivation (the HT
+  // nodes of the app's catalog folder). Until the catalog carries them they
+  // travel empty and the ABAP dispatcher fails the step fast, naming the app
+  // - the same pattern as the ICF node. systemAlias empty = system setting.
+  ACTIVATE_ODATA_SERVICE: ({ fioriId, serviceName, serviceVersion, systemAlias }) => ({
+    fioriId,
+    scenario: 'SAP_GATEWAY_ACTIVATE_ODATA_SERV',
+    serviceName: String(serviceName || '').trim(),
+    serviceVersion: String(serviceVersion || '').trim(),
+    systemAlias: String(systemAlias || '').trim()
+  }),
   ACTIVATE_ICF_NODE: ({ fioriId, bspApplication }) => ({ fioriId, ...icfNodeFor(bspApplication) }),
-  CREATE_SPACE: ({ spaceId, title }) => ({ spaceId, title }),
-  CREATE_PAGE: ({ pageId, apps }) => ({ pageId, apps: [...(apps || [])] }),
-  ASSIGN_PAGE_TO_SPACE: ({ spaceId, pageId }) => ({ spaceId, pageId }),
+  // Launchpad content is written in the customizing layer and recorded on
+  // the plan's request at write time: trkorr is engine-injected like the role's.
+  CREATE_SPACE: ({ spaceId, title, trkorr }) => ({ spaceId, title, trkorr: String(trkorr || '').trim() }),
+  CREATE_PAGE: ({ pageId, title, apps, trkorr }) => ({
+    pageId, title: sapText(title, 100), apps: [...(apps || [])], trkorr: String(trkorr || '').trim()
+  }),
+  ASSIGN_PAGE_TO_SPACE: ({ spaceId, pageId, trkorr }) => ({ spaceId, pageId, trkorr: String(trkorr || '').trim() }),
   // trkorr is the plan's transport request; the planner leaves it empty and
   // the execution engine injects it (withPlanTrkorr) once ADD_TO_TRANSPORT
   // has created the request, so PFCG records the role on it at creation.
@@ -86,6 +101,10 @@ const OBJECT_KEY_BUILDERS = {
     objects: (objects || []).map((o) => ({ pgmid: o.pgmid, object: o.object, objName: o.objName }))
   }),
   ADD_SPACE_TO_ROLE: ({ role, spaceId }) => ({ role, spaceId }),
+  // A space shows tiles; the business catalog in the role menu is what
+  // authorizes the apps (PFCG derives the app and service nodes from it).
+  ADD_CATALOG_TO_ROLE: ({ role, catalogId }) => ({ role, catalogId }),
+  ASSIGN_BUSINESS_CATALOG: ({ role, catalogId }) => ({ role, catalogId }),
   GENERATE_PROFILE: ({ role }) => ({ role }),
   ASSIGN_ROLE_TO_USERS: ({ role, users }) => ({ role, users: [...(users || [])] }),
   // Operator rollback (rollbackActivationStep): ROLLBACK_<type> carries only
@@ -113,7 +132,7 @@ function objectKeyJson(stepType, params) {
 // only exists once the plan's ADD_TO_TRANSPORT step ran, so the engine
 // merges it into the persisted key at dispatch time (the row keeps its
 // planned key; only the executor sees the completed one).
-const TRKORR_STEP_TYPES = ['CREATE_PFCG_ROLE', 'APPEND_TO_TRANSPORT'];
+const TRKORR_STEP_TYPES = ['CREATE_PFCG_ROLE', 'APPEND_TO_TRANSPORT', 'CREATE_SPACE', 'CREATE_PAGE', 'ASSIGN_PAGE_TO_SPACE'];
 
 function withPlanTrkorr(step, trkorr) {
   if (!trkorr || !TRKORR_STEP_TYPES.includes(step.StepType)) return step;
@@ -202,7 +221,7 @@ function deriveActivationSteps({ proposals, waveName }) {
     ObjectType: 'FLP_PAGE', ObjectName: pageId,
     Transportable: true, LocalReplay: false, Reversible: true,
     dependsOn_ID: space.ID,
-    ObjectKeyJson: objectKeyJson('CREATE_PAGE', { pageId, apps: proposals.map((p) => p.FioriId) })
+    ObjectKeyJson: objectKeyJson('CREATE_PAGE', { pageId, title: waveName, apps: proposals.map((p) => p.FioriId) })
   });
   step({
     StepGroup: 'CONTENT', StepType: 'ASSIGN_PAGE_TO_SPACE',
@@ -220,11 +239,25 @@ function deriveActivationSteps({ proposals, waveName }) {
     dependsOn_ID: transport.ID,
     ObjectKeyJson: objectKeyJson('CREATE_PFCG_ROLE', { role: roleName, text: title, referenceRoles })
   });
+  // One menu node per distinct business catalog of the wave's apps; apps
+  // whose proposal names no catalog contribute none (the step list then
+  // equals the earlier template). Chained so PFCG sees one writer at a time.
+  let lastRoleStep = role;
+  const catalogIds = [...new Set(proposals.map((p) => String(p.BusinessCatalogId || '').trim()).filter(Boolean))];
+  for (const catalogId of catalogIds) {
+    lastRoleStep = step({
+      StepGroup: 'ROLE', StepType: 'ADD_CATALOG_TO_ROLE',
+      ObjectType: 'PFCG_ROLE', ObjectName: roleName,
+      Transportable: true, LocalReplay: false, Reversible: true,
+      dependsOn_ID: lastRoleStep.ID,
+      ObjectKeyJson: objectKeyJson('ADD_CATALOG_TO_ROLE', { role: roleName, catalogId })
+    });
+  }
   const spaceToRole = step({
     StepGroup: 'ROLE', StepType: 'ADD_SPACE_TO_ROLE',
     ObjectType: 'PFCG_ROLE', ObjectName: roleName,
     Transportable: true, LocalReplay: false, Reversible: true,
-    dependsOn_ID: role.ID,
+    dependsOn_ID: lastRoleStep.ID,
     ObjectKeyJson: objectKeyJson('ADD_SPACE_TO_ROLE', { role: roleName, spaceId })
   });
   const profile = step({

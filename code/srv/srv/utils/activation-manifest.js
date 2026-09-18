@@ -20,6 +20,7 @@ const VERIFICATION_HINTS = {
   CREATE_PAGE: 'Transported - verify the page exists and lists the wave apps.',
   ASSIGN_PAGE_TO_SPACE: 'Transported - verify the page is assigned to the space.',
   CREATE_PFCG_ROLE: 'Transported - PFCG: role exists after import.',
+  ADD_CATALOG_TO_ROLE: 'Transported - PFCG: role menu contains the business catalog with its app and service nodes.',
   ADD_SPACE_TO_ROLE: 'Transported - PFCG: role menu contains the space node.',
   GENERATE_PROFILE: 'PFCG/SUPC: regenerate the authorization profile after import (profiles are not reliably transported).',
   ASSIGN_ROLE_TO_USERS: 'SU01/PFCG: assign the role to this system\'s users (assignments are client-local and never transported).',

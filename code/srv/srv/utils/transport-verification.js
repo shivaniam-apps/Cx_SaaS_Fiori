@@ -58,6 +58,7 @@ function roleNameOf(entry) {
 function verificationReadFor(entry) {
   switch (entry.stepType) {
     case 'CREATE_PFCG_ROLE':
+    case 'ADD_CATALOG_TO_ROLE':
     case 'ADD_SPACE_TO_ROLE':
     case 'GENERATE_PROFILE':
       return { kind: VERIFY_KIND.ROLE_EXISTS, roleName: roleNameOf(entry) };
@@ -125,7 +126,7 @@ function verdictFor(entry, spec, { rolesByName, rolesError, importStatus }) {
       if (rolesError) return { verdict: VERDICT.UNKNOWN, detail: `RoleInventory read failed: ${rolesError}` };
       const role = rolesByName.get(spec.roleName);
       if (!role) return { verdict: VERDICT.NOT_FOUND, detail: `PFCG role ${spec.roleName} not found (AGR_DEFINE).` };
-      const menuNote = entry.stepType === 'ADD_SPACE_TO_ROLE' ? ' Menu node not readable through the read unit - check PFCG.' : '';
+      const menuNote = ['ADD_SPACE_TO_ROLE', 'ADD_CATALOG_TO_ROLE'].includes(entry.stepType) ? ' Menu node not readable through the read unit - check PFCG.' : '';
       const profileNote = entry.stepType === 'GENERATE_PROFILE' ? ' Profile generation not readable through the read unit - regenerate after import.' : '';
       return { verdict: VERDICT.VERIFIED, detail: `${roleDetail(role)}${menuNote}${profileNote}` };
     }
