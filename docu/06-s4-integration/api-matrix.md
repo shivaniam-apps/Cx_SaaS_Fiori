@@ -66,6 +66,23 @@ calls them **dynamically**: a system without one of these APIs loses that
 step type only (idea I58, portability). Requests are customizing requests by
 default (`ZADO_CFG TRANSPORT_KIND = K` switches back to workbench).
 
+## Round 5 addendum (2026-09-18, RD1/100, section "3e")
+
+- **Transport modes:** `E` = *External* (the caller supplies the request),
+  `P` = *Transport Popup*. The space / page executor therefore sets `E`
+  with the plan's request (a4h fix `fix/space-transport-mode-external`);
+  handing back the API's current mode could have been the popup.
+- **Launchpad customizing sits on customizing requests:** E070 of the
+  requests carrying `R3TR UISC / UIPC`: `TRFUNCTION = W`, `KORRDEV = CUST` -
+  confirms the customizing request default (idea I62, launchpad part).
+- **Sections:** `/UI2/IF_FDM_PAGE_SECTION=>TS_HEADER` = `ID` C35, `TITLE` C100;
+  the interface offers `GET_ITEM`, `MOVE_ITEM`, `REMOVE_ITEM`,
+  `ADD_CHILD_SECTION` but **no add-tile method**; `/UI2/IF_FDM_PAGE_SECTION_TILE`
+  has `UPDATE_TARGET_MAPPING( IV_TM_CATALOG_ID, IV_TM_CATALOG_TYPE, IV_TM_ID )`
+  and `UPDATE_TILE_DISPLAY_FORMAT`. The writer sits in a comprised interface
+  or the implementing class - probe round 6 (section "3f") follows SEOMETAREL.
+- First activation of the S3 part 2 classes on RD1: no syntax errors.
+
 ## Run 6 findings (2026-09-18, RD1/100, probe round 3)
 
 Raw output: [probe-activation-rd1-100-round3-2026-09-18.txt](probe-activation-rd1-100-round3-2026-09-18.txt),

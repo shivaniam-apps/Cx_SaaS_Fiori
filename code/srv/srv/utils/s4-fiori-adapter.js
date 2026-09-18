@@ -36,8 +36,8 @@ function serviceRoot(targetSystem) {
 // for a single-system lab. Nothing else: a system without a destination fails
 // here, before any S/4 call, with a message naming the system (S11).
 function catalogRoot(targetSystem) {
-  const root = String(targetSystem?.catalogRootPath || DEFAULT_S4_CATALOG_ROOT).trim();
-  return root.replace(/\/+$/, '');
+  const root = String(targetSystem?.catalogRootPath || DEFAULT_S4_CATALOG_ROOT || '').trim();
+  return root ? root.replace(/\/+$/, '') : serviceRoot(targetSystem);
 }
 
 function catalogEntityPath(targetSystem, entitySet) {

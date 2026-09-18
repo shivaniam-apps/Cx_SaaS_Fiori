@@ -66,6 +66,26 @@ function icfNodeFor(bspApplication) {
   return bsp ? { url: `${ICF_UI5_ROOT}${bsp}`, icfName: bsp } : { url: '', icfName: '' };
 }
 
+// OData services of a proposal as the catalog derivation delivered them
+// (BackendCatalogApps.ODataServicesJson = [{ service, version, active }]).
+// Tolerant: a broken or absent list is "no services known".
+function servicesOf(proposal) {
+  const raw = proposal?.ODataServicesJson;
+  if (!raw) return [];
+  try {
+    const list = Array.isArray(raw) ? raw : JSON.parse(raw);
+    return (Array.isArray(list) ? list : [])
+      .map((s) => ({
+        service: String(s?.service || '').trim().toUpperCase(),
+        version: String(s?.version || '0001').trim() || '0001',
+        active: s?.active === true
+      }))
+      .filter((s) => s.service);
+  } catch {
+    return [];
+  }
+}
+
 const OBJECT_KEY_BUILDERS = {
   RUN_TASK_LIST: ({ scenario }) => ({ scenario }),
   // The gateway API activates by SERVICE, not by app (RD1 probe rounds 2-4):
@@ -178,14 +198,37 @@ function deriveActivationSteps({ proposals, waveName }) {
     ObjectKeyJson: objectKeyJson('RUN_TASK_LIST', { scenario: 'SAP_FIORI_FOUNDATION_S4' })
   });
 
+  // One step per DISTINCT service that the catalog reports inactive (the
+  // gateway API activates by service, several apps share services). An app
+  // with a catalog row and nothing inactive needs no step; an app WITHOUT a
+  // catalog row keeps the per-app step with an empty service name, which the
+  // ABAP dispatcher fails fast - "run catalog derivation" is the right signal.
+  const plannedServices = new Set();
   for (const p of proposals) {
-    step({
-      StepGroup: 'SERVICE', StepType: 'ACTIVATE_ODATA_SERVICE',
-      ObjectType: 'FIORI_APP', ObjectName: p.FioriId, proposal_ID: p.ID,
-      Transportable: false, LocalReplay: true, Reversible: true,
-      dependsOn_ID: foundation.ID,
-      ObjectKeyJson: objectKeyJson('ACTIVATE_ODATA_SERVICE', { fioriId: p.FioriId })
-    });
+    if (!p.InCatalog) {
+      step({
+        StepGroup: 'SERVICE', StepType: 'ACTIVATE_ODATA_SERVICE',
+        ObjectType: 'FIORI_APP', ObjectName: p.FioriId, proposal_ID: p.ID,
+        Transportable: false, LocalReplay: true, Reversible: true,
+        dependsOn_ID: foundation.ID,
+        ObjectKeyJson: objectKeyJson('ACTIVATE_ODATA_SERVICE', { fioriId: p.FioriId })
+      });
+      continue;
+    }
+    for (const service of servicesOf(p).filter((s) => !s.active)) {
+      const id = `${service.service} ${service.version}`;
+      if (plannedServices.has(id)) continue;
+      plannedServices.add(id);
+      step({
+        StepGroup: 'SERVICE', StepType: 'ACTIVATE_ODATA_SERVICE',
+        ObjectType: 'ODATA_SERVICE', ObjectName: service.service, proposal_ID: p.ID,
+        Transportable: false, LocalReplay: true, Reversible: true,
+        dependsOn_ID: foundation.ID,
+        ObjectKeyJson: objectKeyJson('ACTIVATE_ODATA_SERVICE', {
+          fioriId: p.FioriId, serviceName: service.service, serviceVersion: service.version
+        })
+      });
+    }
   }
   for (const p of proposals) {
     step({
@@ -354,6 +397,7 @@ async function simulateSteps(steps, probe) {
 }
 
 module.exports = {
+  servicesOf,
   waveTechnicalKey,
   icfNodeFor,
   objectKey,

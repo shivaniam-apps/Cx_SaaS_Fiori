@@ -47,9 +47,13 @@ overlay maps transactions to app IDs, not this chapter.
 
 ## Contract of the catalog read unit (for part 2)
 
-Service root: `/sap/opu/odata4/sap/zado_catalog_o4/srvd/sap/zado_catalog_srv/0001`
-(`ADOPTOPS_S4_CATALOG_ROOT`, or `TargetSystems.catalogRootPath` per system).
-Published on every environment like the usage read unit; read-only.
+Service root: **the usage read unit** (`ZADO_USAGE_SRV`, entity sets
+`CatalogApps` and `LaunchpadContent`) - one published binding per system,
+nothing extra to set up. `ADOPTOPS_S4_CATALOG_ROOT` or
+`TargetSystems.catalogRootPath` point at a separate service only when one
+exists; empty means "follow the system's usage root". Read-only, shipped to
+every environment. The "Source" column below is the design before the probes;
+the implemented sources are in [Readers as built](#readers-as-built-s9-part-2).
 
 `CatalogApps` (one row per installed Fiori app; ordered by `FioriId`):
 
@@ -211,6 +215,40 @@ Raw output: [probe-catalog-rd1-100-round4-2026-09-18.txt](probe-catalog-rd1-100-
 - **Portability:** every table above is SAP_UI / SAP_BASIS standard; the
   readers use dynamic SQL per table and report a missing table as an empty
   capability instead of failing (idea I58).
+
+## Readers as built (S9 part 2)
+
+`ZCL_ADO_Q_CATALOG_APPS` - one row per SAPUI5 app:
+
+| Field | Source |
+|---|---|
+| `FioriId` | distinct `TCODE` of `/UI2/PB_C_TM` + `/UI2/PB_C_TMM` rows with a UI5 component |
+| `AppTitle`, `AppSubtitle`, `SemanticObject`, `SemanticAction`, `UI5ComponentName` | `CONF_TEXT`, `INFORMATION`, `SEM_OBJ`, `SEM_ACT`, `UI5_COMPONENT_ID` of that row |
+| `BspApplication` | last segment of `URL` under `/ui5_ui5/`, upper case |
+| `TechnicalCatalogId` | `PARENTID` without the catalog prefix |
+| `BusinessCatalogId`, `BusinessRoleId` | a catalog whose row references the mapping (`REFERENCECHIPID`); among several, one that a role menu carries, `SAP_BR*` first |
+| `ODataServicesJson` | `HT` service nodes of that catalog folder → `USOBHASH` → IWSV / IWSG → `/IWFND/I_MED_SRH`; the app's own services (name contains the Fiori id) when there are any, else the catalog's list (inactive first, cut at 1300 characters) |
+| `ServiceActivationState` | from the app's own services only; empty when none can be told (CAP then judges by BSP + ICF) |
+| `IcfNodeState`, `UiComponentState` | `ICFSERVICE` (upper case, `ICF_NOACT`), `TADIR` WAPA |
+
+`ZCL_ADO_Q_LP_CONTENT` - SPACE and PAGE from `/UI2/STHEADC`, `/UI2/PGHEADC`,
+`/UI2/STPGAC`; CATALOG from `/UI2/PB_C_PAGE` + `/UI2/PB_C_PAGEM`
+(`IS_CATALOG_PAGE`); roles from the `CAT_PROVIDER` / `SPACE_PROVIDER` nodes of
+the role menus (at most 20 per item). Titles are the ids for now (I64).
+
+Both providers read every `/UI2/` table through `ZCL_ADO_Q_DYN` (dynamic
+SQL, row type built from the table's own columns): on a release without such
+a table the entity answers fewer or no rows instead of failing - the
+portability rule of idea I58. Paging: `CatalogApps` pages over the sorted
+Fiori ids (at most 500 per page), `LaunchpadContent` in memory.
+
+**Planner use:** `createActivationPlan` takes BSP application, business
+catalog and services of each approved app from `BackendCatalogApps` of the
+target system: ICF steps get real node paths, `ADD_CATALOG_TO_ROLE` one step
+per distinct catalog, `ACTIVATE_ODATA_SERVICE` **one step per distinct
+inactive service** (idea I56). An app without a catalog row keeps the per-app
+service step with an empty service name, which fails fast - the signal to run
+the derivation.
 
 ## Operator steps for part 2 (RD1 DEV/100)
 

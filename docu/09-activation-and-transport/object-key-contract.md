@@ -140,3 +140,25 @@ prints the full result contract:
 | Profile | `{ "role": "Z_ADO_SMOKE" }` | regenerated (harmless) |
 | ICF | `{ "fioriId": "SMOKE", "url": "/sap/bc/ui5_ui5/ui2/ushell", "icfName": "ushell" }` | default node is already active → `SKIPPED`; point it at an inactive app node to see `HTTP_ACTIVATE_NODE` run (irreversible) |
 | Custom | `StepType` + `ObjectKeyJson` copied from an `ActivationSteps` row | per step type |
+
+### Acceptance run of the S3 part 2 executors (Custom scenario)
+
+Run them in this order in RD1 client 100; every row is pasted into
+**Custom**: step type + JSON. Tick **Probe only** first to see the simulation
+verdict without writing. `<TR>` is the request number the Transport scenario
+printed (a customizing request since S3 part 2).
+
+| # | Step type | JSON | Expected | Repeat |
+|---|---|---|---|---|
+| 1 | Transport scenario | - | SUCCESS, prints `<TR>`; SE10 shows a **customizing** request | - |
+| 2 | Role scenario (`Z_ADO_SMOKE`) | - | SUCCESS | SKIPPED |
+| 3 | `CREATE_SPACE` | `{"spaceId":"ZADO_SMOKE","title":"AdoptOps smoke","trkorr":"<TR>"}` | SUCCESS; `R3TR UISC ZADO_SMOKE` on `<TR>` | SKIPPED |
+| 4 | `CREATE_PAGE` | `{"pageId":"ZADO_SMOKE_P1","title":"AdoptOps smoke","apps":[],"trkorr":"<TR>"}` | SUCCESS (WARNING when `apps` is filled) | SKIPPED |
+| 5 | `ASSIGN_PAGE_TO_SPACE` | `{"spaceId":"ZADO_SMOKE","pageId":"ZADO_SMOKE_P1","trkorr":"<TR>"}` | SUCCESS; the space shows the page in Manage Launchpad Spaces | SKIPPED |
+| 6 | `ADD_CATALOG_TO_ROLE` | `{"role":"Z_ADO_SMOKE","catalogId":"SAP_SD_BC_INQ_PROC"}` | SUCCESS; PFCG menu shows the catalog folder with its app / service nodes | SKIPPED |
+| 7 | `ADD_SPACE_TO_ROLE` | `{"role":"Z_ADO_SMOKE","spaceId":"ZADO_SMOKE"}` | SUCCESS; PFCG menu shows the space node | SKIPPED |
+| 8 | `ACTIVATE_ODATA_SERVICE` | `{"fioriId":"F1873","scenario":"","serviceName":"SD_F1873_SO_WL_SRV","serviceVersion":"0001","systemAlias":""}` | SKIPPED on RD1 (already active); pick an inactive service from /IWFND/MAINT_SERVICE "Add Service" to see SUCCESS | SKIPPED |
+
+Any FAILED prints SAP's own message - send it back unchanged, it names the
+parameter or authorization to correct. Clean-up afterwards: delete space and
+page in Manage Launchpad Spaces / Pages, the role in PFCG, the request in SE10.
