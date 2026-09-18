@@ -222,7 +222,7 @@ Extractions page, "New extraction": choose the target system, the sources
 (ST03N, STAD, AGR, USR02, FIORI), the period, top users per transaction
 and the minimum executions. The extraction runs as a background task; its
 progress and messages are on the page ([docu/13](../13-operations-observability/operations-runbook.md)
-section 3 explains the states). No periods found means the workload
+section 4 explains the states). No periods found means the workload
 collector is not running or the ST03N retention does not cover the window.
 
 **Offline bridge.** While the Cloud Connector path is not open yet, run

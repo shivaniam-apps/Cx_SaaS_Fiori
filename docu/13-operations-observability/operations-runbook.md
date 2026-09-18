@@ -5,21 +5,23 @@ what to look at, what the states mean, and what to do when something is
 off. Deployment is [docu/05 deploy runbook](../05-deployment-tiers/deploy-runbook.md);
 onboarding an S/4HANA system is [docu/15](../15-target-system-configuration/onboarding-a-target-system.md).
 
-The pilot has no alerting: nobody is paged. The daily routine in section 1
-is what stands in for it until Cloud Logging and Alert Notification land
-(roadmap T4).
+Failed and timed-out background tasks page the operators through SAP
+Alert Notification (section 3); everything else is still found by looking,
+so the daily routine in section 1 stays.
 
 ## 1. Daily routine
 
 1. `/readyz` of `adops-basic-srv-<space>` answers 200 and `cf apps` shows
    the expected instance count (two in prod).
-2. Product Insights > Crash reports: new fingerprints since yesterday.
-3. Extractions and Activation Runs: no task older than a few minutes still
+2. Alert Notification: every `AdoptOpsTaskFailed` event of the last day has
+   an owner (section 3).
+3. Product Insights > Crash reports: new fingerprints since yesterday.
+4. Extractions and Activation Runs: no task older than a few minutes still
    `RUNNING`, no unexplained `FAILED`.
-4. Target Systems: every active system's last connection check is `OK`
+5. Target Systems: every active system's last connection check is `OK`
    (rerun Test Connection for any that is stale or red).
-5. Audit Log page: chain verdict `OK`.
-6. Access Requests: pending requests decided.
+6. Audit Log page: chain verdict `OK`.
+7. Access Requests: pending requests decided.
 
 ## 2. Health and logs
 
@@ -28,7 +30,7 @@ is what stands in for it until Cloud Logging and Alert Notification land
 | Liveness | `GET /healthz` on the server route answers `OK` while the process is up; the Cloud Foundry health check uses it |
 | Readiness | `GET /readyz` answers 200 with `{"status":"ok","checks":{"db":{"ok":true,"ms":n}}}`; 503 with `"status":"unavailable"` and the error text when the database does not answer within five seconds |
 | Recent server log | `cf logs adops-basic-srv-<space> --recent` |
-| Persistent log | the `application-logs` service instance bound to the server (BTP cockpit > the space > Services > `<space>-adops-basic-logging` > open the Logs viewer) |
+| Persistent log | SAP Cloud Logging: the `<space>-adops-basic-cloud-logging` instance (BTP cockpit > the space > Instances > open the dashboard). The server logs JSON under the production profile, so every line carries the level, the component, the correlation id and the message as fields; Cloud Foundry metrics and router logs arrive through the same binding. Retention is 14 days (`retentionPeriod` in `deploy/cf/mta.yaml`) |
 | Client-side failures | Product Insights > Crash reports (render errors, window errors, unhandled rejections, API failures) |
 | User feedback | Product Insights > Feedback |
 
@@ -43,7 +45,37 @@ Two server instances (prod) are safe: task claims are atomic and the audit
 chain locks its per-tenant head row, so instances never write over each
 other.
 
-## 3. Background tasks
+## 3. Alerts
+
+The server raises an `AdoptOpsTaskFailed` event through the bound SAP
+Alert Notification instance (`<space>-adops-basic-alert-notification`,
+`code/srv/srv/utils/alert-notification.js`) whenever a background task
+ends `FAILED` or `TIMED_OUT`: a handler error after the last attempt, a
+worker that went silent with no attempts left, or a deadline overrun. One
+event per terminal failure; requeued attempts are not alerted.
+
+| Field | Content |
+|---|---|
+| `eventType` | `AdoptOpsTaskFailed` |
+| `severity` / `category` | `ERROR` / `ALERT` |
+| `subject` | `AdoptOps <task type> <status>: <object type> <object id>` |
+| `body` | error text, phase, attempts, tenant, target system, requester, correlation id, where to look |
+| `resource` | the server app (`resourceName`, instance index) with tags `taskId`, `taskType`, `taskStatus`, `tenant`, `objectType`, `objectId` |
+
+Who gets notified is configured once per space on the instance (BTP
+cockpit > the space > Instances > `<space>-adops-basic-alert-notification`
+> Manage instance): create a *condition* `eventType` equals
+`AdoptOpsTaskFailed`, an *action* (email, Slack, Teams, webhook or a
+ticketing system) and a *subscription* joining both. Test it from the
+same screen ("Test action") before relying on it.
+
+Without a binding (local runs, tests) the alert is written to the log as
+`ALERT (not sent)` and nothing else happens; an unreachable service or a
+refused event is logged as a warning and never changes the task outcome.
+Alerts for other signals (a `BROKEN` audit chain, a 503 readiness) are
+not raised yet.
+
+## 4. Background tasks
 
 Extractions, analyses and activation executions run as rows in
 `BackgroundTasks`, processed by the task runner inside the server
@@ -83,7 +115,7 @@ Never requeue a task by editing the table. Activation executions in
 particular resume (completed steps are skipped, verify-first turns a
 repeated step into `SKIPPED`); they are never replayed wholesale.
 
-## 4. Target systems and connectivity
+## 5. Target systems and connectivity
 
 Test Connection on the Target Systems page runs
 `checkTargetSystemConnection`, stores the verdict on the row and shows one
@@ -106,7 +138,7 @@ system, then rerun the check.
 Destination lookups are cached for five minutes; after changing a
 destination either wait or restart the server.
 
-## 5. Activation and transports
+## 6. Activation and transports
 
 The operator's duties around an activation plan (the mechanics are
 [docu/09](../09-activation-and-transport/object-key-contract.md)):
@@ -131,7 +163,7 @@ The operator's duties around an activation plan (the mechanics are
 Every step is one commit in S/4HANA and every operator decision is an
 audit event with the acting user.
 
-## 6. Audit chain
+## 7. Audit chain
 
 The Audit Log page (Administrator) shows the result of `verifyAuditChain`.
 
@@ -146,7 +178,7 @@ reported, not counted as broken. The chain proves internal consistency
 only; external anchoring in the BTP Audit Log service is T3 (product-owner
 decision PO-2).
 
-## 7. Telemetry and retention
+## 8. Telemetry and retention
 
 Product Insights > Settings (Administrator) switches feedback, usage,
 crash and performance collection on and off per tenant, sets the identity
@@ -170,7 +202,7 @@ limit`) naming the user and tenant. The counters are per server instance,
 so two instances allow about twice the configured number. The knobs are
 in the deploy runbook.
 
-## 8. Access requests
+## 9. Access requests
 
 A user who lands on "Request Access" (no Member role) or on a restricted
 page files a request naming the area (application, settings, product
@@ -180,7 +212,7 @@ through the XSUAA API; if no collection with the expected name exists in
 the subaccount, the request is marked `MANUAL` and the collection is
 assigned in the BTP cockpit. Both outcomes are audited.
 
-## 9. Data hygiene
+## 10. Data hygiene
 
 - A wrong or test extraction is removed with `purgeExtractionRun`
   (AdminService, Administrator); it is audited.
@@ -192,7 +224,7 @@ assigned in the BTP cockpit. Both outcomes are audited.
   longer join with later ones. Agree it with the AdoptOps administrator
   first and start a fresh extraction afterwards.
 
-## 10. Incident quick reference
+## 11. Incident quick reference
 
 | Symptom | First check | Then |
 |---|---|---|
@@ -203,13 +235,12 @@ assigned in the BTP cockpit. Both outcomes are audited.
 | Health check red after a deployment | `cf tasks adops-basic-db-deployer-<space>`, `cf logs ... --recent` | deploy runbook section 5 |
 | `/readyz` answers 503 | the error text in its body; `cf service <space>-adops-basic-postgres` | PostgreSQL instance state in the cockpit; the server recovers on its own once the database answers again |
 | Extraction returns no periods | SAP workload collector (`SAP_COLLECTOR_FOR_PERFMONITOR`) not running or ST03N retention too short | basis on the S/4 system; `SystemInfo.CollectorRunning` shows the flag |
-| Database growing | retention settings, old extraction runs | section 7 and 9 |
+| Database growing | retention settings, old extraction runs | sections 8 and 10 |
 
 ## Not yet in place
 
 | Item | Roadmap |
 |---|---|
 | BTP Audit Log service binding (external anchor for the chain) | T3 |
-| Cloud Logging, Alert Notification, task-failure alerts | T4 |
 | Release process, blue-green | T5 |
 | Secret rotation runbook, security review, `docu/16` troubleshooting | T6 |
