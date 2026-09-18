@@ -14,6 +14,7 @@ import {
   canResumeRun,
   canCancelRun,
   summaryCards,
+  nextStatusFilter,
   shouldRefetchStepMessages
 } from './runModel.js';
 
@@ -145,4 +146,17 @@ test('operatorLabel names the operator decision on the status tag', () => {
   assert.equal(operatorLabel({ OperatorAction: 'ROLLBACK_REQUESTED' }), 'rollback recorded');
   assert.equal(operatorLabel({ Status: 'SUCCESS' }), '');
   assert.equal(operatorLabel(null), '');
+});
+
+test('nextStatusFilter toggles a KPI card into the status filter and the total clears it', () => {
+  assert.equal(nextStatusFilter('', 'FAILED'), 'FAILED');
+  assert.equal(nextStatusFilter('FAILED', 'FAILED'), '', 'clicking the applied card clears it');
+  assert.equal(nextStatusFilter('FAILED', 'ACTIVE'), 'ACTIVE');
+  assert.equal(nextStatusFilter('FAILED', ''), '', 'the total card clears');
+  assert.equal(nextStatusFilter('FAILED', 'OTHER'), '', 'Other is not a server bucket');
+  assert.equal(nextStatusFilter(undefined, 'succeeded'), 'SUCCEEDED');
+  // Every summary card key is a bucket the server accepts.
+  for (const card of summaryCards({ Active: 1, Succeeded: 1, Failed: 1, Cancelled: 1 })) {
+    assert.equal(nextStatusFilter('', card.key), card.key);
+  }
 });
