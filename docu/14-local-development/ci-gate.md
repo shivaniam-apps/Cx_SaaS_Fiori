@@ -8,7 +8,7 @@ asks for before a push, run on Linux with a clean install.
 
 | Job | Working directory | Steps |
 |---|---|---|
-| CAP server | `code/` | `npm ci`, `npm run lint`, `npm test` (mocha, in-memory sqlite), `npm run build:basic` (cds production build plus the PostgreSQL deployer / runtime CSN check) |
+| CAP server | `code/` | `npm ci`, `npm run lint`, `npm test` (mocha, in-memory sqlite, incl. the load suite at scale 1), `npm run build:basic` (cds production build plus the PostgreSQL deployer / runtime CSN check) |
 | Client | `code/app/adops-client/` | rolldown lock check, `npm ci`, `npm run lint`, `npm test` (`node --test`), `npm run build` (Vite on Linux, the platform the CF build uses) |
 | Program tracker | repo root | `node scripts/tracker.mjs --check`, `node scripts/release.mjs check` (one product version across the MTA descriptors and package files) |
 

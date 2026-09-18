@@ -45,6 +45,10 @@ Two server instances (prod) are safe: task claims are atomic and the audit
 chain locks its per-tenant head row, so instances never write over each
 other.
 
+The response times to expect from the Dashboard, Usage Insight and
+Landscape reads at enterprise volume, and how to re-measure them, are in
+[performance-baseline.md](performance-baseline.md).
+
 ## 3. Alerts
 
 The server raises an `AdoptOpsTaskFailed` event through the bound SAP

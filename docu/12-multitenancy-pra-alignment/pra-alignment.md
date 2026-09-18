@@ -52,7 +52,7 @@ design: everything below is already in place with the tenant id `GLOBAL`.
    non-enterprise plan (I27/I39).
 3. Tenant isolation enforced below the service layer as well: the security
    review found that handlers addressing rows by key with direct queries
-   do not add the tenant filter (idea I43). Before a second tenant shares a
+   do not add the tenant filter (idea I45). Before a second tenant shares a
    space, either a database-level filter for `tenantScoped` entities or
    `tenantFilter()` on every key lookup is required, and the two-tenant
    `cds.test` suite becomes the gate.
