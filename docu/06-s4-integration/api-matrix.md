@@ -5,6 +5,7 @@
 | 1 | A4H client 001, `vhcala4hci` | 2026-08-12 | ABAP Platform appliance (no S4CORE) — our lab box |
 | 2 | **RD1 client 100**, `aubls4hd01` | 2026-08-12 | **Customer DEV: S4CORE 108 SP03 = S/4HANA 2023 SP03**, SAP_UI 758 SP3, client role C (customizing) |
 | 3 | RD1 client 100 (probe **v2**) | 2026-08-12 | Adds field lists (4b), STC scenario inventory (4c), spaces/pages table scan, STC session-lifecycle FMs |
+| 7 | **RD1 client 100** (probe round 4) | 2026-09-18 | Entity methods and header types of the space / page API, `CL_PFCG_MENU_MODIFY` as the role-menu writer, Fiori id of a target mapping; the S3 part 2 executors are built on it. |
 | 6 | **RD1 client 100** (probe round 3) | 2026-09-18 | Interface methods of the space / page API, PFCG node writers, service nodes resolved through `USOBHASH`; corrects run 5: the customizing layer holds 340 spaces / 529 pages. |
 | 5 | **RD1 client 100** (probe round 2 / 2b) | 2026-09-18 | Signatures and tables behind run 4; corrects the client-400 reading of the empty space / page tables. |
 | 4 | **RD1 client 400** (`ZADO_PROBE_ACTIVATION`, `ZADO_PROBE_CATALOG`) | 2026-09-18 | S3 part 2 and S9 part 2 inputs; raw output in [probe-activation-rd1-400-2026-09-18.txt](probe-activation-rd1-400-2026-09-18.txt) and [docu/08 probe-catalog-rd1-400-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-400-2026-09-18.txt). Client 400 = unit-test client. Run 5 showed the empty space / page tables are a system-wide fact (no client column), only roles, alias assignments and the customizing layer differ per client. |
@@ -15,6 +16,55 @@ flagged is now resolved with evidence from the customer's own S/4HANA 2023.
 This document converts the design's marked UNCERTAINs into facts. Both
 systems agree on every function-module verdict, which strongly suggests the
 signatures are stable across the 758 basis line.
+
+## Run 7 findings (2026-09-18, RD1/100, probe round 4) - the executors' API
+
+Raw output: [probe-activation-rd1-100-round4-2026-09-18.txt](probe-activation-rd1-100-round4-2026-09-18.txt),
+[docu/08 probe-catalog-rd1-100-round4-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-100-round4-2026-09-18.txt).
+
+Product owner, same day: RD1 users see **spaces** in the launchpad. `/UI2/FLPRT`
+(CLASSIC active) is therefore no indicator of spaces vs groups and
+`/UI2/FLPRTC` / `/UI2/FLPRTSC` are empty; idea I53 is closed - the plan's
+space / page steps are right for this system. 30 of the 340 customizing
+spaces are customer spaces (`ZSS_*`), none has a master space.
+
+1. **Space / page entities.** `/UI2/IF_FDM_SPACE`: `ASSIGN_PAGE( IV_ID,
+   IV_INDEX )`, `UNASSIGN_PAGE`, `MOVE_PAGE`, `SET_PAGE_VISIBILITY`,
+   `ASSIGN_TO_TRANSPORT( IV_TRKORR )`, `UPDATE_TITLE / _DESCRIPTION /
+   _SORT_PRIORITY`, `GET_PAGE_IDS`, `LOCK` / `UNLOCK`.
+   `/UI2/IF_FDM_PAGE`: `ADD_SECTION( IS_HEADER TYPE
+   /UI2/IF_FDM_PAGE_SECTION=>TS_HEADER, IV_INDEX, IV_LANGU -> RO_SECTION )`,
+   `REMOVE_SECTION`, `GET_STRUCTURE`, `ASSIGN_TO_TRANSPORT`. Tiles are methods
+   of `/UI2/IF_FDM_PAGE_SECTION` (round 5).
+   `TS_HEADER` (space) = `ID` C35, `TITLE` C100, `DESCRIPTION` C100, `BASE_ID`,
+   `MERGE_ID`, `SORT_PRIORITY`; page alike without the priority.
+2. **Scope and transport mode.** `/UI2/IF_FDM=>GC_SCOPE`: `CONF` / `CUST`
+   (the executors use `-CUSTOMIZATION`); transport modes `E` / `P` - the
+   executors read the API's current mode and hand it back with the plan's
+   request instead of guessing. Customizing content is recorded as
+   `R3TR UIPC / UISC <id>` (E071, no E071K keys).
+3. **Role menu writer = `CL_PFCG_MENU_MODIFY`** (headless):
+   `RETRIEVE_FOR_UPDATE( IV_ROLE -> ER_ROLE, ET_RETURN )`,
+   `MENU_ADD_APPLICATION_GROUP( IV_URL, IV_URL_TYPE, IV_NODE_TEXT,
+   IV_TARGET_ID, IV_CALCULATE_APPS, IT_APPL_FOR_GROUP -> EV_NEW_OBJECT_ID,
+   ET_RETURN )`, `MENU_ADD_SERVICE( IS_SERVICE TYPE USOBHASH )`,
+   `MENU_ADD_URL`, `MENU_ADD_FOLDER`, `MENU_DELETE_NODE`, `SAVE( -> ET_RETURN,
+   EV_REJECTED )`, `CANCEL`, `ROLE_ADD_TO_REQUEST( CV_REQUEST, IV_NO_DIALOG )`.
+   URL types = `/UI2/IF_FDM=>GC_PROVIDER`: `CAT_PROVIDER`, `GROUP_PROVIDER`,
+   `SPACE_PROVIDER`. Read side: `/UI2/CL_PFCG_UTILS`
+   (`GET_SPACE_FOR_ROLES`, `GET_CATALOGS_GROUPS_FOR_ROLES`,
+   `GET_ROLES_N_DESCR_FOR_CATALOG`). `/UI2/CL_FDM_PFCG_ROLE_API` is read-only.
+4. **Fiori id of a target mapping:** the TM default parameter
+   `sap-fiori-id` (`/UI2/IF_FDM=>GC_SEMANTIC_PARAMETER_NAME`), and for SAPUI5
+   apps the `TCODE` column of `/UI2/PB_C_TM` (see docu/08 round 4).
+
+**What was built from it (S3 part 2):** `ZCL_ADO_ACT_ODATA` (gateway API,
+verify on `/IWFND/I_MED_SRH`), `ZCL_ADO_ACT_SPACE` (create space / page,
+assign page; customizing scope; verify `EXISTS_*` and `/UI2/STPGAC`),
+`ZCL_ADO_ACT_MENU` (catalog / space node; verify `AGR_BUFFI`). The dispatcher
+calls them **dynamically**: a system without one of these APIs loses that
+step type only (idea I58, portability). Requests are customizing requests by
+default (`ZADO_CFG TRANSPORT_KIND = K` switches back to workbench).
 
 ## Run 6 findings (2026-09-18, RD1/100, probe round 3)
 

@@ -101,14 +101,18 @@ describe('deriveActivationSteps', () => {
     const role = steps.find((s) => s.StepType === 'CREATE_PFCG_ROLE');
     const append = steps.find((s) => s.StepType === 'APPEND_TO_TRANSPORT');
     const space = steps.find((s) => s.StepType === 'CREATE_SPACE');
+    const spaceToRole = steps.find((s) => s.StepType === 'ADD_SPACE_TO_ROLE');
     expect(JSON.parse(role.ObjectKeyJson).trkorr).to.equal('');
     expect(JSON.parse(withPlanTrkorr(role, ' RD1K900042 ').ObjectKeyJson).trkorr).to.equal('RD1K900042');
     expect(JSON.parse(withPlanTrkorr(append, 'RD1K900042').ObjectKeyJson)).to.deep.equal({
       trkorr: 'RD1K900042', objects: [{ pgmid: 'R3TR', object: 'ACGR', objName: 'Z_ADO_W1' }]
     });
-    expect(withPlanTrkorr(space, 'RD1K900042')).to.equal(space);
+    // Launchpad content is recorded at write time (S3 part 2); a role menu
+    // node rides on the role, which is already on the request.
+    expect(JSON.parse(withPlanTrkorr(space, 'RD1K900042').ObjectKeyJson).trkorr).to.equal('RD1K900042');
+    expect(withPlanTrkorr(spaceToRole, 'RD1K900042')).to.equal(spaceToRole);
     expect(withPlanTrkorr(role, '')).to.equal(role);
-    expect(TRKORR_STEP_TYPES).to.deep.equal(['CREATE_PFCG_ROLE', 'APPEND_TO_TRANSPORT']);
+    expect(TRKORR_STEP_TYPES).to.deep.equal(['CREATE_PFCG_ROLE', 'APPEND_TO_TRANSPORT', 'CREATE_SPACE', 'CREATE_PAGE', 'ASSIGN_PAGE_TO_SPACE']);
   });
 
   it('deduplicates reference roles and carries proposal links on app steps', () => {

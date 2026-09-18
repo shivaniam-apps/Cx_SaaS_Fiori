@@ -87,11 +87,17 @@ describe('ObjectKeyJson contract: ABAP dispatcher mirrors the fixture', () => {
   });
 
   it('dispatches the step types the roadmap marks executable today', () => {
-    // The remaining planner step types return not_implemented until S3 lands.
+    // S3 part 2: every planner step type has an executor. The ones on
+    // release-dependent SAP APIs are dispatched dynamically (call_executor).
     expect(Object.keys(dispatch).sort()).to.deep.equal([
-      'ACTIVATE_ICF_NODE', 'ADD_TO_TRANSPORT', 'APPEND_TO_TRANSPORT', 'ASSIGN_ROLE_TO_USERS',
-      'CREATE_PFCG_ROLE', 'GENERATE_PROFILE', 'ROLLBACK_CREATE_PFCG_ROLE', 'ROLLBACK_GENERATE_PROFILE', 'RUN_TASK_LIST'
+      'ACTIVATE_ICF_NODE', 'ACTIVATE_ODATA_SERVICE', 'ADD_CATALOG_TO_ROLE', 'ADD_SPACE_TO_ROLE', 'ADD_TO_TRANSPORT',
+      'APPEND_TO_TRANSPORT', 'ASSIGN_BUSINESS_CATALOG', 'ASSIGN_PAGE_TO_SPACE', 'ASSIGN_ROLE_TO_USERS', 'CREATE_PAGE',
+      'CREATE_PFCG_ROLE', 'CREATE_SPACE', 'GENERATE_PROFILE', 'ROLLBACK_CREATE_PFCG_ROLE', 'ROLLBACK_GENERATE_PROFILE',
+      'RUN_TASK_LIST'
     ]);
+    for (const cls of ['ZCL_ADO_ACT_ODATA', 'ZCL_ADO_ACT_SPACE', 'ZCL_ADO_ACT_MENU']) {
+      expect(dispatcherSource, cls).to.include(`iv_class           = '${cls}'`);
+    }
   });
 });
 

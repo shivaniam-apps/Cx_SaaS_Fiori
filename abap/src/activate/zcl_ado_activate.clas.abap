@@ -30,12 +30,12 @@ CLASS zcl_ado_activate DEFINITION
     " SAFETY: this class ships to DEV only; the write service binding
     " stays unpublished in QA/PROD (CLAUDE.md safety contract).
     "
-    " Not yet dispatchable (returns FAILED with an explicit message):
-    " ACTIVATE_ODATA_SERVICE (needs the SAP_GATEWAY_ACTIVATE_ODATA_SERV
-    " parameter shape - open check), CREATE_SPACE / CREATE_PAGE /
-    " ASSIGN_PAGE_TO_SPACE (FDM_*_SRV write path - open check 4),
-    " ASSIGN_BUSINESS_CATALOG / ADD_CATALOG_TO_ROLE / ADD_SPACE_TO_ROLE
-    " (AGR_HIER node shape - open check 2).
+    " PORTABILITY: the executors that sit on release-dependent SAP APIs
+    " (gateway activation API, FDM space / page API, CL_PFCG_MENU_MODIFY)
+    " live in their own classes and are called DYNAMICALLY (call_executor).
+    " On a system where such an API is missing, that one class stays
+    " inactive and its step types answer FAILED "not available on this
+    " system" - the dispatcher and every other step type keep working.
     "---------------------------------------------------------------
 
     " One key type per dispatchable step type (field names = fixture).
@@ -72,6 +72,37 @@ CLASS zcl_ado_activate DEFINITION
              obj_name TYPE string,
            END OF ty_append_object.
     TYPES ty_append_objects TYPE STANDARD TABLE OF ty_append_object WITH DEFAULT KEY.
+    TYPES: BEGIN OF ty_odata_key,             " ACTIVATE_ODATA_SERVICE
+             fiori_id        TYPE string,     "   one step per service of
+             scenario        TYPE string,     "   the app's catalog; an
+             service_name    TYPE string,     "   empty serviceName fails
+             service_version TYPE string,     "   fast (no catalog data)
+             system_alias    TYPE string,
+           END OF ty_odata_key.
+    TYPES: BEGIN OF ty_space_key,             " CREATE_SPACE
+             space_id TYPE string,
+             title    TYPE string,
+             trkorr   TYPE string,            "   injected by the engine
+           END OF ty_space_key.
+    TYPES: BEGIN OF ty_page_key,              " CREATE_PAGE
+             page_id TYPE string,
+             title   TYPE string,
+             apps    TYPE string_table,
+             trkorr  TYPE string,             "   injected by the engine
+           END OF ty_page_key.
+    TYPES: BEGIN OF ty_space_page_key,        " ASSIGN_PAGE_TO_SPACE
+             space_id TYPE string,
+             page_id  TYPE string,
+             trkorr   TYPE string,            "   injected by the engine
+           END OF ty_space_page_key.
+    TYPES: BEGIN OF ty_role_space_key,        " ADD_SPACE_TO_ROLE
+             role     TYPE string,
+             space_id TYPE string,
+           END OF ty_role_space_key.
+    TYPES: BEGIN OF ty_role_catalog_key,      " ADD_CATALOG_TO_ROLE /
+             role       TYPE string,          " ASSIGN_BUSINESS_CATALOG
+             catalog_id TYPE string,
+           END OF ty_role_catalog_key.
     TYPES: BEGIN OF ty_append_key,            " APPEND_TO_TRANSPORT
              trkorr  TYPE string,             "   injected by the engine
              objects TYPE ty_append_objects,
@@ -83,6 +114,15 @@ CLASS zcl_ado_activate DEFINITION
       RETURNING VALUE(rs_result)   TYPE zif_ado_act_step=>ty_result.
 
   PRIVATE SECTION.
+    " Dynamic call of <class>=>EXECUTE( iv_step_type, iv_object_key_json ).
+    " A class that is missing or inactive on this system is reported as
+    " FAILED with the reason - never a dump, never a dead write unit.
+    CLASS-METHODS call_executor
+      IMPORTING iv_class           TYPE string
+                iv_step_type       TYPE string
+                iv_object_key_json TYPE string
+      RETURNING VALUE(rs_result)   TYPE zif_ado_act_step=>ty_result.
+
     CLASS-METHODS not_implemented
       IMPORTING iv_step_type     TYPE string
                 iv_reason        TYPE string
@@ -283,19 +323,124 @@ CLASS zcl_ado_activate IMPLEMENTATION.
           iv_reason    = 'Irreversible on this release (no HTTP_DEACTIVATE_NODE, no task-list undo) - rollback is audit-only.' ).
 
       WHEN 'ACTIVATE_ODATA_SERVICE'.
-        rs_result = not_implemented(
-          iv_step_type = iv_step_type
-          iv_reason    = 'SAP_GATEWAY_ACTIVATE_ODATA_SERV parameter shape not yet captured (run STC_TM_SCENARIO_GET_PARAMETERS on RD1).' ).
+        DATA ls_odata TYPE ty_odata_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_odata ).
+        IF ls_odata-service_name IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = |serviceName is empty for app { ls_odata-fiori_id } - | &&
+                           |run catalog derivation so the OData services of the app's catalog are known.| ).
+        ELSE.
+          rs_result = call_executor(
+            iv_class           = 'ZCL_ADO_ACT_ODATA'
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json ).
+        ENDIF.
 
-      WHEN 'CREATE_SPACE' OR 'CREATE_PAGE' OR 'ASSIGN_PAGE_TO_SPACE'.
-        rs_result = not_implemented(
-          iv_step_type = iv_step_type
-          iv_reason    = 'Spaces/pages write path pending FDM_*_SRV activation-state check (api-matrix open item 4).' ).
+      WHEN 'CREATE_SPACE'.
+        DATA ls_space TYPE ty_space_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_space ).
+        IF ls_space-space_id IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'spaceId is empty.' ).
+        ELSE.
+          rs_result = call_executor(
+            iv_class           = 'ZCL_ADO_ACT_SPACE'
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json ).
+        ENDIF.
 
-      WHEN 'ASSIGN_BUSINESS_CATALOG' OR 'ADD_CATALOG_TO_ROLE' OR 'ADD_SPACE_TO_ROLE'.
-        rs_result = not_implemented(
-          iv_step_type = iv_step_type
-          iv_reason    = 'AGR_HIER catalog/space node shape pending SE16 probe (api-matrix open item 2).' ).
+      WHEN 'CREATE_PAGE'.
+        DATA ls_page TYPE ty_page_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_page ).
+        IF ls_page-page_id IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'pageId is empty.' ).
+        ELSE.
+          rs_result = call_executor(
+            iv_class           = 'ZCL_ADO_ACT_SPACE'
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json ).
+        ENDIF.
+
+      WHEN 'ASSIGN_PAGE_TO_SPACE'.
+        DATA ls_space_page TYPE ty_space_page_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_space_page ).
+        IF ls_space_page-space_id IS INITIAL OR ls_space_page-page_id IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'spaceId / pageId are empty.' ).
+        ELSE.
+          rs_result = call_executor(
+            iv_class           = 'ZCL_ADO_ACT_SPACE'
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json ).
+        ENDIF.
+
+      WHEN 'ADD_SPACE_TO_ROLE'.
+        DATA ls_role_space TYPE ty_role_space_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_role_space ).
+        IF ls_role_space-role IS INITIAL OR ls_role_space-space_id IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'role / spaceId are empty.' ).
+        ELSE.
+          rs_result = call_executor(
+            iv_class           = 'ZCL_ADO_ACT_MENU'
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json ).
+        ENDIF.
+
+      WHEN 'ADD_CATALOG_TO_ROLE'.
+        DATA ls_role_catalog TYPE ty_role_catalog_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_role_catalog ).
+        IF ls_role_catalog-role IS INITIAL OR ls_role_catalog-catalog_id IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'role / catalogId are empty.' ).
+        ELSE.
+          rs_result = call_executor(
+            iv_class           = 'ZCL_ADO_ACT_MENU'
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json ).
+        ENDIF.
+
+      WHEN 'ASSIGN_BUSINESS_CATALOG'.
+        DATA ls_bus_catalog TYPE ty_role_catalog_key.
+        /ui2/cl_json=>deserialize(
+          EXPORTING json = iv_object_key_json
+                    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+          CHANGING  data = ls_bus_catalog ).
+        IF ls_bus_catalog-role IS INITIAL OR ls_bus_catalog-catalog_id IS INITIAL.
+          rs_result = incomplete_key(
+            iv_step_type = iv_step_type
+            iv_reason    = 'role / catalogId are empty.' ).
+        ELSE.
+          rs_result = call_executor(
+            iv_class           = 'ZCL_ADO_ACT_MENU'
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json ).
+        ENDIF.
 
       WHEN OTHERS.
         rs_result = not_implemented(
@@ -309,6 +454,22 @@ CLASS zcl_ado_activate IMPLEMENTATION.
     ELSE.
       COMMIT WORK AND WAIT.
     ENDIF.
+  ENDMETHOD.
+
+  METHOD call_executor.
+    DATA(lv_class) = to_upper( iv_class ).
+    TRY.
+        CALL METHOD (lv_class)=>('EXECUTE')
+          EXPORTING
+            iv_step_type       = iv_step_type
+            iv_object_key_json = iv_object_key_json
+          RECEIVING
+            rs_result          = rs_result.
+      CATCH cx_sy_dyn_call_error INTO DATA(lx_call).
+        rs_result = not_implemented(
+          iv_step_type = iv_step_type
+          iv_reason    = |{ lv_class } is not available on this system ({ lx_call->get_text( ) }) - perform the step manually.| ).
+    ENDTRY.
   ENDMETHOD.
 
   METHOD not_implemented.

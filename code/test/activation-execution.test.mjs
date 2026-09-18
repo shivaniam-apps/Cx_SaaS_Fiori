@@ -189,7 +189,10 @@ describe('activation execution engine', function () {
     expect(seen.CREATE_PFCG_ROLE.trkorr).to.equal(trkorr);
     expect(seen.APPEND_TO_TRANSPORT.trkorr).to.equal(trkorr);
     expect(seen.APPEND_TO_TRANSPORT.objects).to.deep.equal([{ pgmid: 'R3TR', object: 'ACGR', objName: 'Z_ADO_WT' }]);
-    expect(seen.CREATE_SPACE.trkorr).to.equal(undefined);
+    // Launchpad content is recorded at write time too (S3 part 2).
+    expect(seen.CREATE_SPACE.trkorr).to.equal(trkorr);
+    expect(seen.ASSIGN_PAGE_TO_SPACE.trkorr).to.equal(trkorr);
+    expect(seen.ADD_SPACE_TO_ROLE.trkorr).to.equal(undefined);
 
     const persisted = await SELECT.one.from('adops.db.ActivationSteps')
       .where({ plan_ID: plan.ID, StepType: 'CREATE_PFCG_ROLE' });

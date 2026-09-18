@@ -174,6 +174,44 @@ Raw output: [probe-catalog-rd1-100-round3-2026-09-18.txt](probe-catalog-rd1-100-
   SU22 customer tables to find the join (fallback: title match within the
   catalog, or the app id as an attribute of the app library mapping - PO-1).
 
+## Probe findings, round 4 (RD1/100, 2026-09-18) - the reader design
+
+Raw output: [probe-catalog-rd1-100-round4-2026-09-18.txt](probe-catalog-rd1-100-round4-2026-09-18.txt).
+
+- **The join is found.** A resolved target mapping carries everything a
+  `BackendCatalogApps` row needs: `/UI2/PB_C_TM` row of the technical catalog
+  `SAP_TC_CEC_SD_COMMON`: `SEM_OBJ = SalesOrder`, `SEM_ACT = manage`,
+  `APP_TYPE = SAPUI5`, `UI5_COMPONENT_ID = cus.sd.salesorders.manage`,
+  `URL = /sap/bc/ui5_ui5/sap/sd_so_manages1` (the BSP / ICF path),
+  **`TCODE = F1873`** (the Fiori id - SAP registers Fiori ids as transaction
+  codes, `TSTC` has `F1873`), `CONF_TEXT = Manage Sales Orders`,
+  `INFORMATION = Sales Order`; the binary `PARAMETERS` repeat it as
+  `sap-fiori-id`. 4678 mappings have a UI5 component, 16311 a transaction.
+- **Business catalog -> technical catalog.** Business-catalog rows
+  (`PARENTID = X-SAP-UI2-CATALOGPAGE:SAP_SD_BC_INQ_PROC`) are references:
+  `REFERENCECHIPID` points at the technical-catalog row
+  (`X-SAP-UI2-PAGE:X-SAP-UI2-CATALOGPAGE:SAP_TC_*:<guid>`) or at a backend
+  app-descriptor catalog (`X-SAP-UI2-ADCHIP:X-SAP-UI2-ADCAT:<catalog>:<alias>:<guid>_TM`,
+  GUI / Web Dynpro apps, `APP_TYPE = LPD`). The reader resolves one hop:
+  reference row -> `ID = REFERENCECHIPID`.
+- **Reader design (S9 part 2), SAP-standard tables only:**
+  1. catalogs: `/UI2/PB_C_PAGE` (3867, delivered) + `/UI2/PB_C_PAGEM` (client
+     layer), `IS_CATALOG_PAGE = X`;
+  2. apps per catalog: `/UI2/PB_C_TM` + `/UI2/PB_C_TMM` by `PARENTID`, one hop
+     over `REFERENCECHIPID`; `FioriId = TCODE` when it matches the Fiori id
+     pattern, `BspApplication` = last segment of `URL` under
+     `/sap/bc/ui5_ui5/sap/`, `AppTitle = CONF_TEXT`;
+  3. role link and OData services: PFCG (`AGR_HIER` / `AGR_BUFFI`) - catalog
+     folder -> `TR` nodes (app ids) and `HT` nodes (`USOBHASH` -> service);
+  4. states: `ICFSERVICE` (upper case) and `/IWFND/I_MED_SRH`;
+  5. spaces / pages: `/UI2/STHEADC`, `/UI2/PGHEADC`, `/UI2/STPGAC`.
+  `USOBX`, `USOBX_C`, `USOBT_C` have no rows for a Fiori id - SU22 is not a
+  source. `/UI2/AD_CDM_CAT` is empty, `/UI2/AD_MM_CATLG` lists backend
+  app-descriptor catalogs only.
+- **Portability:** every table above is SAP_UI / SAP_BASIS standard; the
+  readers use dynamic SQL per table and report a missing table as an empty
+  capability instead of failing (idea I58).
+
 ## Operator steps for part 2 (RD1 DEV/100)
 
 Round 3 of the probe (`ZADO_PROBE_CATALOG` section 8, `ZADO_PROBE_ACTIVATION`
