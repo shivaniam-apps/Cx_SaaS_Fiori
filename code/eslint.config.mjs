@@ -25,7 +25,7 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ['srv/**/*.js', 'scripts/**/*.js', 'check-bindings.js'],
+    files: ['srv/**/*.js', 'db/**/*.js', 'scripts/**/*.js', 'check-bindings.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'commonjs',

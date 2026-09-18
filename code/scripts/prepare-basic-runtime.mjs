@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const projectRoot = process.cwd();
@@ -119,6 +119,15 @@ function prepareDbDeployer() {
     pinned[name] = existsSync(installed) ? readJson(installed).version : range;
   }
   writeJson(packagePath, { ...deployerPackage, dependencies: pinned });
+
+  // The index step (idea I46): db/package.json starts cds-deploy and then
+  // create-indexes.js, so both files travel with the deployer.
+  for (const file of ['indexes.js', 'create-indexes.js']) {
+    copyFileSync(join(projectRoot, 'db', file), join(deployerDir, file));
+  }
+  if (!String(deployerPackage.scripts?.start || '').includes('create-indexes.js')) {
+    throw new Error('code/db/package.json must start cds-deploy followed by node create-indexes.js (idea I46).');
+  }
   console.log(`Pinned the PostgreSQL deployer to ${Object.entries(pinned).map(([name, version]) => `${name}@${version}`).join(', ')}.`);
 
   const runtimeCsnPath = join(projectRoot, 'gen', 'srv', 'srv', 'csn.json');
