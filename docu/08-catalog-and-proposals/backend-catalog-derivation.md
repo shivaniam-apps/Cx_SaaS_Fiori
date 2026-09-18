@@ -115,7 +115,8 @@ Consequences for the readers:
 
 Raw output: [probe-catalog-rd1-100-round2-2026-09-18.txt](probe-catalog-rd1-100-round2-2026-09-18.txt).
 
-- **Correction:** the empty space / page tables are not a client-400 effect.
+- **Correction (itself corrected by round 3: the customizing layer has
+  content):** the empty space / page tables are not a client-400 effect.
   They have no client column and are empty in client 100 too; RD1 has no
   spaces or pages and runs the CLASSIC launchpad runtime. `LaunchpadContent`
   on RD1 is therefore catalogs and groups, read from PFCG and the
@@ -136,6 +137,42 @@ Raw output: [probe-catalog-rd1-100-round2-2026-09-18.txt](probe-catalog-rd1-100-
   values resolved through `USOBHASH`) and the classic page-builder tables
   (`/UI2/PB_C_PAGEM` catalogs, `/UI2/PB_C_CHIPM` tiles, `/UI2/PB_C_TMM` target
   mappings). `/UI2/PB_C_PAGE` is keyed by `ID`, not `PAGE_ID`.
+
+## Probe findings, round 3 (RD1/100, 2026-09-18)
+
+Raw output: [probe-catalog-rd1-100-round3-2026-09-18.txt](probe-catalog-rd1-100-round3-2026-09-18.txt).
+
+- **Correction:** spaces and pages do exist on RD1, in the customizing layer
+  of client 100 (`/UI2/STHEADC` 340, `/UI2/PGHEADC` 529, `/UI2/STPGAC` 535);
+  only the template layer is empty. `LaunchpadContent` reads the `...C`
+  tables for spaces / pages, PFCG for the role link.
+- **Role menu app nodes, two forms.** `OTSERVICE <name 30> TR`: the name is
+  the Fiori id (`F0029`, `F1873`). `OTSERVICE <hash 30> HT`: the hash is
+  `USOBHASH-NAME`, resolving to `R3TR IWSV` (service padded to 36 + version),
+  `R3TR IWSG` (`<group>_<version>`) or `R3TR G4BA` (V4 service group). A
+  catalog folder therefore yields its app ids **and** its OData services.
+  `USOBT` has no rows for `F1873` / `F0029`: the SU22 route from an app id
+  to `S_SERVICE` values does not exist here - the services come from the `HT`
+  nodes of the same catalog folder.
+- **Catalog content = page-builder tables.** `/UI2/PB_C_TM` (33520 rows, no
+  client column = delivered configuration) and `/UI2/PB_C_TMM` (493 rows,
+  client layer) are the target mappings: `PARENTID =
+  X-SAP-UI2-CATALOGPAGE:<catalog>`, `SEM_OBJ`, `SEM_ACT`, `APP_TYPE`,
+  `UI5_COMPONENT_ID`, `TCODE`, `URL`, `CONF_TEXT`. Business-catalog rows are
+  references (`REFERENCECHIPID` / `REFERENCEPARENTID` point at the technical
+  catalog `SAP_TC_*`), so the reader follows the reference for the component.
+  `/UI2/PB_C_PAGEM` (97) / `/UI2/PB_C_CHIPM` (921, column `PARENTID`, not
+  `PAGE_ID`) are the client layer only - custom catalogs such as
+  `zcat_sd_custom_applications`; delivered catalogs sit in `/UI2/PB_C_PAGE`.
+- **`ServiceActivationState` confirmed:** `/IWFND/I_MED_SRH` by
+  `SERVICE_NAME` + `SERVICE_VERSION`, `IS_ACTIVE = A`; `OBJECT_NAME` is the
+  IWSG name a `HT` node resolves to.
+- **Still open (round 4):** no column of the target mapping carries the Fiori
+  id - within a catalog the app ids (PFCG) and the target mappings
+  (page builder) are two unjoined lists. Round 4 dumps resolved
+  technical-catalog rows, `/UI2/AD_CDM_CAT` / `/UI2/AD_MM_CATLG` and the
+  SU22 customer tables to find the join (fallback: title match within the
+  catalog, or the app id as an attribute of the app library mapping - PO-1).
 
 ## Operator steps for part 2 (RD1 DEV/100)
 

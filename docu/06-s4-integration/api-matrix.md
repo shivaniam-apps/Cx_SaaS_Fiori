@@ -5,6 +5,7 @@
 | 1 | A4H client 001, `vhcala4hci` | 2026-08-12 | ABAP Platform appliance (no S4CORE) — our lab box |
 | 2 | **RD1 client 100**, `aubls4hd01` | 2026-08-12 | **Customer DEV: S4CORE 108 SP03 = S/4HANA 2023 SP03**, SAP_UI 758 SP3, client role C (customizing) |
 | 3 | RD1 client 100 (probe **v2**) | 2026-08-12 | Adds field lists (4b), STC scenario inventory (4c), spaces/pages table scan, STC session-lifecycle FMs |
+| 6 | **RD1 client 100** (probe round 3) | 2026-09-18 | Interface methods of the space / page API, PFCG node writers, service nodes resolved through `USOBHASH`; corrects run 5: the customizing layer holds 340 spaces / 529 pages. |
 | 5 | **RD1 client 100** (probe round 2 / 2b) | 2026-09-18 | Signatures and tables behind run 4; corrects the client-400 reading of the empty space / page tables. |
 | 4 | **RD1 client 400** (`ZADO_PROBE_ACTIVATION`, `ZADO_PROBE_CATALOG`) | 2026-09-18 | S3 part 2 and S9 part 2 inputs; raw output in [probe-activation-rd1-400-2026-09-18.txt](probe-activation-rd1-400-2026-09-18.txt) and [docu/08 probe-catalog-rd1-400-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-400-2026-09-18.txt). Client 400 = unit-test client. Run 5 showed the empty space / page tables are a system-wide fact (no client column), only roles, alias assignments and the customizing layer differ per client. |
 
@@ -15,6 +16,58 @@ This document converts the design's marked UNCERTAINs into facts. Both
 systems agree on every function-module verdict, which strongly suggests the
 signatures are stable across the 758 basis line.
 
+## Run 6 findings (2026-09-18, RD1/100, probe round 3)
+
+Raw output: [probe-activation-rd1-100-round3-2026-09-18.txt](probe-activation-rd1-100-round3-2026-09-18.txt),
+[docu/08 probe-catalog-rd1-100-round3-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-100-round3-2026-09-18.txt).
+
+**Correction to run 5:** RD1 does have spaces and pages - in the
+**customizing layer** of client 100: `/UI2/STHEADC` 340 rows, `/UI2/PGHEADC`
+529, `/UI2/STPGAC` 535 (object types `UISC` / `UIPC`, client-dependent,
+customizing request). Only the cross-client template layer (`/UI2/STHEAD`,
+`UIST` / `UIPG`) is empty. The executors therefore write in the customizing
+scope, which matches the write client (DEV/100) and the customizing request
+the plan already carries. `/UI2/FLPRT` still reads CLASSIC active; round 4
+reads the per-client override `/UI2/FLPRTC` before I53 is decided.
+
+1. **Space / page API methods** (`/UI2/IF_FDM_SPACE_API`, `_PAGE_API`):
+   `EXISTS_SPACE( IV_ID )` / `EXISTS_PAGE` = verify-first;
+   `CREATE_SPACE( IS_HEADER TYPE /UI2/IF_FDM_SPACE=>TS_HEADER, IV_LANGU ->
+   RO_SPACE TYPE /UI2/IF_FDM_SPACE )`, `CREATE_PAGE` alike; `GET_SPACE`,
+   `DELETE_SPACE` (rollback), `COPY_SPACE_TO_CUSTOMIZING`,
+   `GET_PAGE_STRUCTURE`. Before writing: `SET_SCOPE( IV_SCOPE TYPE
+   /UI2/FDM_SCOPE )` and `SET_TRANSPORT_SETTINGS( IV_DEVCLASS,
+   IV_TRANSPORT_MODE, IV_TRKORR )` - the plan TRKORR goes in here, no
+   dialog. Exceptions: `/UI2/CX_FDM_AUTHORIZATION, _DUPLICATE, _INPUT_INVALID,
+   _LOCKED, _NOT_FOUND, _TRANSPORT, _UNEXPECTED, _USER_ABORT`.
+   **Page-to-space assignment, sections and tiles are not API methods**: they
+   are methods of the returned entity (`/UI2/IF_FDM_SPACE`, `/UI2/IF_FDM_PAGE`).
+   Round 4 lists those and the `TS_HEADER` components (RTTI).
+2. **Task-list value row:** `STCTM_SX_VALUE` = `TASKNAME`, `LNR`,
+   `FIELDNAME`, `VALUE` (for the record; OData activation does not use it).
+3. **PFCG node writers:** `/UI2/SPACE_PFCG_CREATE / _CHANGE / _EXECUTE` and
+   `/UI2/CAT_PROV_PFCG_PAGES_*` are the PFCG **dialog exits** of the node
+   types (export `URL` + `SHORT_TEXT`, exception `ACTION_CANCELLED`) - not
+   headless writers. `PRGN_RFC_ADD_TRANSACTION` adds transactions only.
+   Candidates listed for round 4: `/UI2/CL_FDM_PFCG_ROLE_API`,
+   `/UI2/CL_FDM_PUB_PFCG_ROLE_API`, `CL_PFCG_MENU_MODIFY`,
+   `CL_PFCG_MENU_TOOLS`, `PRGN_STRU_LOAD_NODES` / `PRGN_STRU_SAVE_NODES`.
+4. **The node shape to reproduce** (`ZFIORI_MASTER_DEV_ROLE`): folder node
+   with `AGR_BUFFI.URL = X-SAP-UI2-CATALOGPAGE:<catalog>?AUTH_DEFAULTS=X&DEST_FES=`,
+   child nodes `REPORTTYPE = OT`, `REPORT = SERVICE`, URL
+   `OTSERVICE` + 13 blanks + 30-character name + 2-character type; groups as
+   `sap-ui2-group:<group>`. No `AGR_TCODES` rows.
+5. **Service nodes name the OData services.** Type `HT` = the 30-character
+   name is `USOBHASH-NAME`; `USOBHASH` resolves it to `R3TR IWSV <service
+   padded to 36><version>`, `R3TR IWSG <service group>_<version>` or
+   `R3TR G4BA <V4 service group>` (node text in `AGR_HIERT` repeats it).
+   Type `TR` = a transaction-type SU22 name, which for Fiori apps is the
+   Fiori id (`F1873`). So the services of a **catalog folder** are readable
+   from the role menu; they hang on the catalog, not on a single app.
+   `/IWFND/I_MED_SRH` confirms the pairing: `SERVICE_NAME = SD_F1873_SO_WL_SRV`,
+   `SERVICE_VERSION = 0001`, `OBJECT_NAME = ZFTSD_F1873_SO_WL_SRV` (the IWSG
+   name), `IS_ACTIVE = A`.
+
 ## Run 5 findings (2026-09-18, RD1/100, probe round 2)
 
 Raw output: [probe-activation-rd1-100-round2-2026-09-18.txt](probe-activation-rd1-100-round2-2026-09-18.txt),
@@ -22,8 +75,9 @@ Raw output: [probe-activation-rd1-100-round2-2026-09-18.txt](probe-activation-rd
 
 **Correction to run 4:** spaces, pages and assignments are zero in client 100
 as well. `/UI2/STHEAD`, `/UI2/STPGA`, `/UI2/PGHEAD` have no client column;
-TADIR has no `UIST` / `UIPG` objects. RD1 has **no spaces or pages at all**
-and runs the **CLASSIC** launchpad runtime (`/UI2/FLPRT`: CLASSIC active,
+TADIR has no `UIST` / `UIPG` objects. RD1 has **no space or page templates**
+(run 6: the customizing layer of client 100 does hold 340 spaces and 529
+pages) and runs the **CLASSIC** launchpad runtime (`/UI2/FLPRT`: CLASSIC active,
 RA_BASED inactive). Client-dependent are only the PFCG roles, the gateway
 alias assignments (`/IWFND/C_MGDEAM`: 102 rows in client 100, 8 in 400) and
 the customizing layer (`/UI2/STHEADC` ..., object types `UISC` / `UIPC`).
