@@ -13,6 +13,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 
 ## Accomplished
 
+- [x] O16 Path-form deep links open their page (promoted I41): features/app/deepLink.js translates /audit-log or /transports?status=OPEN into the hash route once at boot (main.jsx, before the HashRouter mounts), query kept, base-path aware; previously such links rendered the Dashboard under /audit-log#/dashboard — this PR, 2026-09-18
 - [x] O15 HTTP test fixture convention (promoted I43, ex-I41/I42): fixtures(tag) helper + convention comment in cds-http-test.mjs, suite-tagged destinations in audit-chain / public-service-auth / dashboard-summary / transport-verification, and test/fixture-convention.test.mjs that fails when two HTTP suites register the same destination or one uses a bare landscape name — PR #57, 2026-09-18
 - [x] O14 PilotFeedback on the tenantScoped aspect (promoted I23): the entity declares the shared aspect instead of a plain TenantId column (same column, now with the GLOBAL default; the scope hook already stamped and filtered it), so every business entity carries the aspect — this PR, 2026-09-18
 - [x] O13 Transport route on target systems (promoted I33): TargetSystems.followOnSystem (DEV -> QAS -> PRD per tenant, additive column) editable in the Target Systems dialog with a Next-in-route column, validated (no self-reference, must exist); queryTransportRequests ships it on FollowOnSystems, transportModel walks the route (cycle-safe) so Verify preselects the next unchecked hop and the Transports System column shows the route; docu/09 + docu/15 — this PR, 2026-09-18
@@ -36,6 +37,7 @@ Format: see [program-tracker.md](../program-tracker.md).
 ## Daily log
 
 ### 2026-09-18
+- O16 done on fix/deep-link-initial-route: reproduced in the browser (path-form link -> cockpit under /audit-log#/dashboard; hash-form links were fine, so the shell was not at fault), pure translator + node tests, verified /audit-log, /transports?status=OPEN (filter applied), / and #/landscape/roles on 5283. The deployed approuter has no SPA fallback for such paths (I44, admin).
 - O15 done on test/fixture-convention: guard scans registration lines only (displayName + destinationName on one line), 342 server tests green; the other I41 (deep links open the Dashboard on a full-page load) is the next overview item. PR #57 opened; merged origin/main (S7 #55, T5 #56) and renumbered the idea again (I43) after a second collision.
 - O14 done on feat/feedback-tenant-aspect: one-line model change, compiled table keeps the column with DEFAULT GLOBAL, sqlite views refreshed, 339 server tests green (tenant-scope suite covers PilotFeedback); no client change.
 - O13 done on feat/landscape-route: data-model followOnSystem association, validation hook extended, FollowOnSystems shaping carries followOnSystem_ID (the first server test caught that the list was re-shaped without it), transportRoute / routeLabel / route-aware defaultFollowOnSystem in transportModel (node --test), Target Systems dialog select + column, Transports route line. Verified in the browser on 5283 after db:refresh added the column: Next-in-route column and the route line under the transport source.
