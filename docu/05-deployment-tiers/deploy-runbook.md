@@ -60,7 +60,8 @@ this order:
    dominates the first deployment's duration);
 2. pushes `adops-basic-db-deployer-<space>` without starting it and runs
    its task `deploy-to-postgresql`, which creates every table and view on an
-   empty database or applies the additive delta to an existing one;
+   empty database or applies the additive delta to an existing one, then
+   creates the secondary indexes (`create-indexes.js`, idempotent);
 3. starts `adops-basic-srv-<space>` only after that task succeeded (the
    module requires the deployer) and waits for its HTTP health check on
    `/healthz` (up to 180 s);

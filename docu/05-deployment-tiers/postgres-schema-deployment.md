@@ -12,11 +12,26 @@ to be deployed from a workstation any more.
 | `npm run build:basic` (`cds build --production`) | The `postgres` build task in `code/package.json` compiles the same model as the srv runtime (`srv/srv`) into `code/gen/pg/db/csn.json` and copies `code/db/package.json` next to it. |
 | `scripts/prepare-basic-runtime.mjs` | Strips `cds.xt.*` definitions from the deployer CSN and fails the build if `gen/pg` is missing or its persisted entities differ from `gen/srv`. |
 | `mbt build` | Packages `gen/pg` as module `adops-basic-db-deployer` (see `deploy/cf/mta.yaml`). |
-| `cf deploy` | Pushes the deployer with `no-start` and `no-route`, then runs its CF task `deploy-to-postgresql` (`npm start` = `cds-deploy`). `adops-basic-srv` requires the deployer module, so the app starts only after the task has finished. |
+| `cf deploy` | Pushes the deployer with `no-start` and `no-route`, then runs its CF task `deploy-to-postgresql` (`npm start` = `cds-deploy && node create-indexes.js`, the schema then the secondary indexes). `adops-basic-srv` requires the deployer module, so the app starts only after the task has finished. |
 
 `cds-deploy` binds to the `postgresql-db` service instance
 (`adops-basic-postgres`) through VCAP_SERVICES and runs with
 `schema_evolution: auto`.
+
+## Secondary indexes
+
+CAP creates primary keys only. The reads of Usage Insight and the User &
+Role Landscape filter the big tables by run, snapshot, transaction, role or
+user, so `code/db/indexes.js` lists the secondary indexes those reads need
+(measured in [performance-baseline.md](../13-operations-observability/performance-baseline.md)).
+Three places apply the same list: the deployer task runs
+`create-indexes.js` after `cds-deploy` on every deployment, the local
+`npm run db:refresh:sqlite` creates them in `db.sqlite`, and the load test
+measures with them. Every statement is `CREATE INDEX IF NOT EXISTS`, so
+repeated runs are no-ops; a failing index statement fails the deployer
+task on purpose. A new index is added to the list, never to a space by
+hand; `test/db-indexes.test.mjs` checks that every entry names a real table
+and column.
 
 ## Migration strategy: automatic, additive-only schema evolution
 

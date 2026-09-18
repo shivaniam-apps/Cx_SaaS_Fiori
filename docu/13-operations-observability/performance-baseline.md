@@ -48,42 +48,53 @@ tables accordingly.
 ## Results on the development machine, 2026-09-18
 
 In-memory SQLite (the test database), Windows workstation, six concurrent
-requests, three rounds. Seeding took 20 s at scale 20.
+requests, three rounds. Seeding took 20 s at scale 20. "Indexes" are the
+secondary indexes of `code/db/indexes.js` (idea I46) that the deployer,
+the local refresh and the load test now apply; the "without" column is the
+same run before they existed. Numbers on a shared workstation vary by
+about a fifth between runs; read the ratios, not the last digit.
 
-| Read | Rows | p95 ms (scale 1) | p95 ms (scale 20) |
-|---|---|---|---|
-| Dashboard summary, one system | 10 | 71 | 88 |
-| Dashboard summary, all systems | 10 | 47 | 72 |
-| Usage: first page with summary (top 200) | 200 | 75 | 93 |
-| Usage: middle page (skip half) | 200 | 28 | 108 |
-| Usage: search with summary | 200 | 35 | 82 |
-| Usage: custom only, sorted by code | 200 | 44 | 84 |
-| Usage: overview | 8 | 22 | 21 |
-| Usage: users of a transaction (client filter, transaction only) | 50 | 55 | 347 |
-| Usage: users of a transaction (run-scoped) | 50 | 59 | 434 |
-| Landscape: users, most transactions (top 100) | 100 | 63 | 193 |
-| Landscape: users, page 3 (skip 200) | 100 | 64 | 217 |
-| Landscape: users, search + active filter | 100 | 60 | 204 |
-| Landscape: user groups by type | 2 | 48 | 409 |
-| Landscape: user groups by user group | 40 | 44 | 471 |
-| Landscape: roles of one user | 2 | 29 | 157 |
-| Landscape: roles, most users (top 100) | 100 | 45 | 61 |
-| Landscape: roles, custom + search | 100 | 44 | 60 |
-| Landscape: role groups by type | 2 | 27 | 54 |
-| Landscape: members of one role | 26 | 29 | 162 |
-| Landscape: transactions of one role | 13 | 23 | 72 |
+| Read | Rows | p95 ms, scale 1 | p95 ms, scale 20 without indexes | p95 ms, scale 20 with indexes |
+|---|---|---|---|---|
+| Dashboard summary, one system | 10 | 73 | 88 | 87 |
+| Dashboard summary, all systems | 10 | 45 | 72 | 66 |
+| Usage: first page with summary (top 200) | 200 | 75 | 93 | 92 |
+| Usage: middle page (skip half) | 200 | 60 | 108 | 120 |
+| Usage: search with summary | 200 | 65 | 82 | 93 |
+| Usage: custom only, sorted by code | 200 | 44 | 84 | 90 |
+| Usage: overview | 8 | 24 | 21 | 23 |
+| Usage: users of a transaction (client filter, transaction only) | 50 | 46 | 347 | 48 |
+| Usage: users of a transaction (run-scoped) | 50 | 39 | 434 | 41 |
+| Landscape: users, most transactions (top 100) | 100 | 59 | 193 | 216 |
+| Landscape: users, page 3 (skip 200) | 100 | 72 | 217 | 248 |
+| Landscape: users, search + active filter | 100 | 61 | 204 | 243 |
+| Landscape: user groups by type | 2 | 54 | 409 | 617 |
+| Landscape: user groups by user group | 40 | 51 | 471 | 638 |
+| Landscape: roles of one user | 2 | 23 | 157 | 24 |
+| Landscape: roles, most users (top 100) | 100 | 43 | 61 | 61 |
+| Landscape: roles, custom + search | 100 | 47 | 60 | 61 |
+| Landscape: role groups by type | 2 | 28 | 54 | 66 |
+| Landscape: members of one role | 26 | 25 | 162 | 25 |
+| Landscape: transactions of one role | 13 | 24 | 72 | 23 |
 
 Reading the table:
 
 - The Dashboard and the transaction-level Usage Insight reads are flat
-  across a 20x volume increase: grouped counts and a paged, indexed-by-key
-  table behave as the performance rules intend.
-- The reads that grow with volume are the ones that scan a large table for
-  a filter the database has no index for: the user x transaction drill-down
-  (200,000 rows by `TransactionCode`), the user inventory (50,000 rows by
-  run, with `$count` and `groupby`) and the role assignments (120,000 rows
-  by run and user or role). They stay well under half a second on SQLite,
-  and under the budget, but their cost is linear in the table size.
+  across a 20x volume increase: grouped counts and a paged table of 8,000
+  rows behave as the performance rules intend, with or without indexes.
+- The keyed lookups into the big tables are the ones the indexes fix: users
+  of one transaction (200,000 rows) 347 to 48 ms, roles of one user
+  (120,000 assignments) 157 to 24 ms, members of one role 162 to 25 ms,
+  transactions of one role 72 to 23 ms. These are the reads a user
+  triggers by clicking a row, so they are the ones felt as latency.
+- The user inventory reads (50,000 rows of one run) are bounded by the sort
+  or the `groupby` over the whole run, not by the filter: an index on
+  the run id cannot shorten a sort of 50,000 rows by transaction count, and
+  on SQLite the planner sometimes prefers the index and then sorts, which
+  is why those rows read slightly slower with indexes. They stay under
+  a quarter of a second for pages and under two thirds for the KPI groups
+  at this volume; a covering index per sort order would be the next step
+  if a customer's user base is several times larger.
 - The client's user drill-down filters by transaction code only, without
   the run: the load test measures both the client's request and a
   run-scoped variant. Scoping does not cost more and is what the page
@@ -92,18 +103,15 @@ Reading the table:
 ## What to expect on PostgreSQL
 
 The production database is PostgreSQL with network latency and shared
-resources, so absolute numbers differ; the shape does not. Without indexes
-the linear reads above become sequential scans over the same tables, which
-PostgreSQL handles well into the hundreds of thousands of rows but not into
-the tens of millions that several enterprise runs accumulate. CAP creates
-no secondary indexes for associations, so the deployer needs an index step
-for `UserTransactionUsage (snapshot_ID, TransactionCode)`, `UserInventory
-(extractionRun_ID)`, `RoleUsers (extractionRun_ID, RoleName)` and
-`(extractionRun_ID, UserKey)`, `RoleTransactions (extractionRun_ID,
-RoleName)` and `TransactionUsage (snapshot_ID)` before the second or third
-enterprise extraction (idea I46). Re-run `npm run test:load` against a
-PostgreSQL binding (hybrid profile) after that step and record the numbers
-here.
+resources, so absolute numbers differ; the shape does not. The indexes are
+created by the deployer on every deployment
+([postgres-schema-deployment.md](../05-deployment-tiers/postgres-schema-deployment.md)),
+so the keyed lookups keep their index plans there; the sorts and groups
+over one run's inventory are sequential scans of that run's rows on both
+databases, which PostgreSQL handles well into the hundreds of thousands
+of rows. Re-run `npm run test:load` against a PostgreSQL binding (hybrid
+profile) once a space carries real extractions and record the numbers
+here; the budgets below are the gate until then.
 
 ## Budgets as a gate
 

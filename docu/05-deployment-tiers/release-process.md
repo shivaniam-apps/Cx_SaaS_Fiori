@@ -142,6 +142,10 @@ compatible with the version that is still running:
   renders comes from the same compiler that produced the runtime CSN. The
   server runtime keeps caret ranges; a dependency update that changes the
   compiler is a PATCH release of its own, deployed to `dev` first.
+- **Indexes travel with the deployer.** `code/db/indexes.js` is applied
+  after every schema deployment (`CREATE INDEX IF NOT EXISTS`), so an
+  index is a normal code change in a MINOR or PATCH release, never a manual
+  step on a space.
 - **Preview the delta.** Before a release that changes the model, run
   `npm run db:deploy:postgres:dry` against the `qa` binding (hybrid) and
   read the statements; an unexpected `DROP` or a refused change means the

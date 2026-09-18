@@ -171,7 +171,7 @@ CLASS lcl_probe IMPLEMENTATION.
     dump_rows( iv_table = 'OBJH' iv_where = |OBJECTNAME IN ('UIST','UIPG','UIAD','UIPGC','ACGR')| iv_max = 10 ).
     SELECT pgmid, object, COUNT(*) AS cnt
       FROM tadir
-      WHERE object IN ('UIST', 'UIPG', 'UIAD', 'UIPGC', 'ACGR')
+      WHERE object IN ('UIST', 'UIPG', 'UIAD', 'ACGR')  "TADIR-OBJECT is CHAR 4; UIPGC is an OBJH name only
       GROUP BY pgmid, object
       INTO TABLE @DATA(lt_tadir).
     LOOP AT lt_tadir INTO DATA(ls_tadir).

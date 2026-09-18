@@ -33,6 +33,7 @@ import fs from 'node:fs';
 const TAG = '[db:refresh:sqlite]';
 const codeDir = process.cwd();
 const require = createRequire(path.join(codeDir, 'package.json'));
+const { INDEXES } = require('./db/indexes.js');
 
 const args = process.argv.slice(2);
 const force = args.includes('--force');
@@ -166,6 +167,18 @@ async function main() {
   db.pragma('busy_timeout = 5000');
   try {
     db.exec('CREATE TABLE IF NOT EXISTS adoptops_schema_sync (key TEXT PRIMARY KEY, value TEXT)');
+
+    // Secondary indexes (db/indexes.js, idea I46): the same list the
+    // PostgreSQL deployer creates. Idempotent; skipped for tables that do
+    // not exist yet (a fresh db before its first deploy).
+    const tableExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+    let created = 0;
+    for (const index of INDEXES) {
+      if (!tableExists.get(index.table)) continue;
+      db.exec(`CREATE INDEX IF NOT EXISTS ${index.name} ON ${index.table} (${index.columns.join(', ')})`);
+      created += 1;
+    }
+    if (created) log(`${created} secondary index(es) present (db/indexes.js).`);
     const readMeta = db.prepare('SELECT value FROM adoptops_schema_sync WHERE key = ?');
     const storedFingerprint = readMeta.get('source_fingerprint')?.value;
     const storedDdlHash = readMeta.get('ddl_hash')?.value;
