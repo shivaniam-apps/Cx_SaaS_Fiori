@@ -68,6 +68,7 @@ CLASS lcl_probe DEFINITION FINAL.
     METHODS class_methods IMPORTING iv_class TYPE string
                                     iv_max   TYPE i DEFAULT 40.
     METHODS probe_round_two.
+    METHODS probe_round_three.
     " Generic, dynamic row dump: table name and WHERE clause as strings,
     " so a wrong column or table name is reported, never a syntax error.
     METHODS dump_rows IMPORTING iv_table TYPE string
@@ -87,6 +88,7 @@ CLASS lcl_probe IMPLEMENTATION.
     probe_spaces_pages( ).
     probe_role_menu_nodes( ).
     probe_round_two( ).
+    probe_round_three( ).
     manual_follow_ups( ).
     section( 'END OF PROBE' ).
   ENDMETHOD.
@@ -324,6 +326,55 @@ CLASS lcl_probe IMPLEMENTATION.
     line( 'Any Z role that already carries a space or catalog node (learn the write result):' ).
     dump_rows( iv_table = 'AGR_HIER'  iv_where = |AGR_NAME LIKE 'Z%' AND REPORTTYPE = 'OT'| iv_max = p_rows ).
     dump_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME LIKE 'Z%'| iv_max = p_rows ).
+  ENDMETHOD.
+
+  METHOD probe_round_three.
+    " Round 3 (from the RD1/100 round-2 output of 2026-09-18): the FDM API
+    " classes are factories for INTERFACES - the methods live there; the
+    " task-list value row type is STCTM_SX_VALUE; PRGN_RFC_CREATE_ACTIVITY_GROUP
+    " cannot carry the AGR_BUFFI URL of an OT node, so the PFCG-side writers
+    " for catalog / space nodes are recorded; ZFIORI_MASTER_DEV_ROLE is a
+    " customer role that already carries catalog + SERVICE nodes.
+    section( '3c. ROUND 3 - INTERFACE METHODS, VALUE ROW TYPE, PFCG NODE WRITERS' ).
+    line( 'Space / page API interfaces (the factories return these):' ).
+    class_methods( '/UI2/IF_FDM_SPACE_API' ).
+    class_methods( '/UI2/IF_FDM_PAGE_API' ).
+    class_methods( '/UI2/IF_FDM_SPACE_CTS_ACCESS' ).
+    class_methods( '/UI2/IF_FDM_PAGE_CTS_ACCESS' ).
+    line( 'Structures the two APIs exchange:' ).
+    list_classes( '/UI2/IF_FDM%' ).
+    dump_rows( iv_table = 'DD40L' iv_where = |TYPENAME LIKE '/UI2/FDM%SPACE%' AND AS4LOCAL = 'A'| iv_max = 12 ).
+    dump_rows( iv_table = 'DD40L' iv_where = |TYPENAME LIKE '/UI2/FDM%PAGE%' AND AS4LOCAL = 'A'| iv_max = 12 ).
+    dump_rows( iv_table = 'DD02L' iv_where = |TABNAME LIKE '/UI2/FDM%SPACE%' AND AS4LOCAL = 'A' AND TABCLASS = 'INTTAB'| iv_max = 12 ).
+    dump_rows( iv_table = 'DD02L' iv_where = |TABNAME LIKE '/UI2/FDM%PAGE%' AND AS4LOCAL = 'A' AND TABCLASS = 'INTTAB'| iv_max = 12 ).
+    line( 'Customizing layer (client-dependent) of spaces and pages:' ).
+    field_list( '/UI2/STHEADC' ).
+    field_list( '/UI2/STPGAC' ).
+    field_list( '/UI2/PGHEADC' ).
+    line( |  /UI2/STHEADC { count_rows( iv_table = '/UI2/STHEADC' iv_where = '' ) }, /UI2/PGHEADC { count_rows( iv_table = '/UI2/PGHEADC' iv_where = '' ) }, /UI2/STPGAC { count_rows( iv_table = '/UI2/STPGAC' iv_where = '' ) }| ).
+    line( 'Task-list value row type:' ).
+    field_list( 'STCTM_SX_VALUE' ).
+    line( 'PFCG-side writers for catalog / group / space nodes:' ).
+    fm_signature( '/UI2/SPACE_PFCG_CREATE' ).
+    fm_signature( '/UI2/SPACE_PFCG_CHANGE' ).
+    fm_signature( '/UI2/SPACE_PFCG_EXECUTE' ).
+    fm_signature( '/UI2/CAT_PROV_PFCG_PAGES_INIT' ).
+    fm_signature( '/UI2/CAT_PROV_PFCG_PAGES_CHECK' ).
+    fm_signature( 'PRGN_RFC_ADD_TRANSACTION' ).
+    list_functions( 'PRGN%NODE%' ).
+    list_functions( 'PRGN%FOLDER%' ).
+    list_functions( 'PRGN%URL%' ).
+    list_functions( 'PRGN%HIER%' ).
+    list_functions( 'PRGN%CATALOG%' ).
+    list_classes( 'CL_PFCG%MENU%' ).
+    list_classes( 'CL_PRGN%MENU%' ).
+    list_classes( 'CL_PFCG%PROVIDER%' ).
+    list_classes( '/UI2/CL%PFCG%' ).
+    line( 'A customer role that already carries catalog and app nodes (the write result to reproduce):' ).
+    dump_rows( iv_table = 'AGR_HIER'  iv_where = |AGR_NAME = 'ZFIORI_MASTER_DEV_ROLE'| iv_max = 12 ).
+    dump_rows( iv_table = 'AGR_HIERT' iv_where = |AGR_NAME = 'ZFIORI_MASTER_DEV_ROLE' AND SPRAS = '{ sy-langu }'| iv_max = 12 ).
+    dump_rows( iv_table = 'AGR_BUFFI' iv_where = |AGR_NAME = 'ZFIORI_MASTER_DEV_ROLE'| iv_max = 12 ).
+    dump_rows( iv_table = 'AGR_TCODES' iv_where = |AGR_NAME = 'ZFIORI_MASTER_DEV_ROLE'| iv_max = 12 ).
   ENDMETHOD.
 
   METHOD manual_follow_ups.

@@ -36,11 +36,16 @@ ENDCLASS.
 CLASS zcl_ado_act_icf IMPLEMENTATION.
 
   METHOD is_node_active.
+    " ICFSERVICE-ICF_NAME is stored in UPPER CASE (ORIG_NAME keeps the
+    " spelling); the planner key carries the lower-case BSP name. Verified on
+    " RD1 (probe round 2, 2026-09-18): 'sd_so_manages1' answered no row,
+    " 'SD_SO_MANAGES1' two (one per parent node).
+    DATA(lv_name) = CONV icfname( to_upper( iv_icf_name ) ).
     SELECT COUNT(*) FROM icfservice
-      WHERE icf_name = @iv_icf_name
+      WHERE icf_name = @lv_name
       INTO @DATA(lv_total).
     SELECT COUNT(*) FROM icfservice
-      WHERE icf_name  = @iv_icf_name
+      WHERE icf_name  = @lv_name
         AND icf_noact = @abap_true
       INTO @DATA(lv_inactive).
     rv_active = xsdbool( lv_total > 0 AND lv_inactive = 0 ).

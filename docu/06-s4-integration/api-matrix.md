@@ -5,7 +5,8 @@
 | 1 | A4H client 001, `vhcala4hci` | 2026-08-12 | ABAP Platform appliance (no S4CORE) — our lab box |
 | 2 | **RD1 client 100**, `aubls4hd01` | 2026-08-12 | **Customer DEV: S4CORE 108 SP03 = S/4HANA 2023 SP03**, SAP_UI 758 SP3, client role C (customizing) |
 | 3 | RD1 client 100 (probe **v2**) | 2026-08-12 | Adds field lists (4b), STC scenario inventory (4c), spaces/pages table scan, STC session-lifecycle FMs |
-| 4 | **RD1 client 400** (`ZADO_PROBE_ACTIVATION`, `ZADO_PROBE_CATALOG`) | 2026-09-18 | S3 part 2 and S9 part 2 inputs; raw output in [probe-activation-rd1-400-2026-09-18.txt](probe-activation-rd1-400-2026-09-18.txt) and [docu/08 probe-catalog-rd1-400-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-400-2026-09-18.txt). Client 400 = unit-test client: client-dependent content (spaces, pages, service assignments) came back empty and is re-probed in client 100 by round 2. |
+| 5 | **RD1 client 100** (probe round 2 / 2b) | 2026-09-18 | Signatures and tables behind run 4; corrects the client-400 reading of the empty space / page tables. |
+| 4 | **RD1 client 400** (`ZADO_PROBE_ACTIVATION`, `ZADO_PROBE_CATALOG`) | 2026-09-18 | S3 part 2 and S9 part 2 inputs; raw output in [probe-activation-rd1-400-2026-09-18.txt](probe-activation-rd1-400-2026-09-18.txt) and [docu/08 probe-catalog-rd1-400-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-400-2026-09-18.txt). Client 400 = unit-test client. Run 5 showed the empty space / page tables are a system-wide fact (no client column), only roles, alias assignments and the customizing layer differ per client. |
 
 **Status after run 3: Phase 0 is complete.** Every API uncertainty the design
 flagged is now resolved with evidence from the customer's own S/4HANA 2023.
@@ -13,6 +14,74 @@ flagged is now resolved with evidence from the customer's own S/4HANA 2023.
 This document converts the design's marked UNCERTAINs into facts. Both
 systems agree on every function-module verdict, which strongly suggests the
 signatures are stable across the 758 basis line.
+
+## Run 5 findings (2026-09-18, RD1/100, probe round 2)
+
+Raw output: [probe-activation-rd1-100-round2-2026-09-18.txt](probe-activation-rd1-100-round2-2026-09-18.txt),
+[docu/08 probe-catalog-rd1-100-round2-2026-09-18.txt](../08-catalog-and-proposals/probe-catalog-rd1-100-round2-2026-09-18.txt).
+
+**Correction to run 4:** spaces, pages and assignments are zero in client 100
+as well. `/UI2/STHEAD`, `/UI2/STPGA`, `/UI2/PGHEAD` have no client column;
+TADIR has no `UIST` / `UIPG` objects. RD1 has **no spaces or pages at all**
+and runs the **CLASSIC** launchpad runtime (`/UI2/FLPRT`: CLASSIC active,
+RA_BASED inactive). Client-dependent are only the PFCG roles, the gateway
+alias assignments (`/IWFND/C_MGDEAM`: 102 rows in client 100, 8 in 400) and
+the customizing layer (`/UI2/STHEADC` ..., object types `UISC` / `UIPC`).
+
+1. **OData activation goes through the gateway API, not the task list.**
+   `STC_TM_SCENARIO_GET_PARAMETERS` returns 15 parameters for
+   `SAP_GATEWAY_ACTIVATE_ODATA_SERV`, all of task
+   `CL_STCT_SET_TRANSPORT_OPTIONS` (prefix, package, requests, client): the
+   service selection is not a parameter. The executor uses
+   `/IWFND/CL_MGW_ACTIVATION_API`: `GET_INSTANCE`, `IS_ACTIVE( IV_SERVICE_NAME,
+   IV_SERVICE_VERSION -> EV_ACTIVE )` for verify-first / verify-after,
+   `ACTIVATE_SERVICE( IV_SERVICE_NAME, IV_SERVICE_VERSION, IV_SYSTEM_ALIAS,
+   IV_PACKAGE, IV_PREFIX, IV_TRANSPORT, IV_TRANSPORT_CUST, IV_SUPPRESS_DIALOG,
+   IV_DO_ACTIVATE_ICF_NODE, IV_PROCESS_MODE -> EV_SRG_IDENTIFIER,
+   EV_TECH_SERVICE_NAME )`, `CHECK_ICF_NODE`. The simple FM is
+   `/IWFND/FM_ACTIVATE_SERVICE( IV_TECH_SERVICE_NAME, IV_TECH_SERVICE_VERSION
+   -> EV_ERROR_OCCURRED, EV_ERROR_TEXT )`. Consequence for the key contract:
+   `ACTIVATE_ODATA_SERVICE` needs the service names and versions of the app
+   (today it carries `fioriId` + scenario) - they come from the catalog
+   derivation (round 3 looks at the SU22 data of the app id).
+   Task-list row types for the record: `STCTM_TX_VALUE` rows are
+   `STCTM_SX_VALUE`, `STCTM_TX_PARAMETER` rows `STCTM_SX_PARAMETER`
+   (`TASKNAME`, `LNR`, `FIELDNAME`, `MANDATORY`, `DATATYPE`, ...,
+   `DEFAULTVAL`); `STC_EXT_CALLER_INFO` = `EXT_SESSION_ID`, `USERNAME`,
+   `SID`, `SYSNR`, `MANDT`, `HOST`.
+2. **Role deletion:** `PRGN_ACTIVITY_GROUP_DELETE( ACTIVITY_GROUP,
+   ENQUEUE_AND_TRANSPORT, SHOW_DIALOG, DISTRIBUTE, REQUEST -> ERROR_FLAG,
+   NEW_REQUEST; MESSAGES TYPE SPROT_U_TAB )`. `ZCL_ADO_ACT_ROLE=>delete_role`
+   calls it first now (idea I37 closed).
+3. **ICF node names are stored in UPPER CASE.** `ICF_NAME = 'SD_SO_MANAGES1'`
+   answers two rows (one per parent node), `ORIG_NAME` keeps
+   `sd_so_manages1`; the lower-case read of round 1 found nothing.
+   `ZCL_ADO_ACT_ICF=>is_node_active` compared the planner's lower-case name
+   and therefore never saw a node as existing or active - fixed (upper case).
+   13810 ICF rows; `UI5_UI5` exists twice.
+4. **Space / page API = interfaces.** `/UI2/CL_FDM_SPACE_API` and
+   `/UI2/CL_FDM_PAGE_API` (and their factories) only offer `GET_INSTANCE`
+   returning `/UI2/IF_FDM_SPACE_API` / `/UI2/IF_FDM_PAGE_API`; the CTS access
+   classes return `/UI2/IF_FDM_*_CTS_ACCESS` with `SET_CURRENT_TRANSPORT_REQUEST`,
+   `SET_CURRENT_DEVCLASS`, `GET_ASSIGNED_TRANSPORT_REQUEST( IV_SCOPE, ... )`.
+   Round 3 lists the interface methods. Object types: `UIST` / `UIPG` =
+   space / page **template** (cross-client, SYST), `UISC` / `UIPC` = space /
+   page **customizing** (client-dependent, CUST), `UIAC` technical catalog
+   (200), `UIAD` app descriptor item (18664, GUID names), `UIBA` business
+   application, `UIAA` descriptor adaptation.
+5. **PFCG menu writer:** `SMENCUST` carries texts only, so
+   `PRGN_RFC_CREATE_ACTIVITY_GROUP` cannot write the `AGR_BUFFI` URL of a
+   catalog / space node. Round 3 records the PFCG-side writers
+   (`/UI2/SPACE_PFCG_CREATE`, `/UI2/CAT_PROV_PFCG_PAGES_INIT`, PRGN node /
+   folder FMs). `ZFIORI_MASTER_DEV_ROLE` (client 100) already carries a
+   `CAT_PROVIDER` folder with child `REPORT = SERVICE` app nodes - the result
+   to reproduce.
+6. **App ids in PFCG:** across the `SAP_BR_*` roles 6468 `OTSERVICE` app
+   nodes, 3142 catalog nodes, 1634 group nodes, 316 space nodes. App nodes
+   read `OTSERVICE <FioriId> TR` (e.g. `F0029`, `F1873`) or a hashed id with
+   type `HT`. The Fiori id is the name of the app's SU22 entry, so role ->
+   catalog folder -> app id is fully readable from `AGR_HIER` / `AGR_BUFFI` /
+   `AGR_HIERT`.
 
 ## Run 4 findings (2026-09-18, RD1/400) - what changed in the design
 
