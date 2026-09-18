@@ -7,9 +7,9 @@ authorization master ( instance )
 {
   field ( readonly ) LogUuid;
 
-  " Static action: no instance persistence - the log table exists only to
-  " make the entity a valid RAP BO root. The handler calls the RFC wrapper
-  " via DESTINATION 'NONE'.
+  // Static action: no instance persistence - the log table exists only to
+  // make the entity a valid RAP BO root. The handler calls the RFC wrapper
+  // via DESTINATION 'NONE'.
   static action executeStep parameter ZADO_A_ACT_INPUT result [1] ZADO_A_ACT_RESULT;
 
   mapping for zado_act_log
