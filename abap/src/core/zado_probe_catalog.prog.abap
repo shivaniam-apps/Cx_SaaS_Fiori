@@ -247,7 +247,8 @@ CLASS lcl_probe IMPLEMENTATION.
         ELSE.
           SELECT COUNT(*) FROM (iv_table) WHERE (iv_where) INTO @rv_count.
         ENDIF.
-      CATCH cx_sy_dynamic_osql_error cx_sy_dynamic_osql_semantics.
+      " cx_sy_dynamic_osql_semantics is a subclass of the OSQL error: one CATCH.
+      CATCH cx_sy_dynamic_osql_error.
         rv_count = -1.
     ENDTRY.
   ENDMETHOD.
@@ -263,7 +264,7 @@ CLASS lcl_probe IMPLEMENTATION.
         ELSE.
           SELECT * FROM (iv_table) WHERE (iv_where) INTO TABLE @<lt_rows> UP TO @iv_max ROWS.
         ENDIF.
-      CATCH cx_sy_dynamic_osql_error cx_sy_create_data_error cx_sy_dynamic_osql_semantics INTO DATA(lx_error).
+      CATCH cx_sy_dynamic_osql_error cx_sy_create_data_error INTO DATA(lx_error).
         line( |  { iv_table } [{ iv_where }]: not readable - { lx_error->get_text( ) }| ).
         RETURN.
     ENDTRY.
