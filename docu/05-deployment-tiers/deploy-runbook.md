@@ -232,7 +232,8 @@ The MTA contains none. XSUAA, PostgreSQL, destination and connectivity
 credentials are service bindings that Cloud Foundry injects. The
 pseudonymisation secret lives inside each S/4HANA system (`ZADO_CFG`,
 docu/11) and the per-tenant salt in the `TenantSecrets` table, generated
-on first use. The secret rotation runbook is T6.
+on first use. Rotation of every credential is described in
+[docu/10 secret rotation](../10-security-authorization/secret-rotation.md).
 
 ## Known limits
 

@@ -146,6 +146,11 @@
           },
           "eve": {
             "roles": []
+          },
+          "saas-registry": {
+            "roles": [
+              "mtcallback"
+            ]
           }
         }
       },

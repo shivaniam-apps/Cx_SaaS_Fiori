@@ -31,9 +31,25 @@ function readDependencyXsappnames() {
   return dependencies;
 }
 
+// The SaaS registry calls the callbacks with a token that carries the
+// mtcallback scope (xs-security.json grants it to sap-provisioning). Plain
+// express routes sit outside CAP's per-service authentication, so the
+// callbacks authenticate through the same strategy and refuse every caller
+// without that scope (T6 security review).
+function requireSaasCallbackScope(req, res, next) {
+  const user = req.user || cds.context?.user;
+  if (user && typeof user.is === 'function' && user.is('mtcallback')) return next();
+  LOG.warn(`SaaS callback ${req.method} ${req.path} refused: caller ${user?.id || 'anonymous'} lacks the mtcallback scope.`);
+  return res.status(403).json({ error: { code: '403', message: 'The SaaS provisioning callbacks require the mtcallback scope.' } });
+}
+
 function registerBasicSubscriptionRoutes(app) {
   // These lightweight callbacks allow the Basic tier to be subscribed via SAP SaaS Provisioning
   // without activating CAP MTX tenant database deployment, Service Manager, HANA, or PostgreSQL.
+  // context() opens the request scope auth() writes the user into; without
+  // it the auth middleware has nowhere to put req.user and the request hangs.
+  app.use('/-/basic/saas-provisioning', cds.middlewares.context(), cds.middlewares.auth(), requireSaasCallbackScope);
+
   app.put('/-/basic/saas-provisioning/tenant/:tenantId', async (req, res) => {
     const tenantId = req.params.tenantId;
     const subdomain = req.body?.subscribedSubdomain || req.body?.subdomain;
@@ -55,4 +71,4 @@ function registerBasicSubscriptionRoutes(app) {
   });
 }
 
-module.exports = { registerBasicSubscriptionRoutes };
+module.exports = { registerBasicSubscriptionRoutes, requireSaasCallbackScope };
